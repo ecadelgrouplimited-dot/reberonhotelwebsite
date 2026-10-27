@@ -158,9 +158,13 @@ describe('role walls (the API is the wall)', () => {
     }
   });
 
-  test('desk can work the inbox but not edit the website', async () => {
+  test('desk can work the inbox but not edit the website or read director audit logs', async () => {
     assert.equal((await desk.get('/admin/conversations')).status, 200);
     assert.equal((await desk.get('/admin/pages')).status, 403);
+    assert.equal((await desk.get('/admin/audit')).status, 403);
+    const dash = await desk.get('/admin/dashboard');
+    assert.equal(dash.status, 200);
+    assert.deepEqual(dash.body.recentActivity, []);
     assert.equal((await desk.patch('/admin/settings', { 'hotel.name': 'X' })).status, 403);
   });
 

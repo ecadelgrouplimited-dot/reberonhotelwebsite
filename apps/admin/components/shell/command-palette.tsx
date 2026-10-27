@@ -56,7 +56,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           </Command.Group>
           <Command.Group heading="Go to" className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-fg-subtle">
             {NAV.flatMap((g) => g.items)
-              .filter((i) => !i.later && can(i.perm))
+              .filter((i) => !i.later && (!i.perm || can(i.perm)))
               .map((i) => (
                 <Command.Item key={i.href} className={item} onSelect={() => go(i.href)}>
                   <i.icon className="size-4 text-fg-subtle" /> {i.label}

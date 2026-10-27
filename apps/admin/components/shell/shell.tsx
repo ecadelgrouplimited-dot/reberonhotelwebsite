@@ -39,7 +39,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
       <nav className="scrollbar-thin flex-1 overflow-y-auto px-2.5 pb-4" aria-label="Main">
         {NAV.map((g, gi) => {
-          const items = g.items.filter((i) => can(i.perm));
+          const items = g.items.filter((i) => !i.perm || can(i.perm));
           if (!items.length) return null;
           return (
             <div key={gi} className="mt-3.5 first:mt-2">

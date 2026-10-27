@@ -6,7 +6,7 @@ import { hotelToday, addDays } from '@reberon/utils';
 import type { Prisma, WaitlistEntry } from '@reberon/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
-import { CurrentUser, Requires, type AuthUser } from '../../common/auth.js';
+import { CurrentUser, Requires, has, type AuthUser } from '../../common/auth.js';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import { notFound } from '../../common/errors.js';
 import { lt } from '../content/mappers.js';
@@ -138,23 +138,29 @@ export class DashboardController {
   async dashboard(@CurrentUser() user: AuthUser): Promise<DashboardDTO> {
     const since = new Date(Date.now() - 86_400_000);
     const from30 = addDays(hotelToday(), -29);
+    const canAudit = has(user, 'audit:read');
+    const canInbox = has(user, 'inbox:read');
+    const canWaitlist = has(user, 'waitlist:read');
+    const canContent = has(user, 'content:read');
     const [newEnq, open, wlTotal, wlNew, drafts, mediaCount, byRoom, rooms, latestConv, latestWl, activity, progress, perDay] = await Promise.all([
-      this.prisma.conversation.count({ where: { createdAt: { gte: since }, status: { not: 'SPAM' } } }),
-      this.prisma.conversation.count({ where: { status: { in: ['NEW', 'OPEN', 'WAITING_GUEST'] } } }),
-      this.prisma.waitlistEntry.count({ where: { status: { in: ['NEW', 'CONTACTED'] } } }),
-      this.prisma.waitlistEntry.count({ where: { status: 'NEW' } }),
-      this.prisma.page.findMany({ where: { deletedAt: null }, include: { publishedVersion: true } }),
-      this.prisma.mediaAsset.count({ where: { deletedAt: null } }),
-      this.prisma.waitlistEntry.groupBy({ by: ['roomTypeId'], _count: true, where: { status: { in: ['NEW', 'CONTACTED'] } } }),
-      this.prisma.roomType.findMany({ select: { id: true, name: true, order: true } }),
-      this.prisma.conversation.findMany({ where: { status: { not: 'SPAM' } }, include: this.inbox.include(user.id), orderBy: { lastMessageAt: 'desc' }, take: 6 }),
-      this.prisma.waitlistEntry.findMany({ include: waitlistInclude, orderBy: { createdAt: 'desc' }, take: 6 }),
-      this.prisma.auditLog.findMany({ where: { actorType: { in: ['USER', 'GUEST', 'SYSTEM'] }, action: { notIn: ['auth.login', 'auth.login_failed'] } }, include: { actor: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' }, take: 12 }),
-      this.prisma.progressUpdate.findFirst({ where: { status: 'PUBLISHED', deletedAt: null }, orderBy: { happenedOn: 'desc' } }),
-      this.prisma.$queryRaw<{ d: Date; c: bigint }[]>`
-        SELECT date_trunc('day', "createdAt" AT TIME ZONE 'Africa/Kampala') AS d, count(*) AS c
-        FROM "Conversation" WHERE "createdAt" >= ${new Date(`${from30}T00:00:00+03:00`)} AND status <> 'SPAM'
-        GROUP BY 1 ORDER BY 1`,
+      canInbox ? this.prisma.conversation.count({ where: { createdAt: { gte: since }, status: { not: 'SPAM' } } }) : Promise.resolve(0),
+      canInbox ? this.prisma.conversation.count({ where: { status: { in: ['NEW', 'OPEN', 'WAITING_GUEST'] } } }) : Promise.resolve(0),
+      canWaitlist ? this.prisma.waitlistEntry.count({ where: { status: { in: ['NEW', 'CONTACTED'] } } }) : Promise.resolve(0),
+      canWaitlist ? this.prisma.waitlistEntry.count({ where: { status: 'NEW' } }) : Promise.resolve(0),
+      canContent ? this.prisma.page.findMany({ where: { deletedAt: null }, include: { publishedVersion: true } }) : Promise.resolve([]),
+      canContent ? this.prisma.mediaAsset.count({ where: { deletedAt: null } }) : Promise.resolve(0),
+      canWaitlist ? this.prisma.waitlistEntry.groupBy({ by: ['roomTypeId'], _count: true, where: { status: { in: ['NEW', 'CONTACTED'] } } }) : Promise.resolve([]),
+      canWaitlist ? this.prisma.roomType.findMany({ select: { id: true, name: true, order: true } }) : Promise.resolve([]),
+      canInbox ? this.prisma.conversation.findMany({ where: { status: { not: 'SPAM' } }, include: this.inbox.include(user.id), orderBy: { lastMessageAt: 'desc' }, take: 6 }) : Promise.resolve([]),
+      canWaitlist ? this.prisma.waitlistEntry.findMany({ include: waitlistInclude, orderBy: { createdAt: 'desc' }, take: 6 }) : Promise.resolve([]),
+      canAudit ? this.prisma.auditLog.findMany({ where: { actorType: { in: ['USER', 'GUEST', 'SYSTEM'] }, action: { notIn: ['auth.login', 'auth.login_failed'] } }, include: { actor: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' }, take: 12 }) : Promise.resolve([]),
+      canContent ? this.prisma.progressUpdate.findFirst({ where: { status: 'PUBLISHED', deletedAt: null }, orderBy: { happenedOn: 'desc' } }) : Promise.resolve(null),
+      canInbox
+        ? this.prisma.$queryRaw<{ d: Date; c: bigint }[]>`
+            SELECT date_trunc('day', "createdAt" AT TIME ZONE 'Africa/Kampala') AS d, count(*) AS c
+            FROM "Conversation" WHERE "createdAt" >= ${new Date(`${from30}T00:00:00+03:00`)} AND status <> 'SPAM'
+            GROUP BY 1 ORDER BY 1`
+        : Promise.resolve([]),
     ]);
     const byDay = new Map(perDay.map((r) => [r.d.toISOString().slice(0, 10), Number(r.c)]));
     const draftCount = drafts.filter((p) => !p.publishedVersion || JSON.stringify(p.publishedVersion.blocks) !== JSON.stringify(p.draftBlocks)).length;

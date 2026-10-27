@@ -1,6 +1,6 @@
 import type { Permission } from '@reberon/contracts';
 import {
-  BedDouble, BookOpenText, CalendarRange, CircleHelp, ConciergeBell, FileText, Hammer, Home, Image, Inbox, ListChecks, Map, Navigation, ScrollText,
+  BedDouble, BookOpenText, CalendarRange, CircleHelp, ConciergeBell, FileText, Hammer, Home, Image, Inbox, KeyRound, ListChecks, Map, Navigation, ScrollText,
   Settings, Shuffle, SprayCan, Building2, Users, Rocket, Gift, Sunset, LayoutGrid, Contact, MessageCircleHeart, ChartColumnBig, Send, PlugZap, MessagesSquare, Rotate3d, ReceiptText,
   UtensilsCrossed, Dumbbell, FileSpreadsheet, Boxes, ClipboardCheck, type LucideIcon,
 } from 'lucide-react';
@@ -9,7 +9,7 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  perm: Permission;
+  perm?: Permission;
   badge?: 'inbox' | 'waitlist' | 'publishing';
   later?: string;
 }
@@ -21,7 +21,8 @@ export interface NavGroup {
 export const NAV: NavGroup[] = [
   {
     items: [
-      { label: 'Today', href: '/', icon: Home, perm: 'dashboard:view' },
+      { label: 'Today', href: '/', icon: Home },
+      { label: 'Account & password', href: '/account', icon: KeyRound },
       { label: 'Inbox', href: '/inbox', icon: Inbox, perm: 'inbox:read', badge: 'inbox' },
       { label: 'First-stay list', href: '/waitlist', icon: ListChecks, perm: 'waitlist:read', badge: 'waitlist' },
       { label: 'Sent messages', href: '/messages', icon: Send, perm: 'messages:read' },

@@ -50,16 +50,22 @@ export async function seedUsers() {
     update: { passwordHash, failedLogins: 0, lockedUntil: null, status: 'ACTIVE' },
   });
   // Specialized operational staff from the hotel management structure:
-  const opsStaff: { email: string; name: string; jobTitle: string; role: Role; phone: string; grants: string[] }[] = [
-    { email: 'bar@reberonhotel.com', name: 'Samuel Kiprop', jobTitle: 'Bar Attendant', role: 'DESK', phone: '+256700000105', grants: ['pos:operate', 'inventory:manage', 'requisitions:request'] },
-    { email: 'kitchen@reberonhotel.com', name: 'Chef Isaac Mangusho', jobTitle: 'Head Chef', role: 'DESK', phone: '+256700000106', grants: ['pos:operate', 'inventory:manage', 'requisitions:request'] },
-    { email: 'gym@reberonhotel.com', name: 'Coach Daniel Cherop', jobTitle: 'Gym Instructor & Spa Attendant', role: 'DESK', phone: '+256700000107', grants: ['healthclub:operate', 'pos:operate', 'inventory:manage', 'requisitions:request'] },
+  const nonDeskRevokes = [
+    'media:read', 'media:upload', 'inbox:read', 'inbox:write',
+    'waitlist:read', 'waitlist:write', 'rooms:status', 'bookings:read', 'bookings:write',
+    'rates:read', 'desk:operate', 'rooms:inspect', 'guests:read',
+    'guests:write', 'messages:read', 'receipts:read', 'receipts:issue', 'quotations:manage',
+  ];
+  const opsStaff: { email: string; name: string; jobTitle: string; role: Role; phone: string; grants: string[]; revokes: string[] }[] = [
+    { email: 'bar@reberonhotel.com', name: 'Samuel Kiprop', jobTitle: 'Bar Attendant', role: 'DESK', phone: '+256700000105', grants: ['pos:operate', 'inventory:manage', 'requisitions:request'], revokes: [...nonDeskRevokes, 'healthclub:operate'] },
+    { email: 'kitchen@reberonhotel.com', name: 'Chef Isaac Mangusho', jobTitle: 'Head Chef', role: 'DESK', phone: '+256700000106', grants: ['pos:operate', 'inventory:manage', 'requisitions:request'], revokes: [...nonDeskRevokes, 'healthclub:operate'] },
+    { email: 'gym@reberonhotel.com', name: 'Coach Daniel Cherop', jobTitle: 'Gym Instructor & Spa Attendant', role: 'DESK', phone: '+256700000107', grants: ['healthclub:operate', 'pos:operate', 'inventory:manage', 'requisitions:request'], revokes: nonDeskRevokes },
   ];
   for (const s of opsStaff) {
     const u = await prisma.user.upsert({
       where: { email: s.email },
       create: { ...s, passwordHash, status: 'ACTIVE', isSeed: true },
-      update: { passwordHash, failedLogins: 0, lockedUntil: null, status: 'ACTIVE' },
+      update: { passwordHash, failedLogins: 0, lockedUntil: null, status: 'ACTIVE', grants: s.grants, revokes: s.revokes },
     });
     ids[s.email] = u.id;
   }
