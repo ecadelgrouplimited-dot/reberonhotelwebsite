@@ -31,7 +31,7 @@ export async function seedUsers() {
     const user = await prisma.user.upsert({
       where: { email: u.email },
       create: { ...u, passwordHash, status: 'ACTIVE', isSeed: true },
-      update: {},
+      update: { passwordHash, failedLogins: 0, lockedUntil: null, status: 'ACTIVE' },
     });
     ids[u.email] = user.id;
   }
@@ -44,9 +44,11 @@ export async function seedUsers() {
     if (!(await prisma.user.findFirst({ where: { name: r.name, isSeed: true } }))) await prisma.user.create({ data: { ...r, canSignIn: false, status: 'ACTIVE', isSeed: true } });
   }
   // A temporary contractor: desk access for three months, weekday hours.
-  if (!(await prisma.user.findUnique({ where: { email: 'relief.desk@reberonhotel.com' } }))) {
-    await prisma.user.create({ data: { email: 'relief.desk@reberonhotel.com', name: 'Joan Nekesa', jobTitle: 'Relief receptionist', role: 'DESK', status: 'ACTIVE', passwordHash, isSeed: true, signInFrom: '07:00', signInUntil: '19:00', accessExpiresAt: new Date(Date.now() + 90 * 86_400_000), revokes: ['payments:record'] } });
-  }
+  await prisma.user.upsert({
+    where: { email: 'relief.desk@reberonhotel.com' },
+    create: { email: 'relief.desk@reberonhotel.com', name: 'Joan Nekesa', jobTitle: 'Relief receptionist', role: 'DESK', status: 'ACTIVE', passwordHash, isSeed: true, signInFrom: '07:00', signInUntil: '19:00', accessExpiresAt: new Date(Date.now() + 90 * 86_400_000), revokes: ['payments:record'] },
+    update: { passwordHash, failedLogins: 0, lockedUntil: null, status: 'ACTIVE' },
+  });
   // Specialized operational staff from the hotel management structure:
   const opsStaff: { email: string; name: string; jobTitle: string; role: Role; phone: string; grants: string[] }[] = [
     { email: 'bar@reberonhotel.com', name: 'Samuel Kiprop', jobTitle: 'Bar Attendant', role: 'DESK', phone: '+256700000105', grants: ['pos:operate', 'inventory:manage', 'requisitions:request'] },
@@ -57,7 +59,7 @@ export async function seedUsers() {
     const u = await prisma.user.upsert({
       where: { email: s.email },
       create: { ...s, passwordHash, status: 'ACTIVE', isSeed: true },
-      update: {},
+      update: { passwordHash, failedLogins: 0, lockedUntil: null, status: 'ACTIVE' },
     });
     ids[s.email] = u.id;
   }

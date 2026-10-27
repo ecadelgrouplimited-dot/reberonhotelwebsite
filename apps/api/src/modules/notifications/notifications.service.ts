@@ -28,10 +28,19 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private async mailer() {
     const c = await this.integrations.get('SMTP');
     const v = c?.values ?? {};
-    const key = JSON.stringify([v.host, v.port, v.user, v.pass]);
+    const key = JSON.stringify([v.host, v.port, v.user, v.pass, v.from]);
     if (this.transport?.key !== key) {
       const port = Number(v.port || env.SMTP_PORT);
-      this.transport = { key, from: v.from || env.MAIL_FROM, t: nodemailer.createTransport({ host: v.host || env.SMTP_HOST, port, secure: port === 465, auth: v.user ? { user: v.user, pass: v.pass } : undefined }) };
+      this.transport = {
+        key,
+        from: v.from || env.MAIL_FROM,
+        t: nodemailer.createTransport({
+          host: v.host || env.SMTP_HOST,
+          port,
+          secure: port === 465,
+          auth: v.user ? { user: v.user, pass: v.pass } : undefined,
+        }),
+      };
     }
     return this.transport;
   }

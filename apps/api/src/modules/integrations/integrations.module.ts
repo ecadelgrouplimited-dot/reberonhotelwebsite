@@ -34,6 +34,13 @@ export class IntegrationsController {
   test(@Param('kind') kind: string, @CurrentUser() user: AuthUser) {
     return this.integrations.test(kindOf(kind), user);
   }
+
+  @Post('SMTP/test-email')
+  @HttpCode(200)
+  @Requires('vault:manage')
+  testEmail(@Body(new ZodPipe(z.object({ to: z.string().trim().email() }))) body: { to: string }, @CurrentUser() user: AuthUser) {
+    return this.integrations.sendTestEmail(body.to, user);
+  }
 }
 
 @Global()

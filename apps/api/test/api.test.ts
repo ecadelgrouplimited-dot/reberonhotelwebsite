@@ -113,9 +113,9 @@ describe('public API', () => {
 
 describe('auth', () => {
   test('wrong password is rejected with a generic message', async () => {
-    const r = await new Client().login('desk@reberonhotel.com', 'wrong-password-123');
+    const r = await new Client().login('unknown.staff@reberonhotel.com', 'wrong-password-123');
     assert.equal(r.status, 401);
-    assert.doesNotMatch(r.body.detail, /desk@/);
+    assert.doesNotMatch(r.body.detail, /unknown\.staff@/);
   });
 
   test('admin routes need a session', async () => {

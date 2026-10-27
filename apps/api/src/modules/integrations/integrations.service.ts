@@ -8,6 +8,7 @@ import type { AuthUser } from '../../common/auth.js';
 import { badRequest, notFound } from '../../common/errors.js';
 import { last4, open, seal } from '../../common/crypto.js';
 import { env } from '../../config.js';
+import { renderEmail } from '../notifications/email-template.js';
 
 export interface ResolvedIntegration {
   kind: IntegrationKind;
@@ -152,8 +153,59 @@ export class IntegrationsService {
       case 'SMTP': {
         const tr = nodemailer.createTransport({ host: v.host, port: Number(v.port || 587), secure: Number(v.port) === 465, auth: v.user ? { user: v.user, pass: v.pass } : undefined, connectionTimeout: 10_000 });
         await tr.verify();
-        return `The mail server at ${v.host}:${v.port} accepted the connection.`;
+        return `The mail server at ${v.host}:${v.port} accepted the connection (From: ${v.from || env.MAIL_FROM}).`;
       }
+    }
+  }
+
+  /** Send a real test email through the active SMTP configuration to verify end-to-end delivery. */
+  async sendTestEmail(to: string, actor: AuthUser) {
+    const cfg = await this.get('SMTP');
+    if (!cfg) throw badRequest('SMTP is not configured');
+    const v = cfg.values;
+    const port = Number(v.port || env.SMTP_PORT || 587);
+    const from = v.from || env.MAIL_FROM;
+    const tr = nodemailer.createTransport({
+      host: v.host || env.SMTP_HOST,
+      port,
+      secure: port === 465,
+      auth: v.user ? { user: v.user, pass: v.pass } : undefined,
+      connectionTimeout: 12_000,
+    });
+    const { html, text } = renderEmail({
+      to,
+      subject: 'Reberon Hotel Suite — SMTP Notification Test',
+      heading: 'SMTP notifications are working',
+      paragraphs: [
+        `Hello ${actor.name.split(' ')[0]},`,
+        'This test message confirms that your Reberon Hotel Suite SMTP configuration is active and delivering outbound notifications properly.',
+      ],
+      facts: [
+        ['Sender (From)', from],
+        ['SMTP Host', `${v.host || env.SMTP_HOST}:${port}`],
+        ['Configuration Source', cfg.source],
+        ['Recipient', to],
+      ],
+      action: { label: 'Open Reberon Suite Settings', url: `${env.ADMIN_URL}/settings` },
+    });
+    try {
+      const info = await tr.sendMail({ from, to, subject: 'Reberon Hotel Suite — SMTP Notification Test', html, text });
+      const msg = `Test email sent to ${to} (${info.messageId || 'delivered'})`;
+      await this.prisma.integration.upsert({
+        where: { kind: 'SMTP' },
+        create: { kind: 'SMTP', lastTestAt: new Date(), lastTestOk: true, lastTestMessage: msg },
+        update: { lastTestAt: new Date(), lastTestOk: true, lastTestMessage: msg },
+      });
+      await this.audit.record({ actor, action: 'integration.test_email', entityType: 'Integration', entityId: 'SMTP', summary: `Sent test email to ${to}` });
+      return { ok: true, message: msg };
+    } catch (e) {
+      const err = (e as Error).message.slice(0, 300);
+      await this.prisma.integration.upsert({
+        where: { kind: 'SMTP' },
+        create: { kind: 'SMTP', lastTestAt: new Date(), lastTestOk: false, lastTestMessage: err },
+        update: { lastTestAt: new Date(), lastTestOk: false, lastTestMessage: err },
+      });
+      return { ok: false, message: `Could not send test email: ${err}` };
     }
   }
 
