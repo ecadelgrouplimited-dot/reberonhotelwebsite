@@ -151,9 +151,19 @@ export class IntegrationsService {
         return `Connected to ${j.verified_name ?? 'the business'} on ${j.display_phone_number ?? 'the number'} (quality ${j.quality_rating ?? 'unknown'}).`;
       }
       case 'SMTP': {
-        const tr = nodemailer.createTransport({ host: v.host, port: Number(v.port || 587), secure: Number(v.port) === 465, auth: v.user ? { user: v.user, pass: v.pass } : undefined, connectionTimeout: 10_000 });
+        const host = v.host || env.SMTP_HOST;
+        const port = Number(v.port || env.SMTP_PORT || 587);
+        const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+        const tr = nodemailer.createTransport({
+          host,
+          port,
+          secure: port === 465,
+          auth: v.user ? { user: v.user, pass: v.pass } : undefined,
+          connectionTimeout: 10_000,
+          ...(isLocal ? { tls: { rejectUnauthorized: false } } : {}),
+        });
         await tr.verify();
-        return `The mail server at ${v.host}:${v.port} accepted the connection (From: ${v.from || env.MAIL_FROM}).`;
+        return `The mail server at ${host}:${port} accepted the connection (From: ${v.from || env.MAIL_FROM}).`;
       }
     }
   }
@@ -163,14 +173,17 @@ export class IntegrationsService {
     const cfg = await this.get('SMTP');
     if (!cfg) throw badRequest('SMTP is not configured');
     const v = cfg.values;
+    const host = v.host || env.SMTP_HOST;
     const port = Number(v.port || env.SMTP_PORT || 587);
     const from = v.from || env.MAIL_FROM;
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1';
     const tr = nodemailer.createTransport({
-      host: v.host || env.SMTP_HOST,
+      host,
       port,
       secure: port === 465,
       auth: v.user ? { user: v.user, pass: v.pass } : undefined,
       connectionTimeout: 12_000,
+      ...(isLocal ? { tls: { rejectUnauthorized: false } } : {}),
     });
     const { html, text } = renderEmail({
       to,

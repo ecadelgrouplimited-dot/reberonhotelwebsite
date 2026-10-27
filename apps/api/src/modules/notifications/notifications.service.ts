@@ -30,15 +30,18 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     const v = c?.values ?? {};
     const key = JSON.stringify([v.host, v.port, v.user, v.pass, v.from]);
     if (this.transport?.key !== key) {
+      const host = v.host || env.SMTP_HOST;
       const port = Number(v.port || env.SMTP_PORT);
+      const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1';
       this.transport = {
         key,
         from: v.from || env.MAIL_FROM,
         t: nodemailer.createTransport({
-          host: v.host || env.SMTP_HOST,
+          host,
           port,
           secure: port === 465,
           auth: v.user ? { user: v.user, pass: v.pass } : undefined,
+          ...(isLocal ? { tls: { rejectUnauthorized: false } } : {}),
         }),
       };
     }
