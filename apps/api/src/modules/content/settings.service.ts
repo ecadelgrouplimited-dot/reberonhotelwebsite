@@ -66,6 +66,7 @@ export class SettingsService {
         waitlistEnabled: get('features.waitlistEnabled', true),
         progressEnabled: get('features.progressEnabled', true),
         toursEnabled: get('features.toursEnabled', false),
+        maintenanceMode: get('features.maintenanceMode', true),
       },
       seo: {
         titleTemplate: get('seo.titleTemplate', '%s · Reberon Hotel'),

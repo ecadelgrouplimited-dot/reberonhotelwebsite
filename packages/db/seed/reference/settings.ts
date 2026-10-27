@@ -35,6 +35,7 @@ export const SETTING_DEFAULTS: { key: string; group: SettingGroup; value: unknow
   { key: 'features.progressEnabled', group: 'FEATURES', value: true },
   { key: 'features.toursEnabled', group: 'FEATURES', value: false },
   { key: 'features.stayOtp', group: 'FEATURES', value: false },
+  { key: 'features.maintenanceMode', group: 'FEATURES', value: true },
   { key: 'receipts.tin', group: 'BOOKING', value: '' },
   { key: 'receipts.vatRegistered', group: 'BOOKING', value: false },
   { key: 'receipts.footer', group: 'BOOKING', value: 'Thank you for staying with us on the mountain. Keep this for your records.' },

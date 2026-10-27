@@ -207,6 +207,45 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   /* ───────── public booking ───────── */
 
   async start(input: BookingInput): Promise<BookingStartedDTO> {
+    if (input.payAtPremises) {
+      const built = await this.prisma.$transaction(async (tx) => {
+        const b = await this.build(tx, input, {
+          source: 'DIRECT',
+          status: 'CONFIRMED',
+          holdMinutes: 0,
+          guest: { name: input.guest.name, phone: input.guest.phone, email: input.guest.email },
+        });
+        await tx.reservation.update({
+          where: { id: b.reservation.id },
+          data: { staffNotes: 'Guest selected Pay at the Premises upon arrival.' },
+        });
+        return b;
+      });
+      const r = built.reservation;
+      const token = this.accessToken(r.code);
+      await this.audit.record({
+        actorType: 'GUEST',
+        action: 'reservation.create',
+        entityType: 'Reservation',
+        entityId: r.id,
+        summary: `Web booking ${r.code} confirmed — Pay at the premises (${this.money(r.totalMinor, r.currency)})`,
+      });
+      await this.notifyAfterPayment(r.id, true, false).catch((e) => this.log.error(e));
+      return {
+        code: r.code,
+        status: 'CONFIRMED',
+        holdExpiresAt: null,
+        payment: {
+          merchantReference: `${r.code}-PREMISES`,
+          redirectUrl: `${env.WEB_URL}/stay?code=${r.code}&t=${token}`,
+          amountMinor: '0',
+          currency: r.currency,
+          provider: 'PREMISES',
+        },
+        accessToken: token,
+      };
+    }
+
     const built = await this.prisma.$transaction((tx) =>
       this.build(tx, input, { source: 'DIRECT', status: 'HELD', holdMinutes: env.BOOKING_HOLD_MINUTES, guest: { name: input.guest.name, phone: input.guest.phone, email: input.guest.email } }),
     );

@@ -65,6 +65,7 @@ const RECEIPT_SEO_SECTIONS: { title: string; description: string; fields: AdminF
 ];
 
 const FEATURES: [string, string, string][] = [
+  ['features.maintenanceMode', 'Under Maintenance / Coming Soon Gate', 'Require staff/admin sign-in to view the public website. Visitors without a session see the Coming Soon page with a Sign In option.'],
   ['features.waitlistEnabled', 'First-stay waitlist', 'Show the first-stay registration form across the website.'],
   ['features.progressEnabled', 'Construction journal', 'Publish construction milestones on the public progress page.'],
   ['features.bookingEnabled', 'Live online booking', 'Switch public CTAs from waitlist to instant room booking.'],

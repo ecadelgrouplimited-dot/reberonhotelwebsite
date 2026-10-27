@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, BedDouble, Check, LoaderCircle, Minus, Plus, Rotate3d, ShieldCheck, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BedDouble, Building2, Check, LoaderCircle, Minus, Plus, Rotate3d, ShieldCheck, Users } from 'lucide-react';
 import type { AvailabilityDTO, BookingStartedDTO, OfferDTO, OfferPlanDTO, TourDTO } from '@reberon/contracts';
 import { t } from '@reberon/contracts/text';
 import { formatMoney, type Currency } from '@reberon/utils';
@@ -48,7 +48,7 @@ export function BookingFlow() {
   const [pick, setPick] = useState<{ offer: OfferDTO; plan: OfferPlanDTO } | null>(null);
   const [extras, setExtras] = useState<Record<string, number>>({});
   const [guest, setGuest] = useState({ name: '', phone: '', email: '', eta: '', notes: '' });
-  const [payInFull, setPayInFull] = useState(false);
+  const [payOption, setPayOption] = useState<'premises' | 'deposit' | 'full'>('premises');
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -112,7 +112,8 @@ export function BookingFlow() {
           arrival: data.arrival, departure: data.departure, adults, children, currency: data.currency,
           roomTypeId: pick.offer.roomType.id, ratePlanId: pick.plan.ratePlanId, rooms: pick.offer.roomsNeeded,
           extras: Object.entries(extras).filter(([, n]) => n > 0).map(([extraId, quantity]) => ({ extraId, quantity })),
-          payInFull: payInFull || depositPct >= 100,
+          payAtPremises: payOption === 'premises',
+          payInFull: payOption === 'full' || (payOption !== 'premises' && depositPct >= 100),
           guest: { name: guest.name, phone: guest.phone, email: guest.email },
           eta: guest.eta || undefined, notes: guest.notes || undefined, consent, tourSessionId: walkedSession(),
         }),
@@ -285,17 +286,37 @@ export function BookingFlow() {
             </fieldset>
             <fieldset className="grid gap-3">
               <legend className="mb-2 text-step-2 font-display">Payment</legend>
-              {depositPct >= 100 ? <p className="text-fg-muted">This rate is paid in full now: <b className="tabular text-fg">{money(total, data.currency)}</b>.</p> : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[false, true].map((full) => (
-                    <label key={String(full)} className={cn('flex cursor-pointer gap-3 rounded-[var(--r-md)] border p-4', payInFull === full ? 'border-fg' : 'border-line')}>
-                      <input type="radio" name="pay" checked={payInFull === full} onChange={() => setPayInFull(full)} className="mt-1 accent-[var(--accent)]" />
-                      <span><span className="block font-medium">{full ? 'Pay in full now' : `Pay a ${depositPct}% deposit`}</span><span className="text-sm tabular text-fg-muted">{money(full ? total : deposit, data.currency)} now{full ? '' : `, ${money(total - deposit, data.currency)} at the house`}</span></span>
-                    </label>
-                  ))}
-                </div>
-              )}
-              <p className="flex items-center gap-2 text-sm text-fg-muted"><ShieldCheck className="size-4 text-success" /> MTN MoMo, Airtel Money, Visa or Mastercard through Pesapal. We never see your card.</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className={cn('flex cursor-pointer gap-3 rounded-[var(--r-md)] border p-4 transition', payOption === 'premises' ? 'border-fg bg-surface-2/60' : 'border-line')}>
+                  <input type="radio" name="pay" checked={payOption === 'premises'} onChange={() => setPayOption('premises')} className="mt-1 accent-[var(--accent)]" />
+                  <span>
+                    <span className="flex items-center gap-1.5 font-medium"><Building2 className="size-4 text-accent" /> Pay at the premises</span>
+                    <span className="mt-0.5 block text-sm tabular text-fg-muted">{money(total, data.currency)} upon arrival at the hotel desk</span>
+                  </span>
+                </label>
+                {depositPct < 100 && (
+                  <label className={cn('flex cursor-pointer gap-3 rounded-[var(--r-md)] border p-4 transition', payOption === 'deposit' ? 'border-fg bg-surface-2/60' : 'border-line')}>
+                    <input type="radio" name="pay" checked={payOption === 'deposit'} onChange={() => setPayOption('deposit')} className="mt-1 accent-[var(--accent)]" />
+                    <span>
+                      <span className="block font-medium">Pay a {depositPct}% deposit</span>
+                      <span className="mt-0.5 block text-sm tabular text-fg-muted">{money(deposit, data.currency)} now, {money(total - deposit, data.currency)} at the house</span>
+                    </span>
+                  </label>
+                )}
+                <label className={cn('flex cursor-pointer gap-3 rounded-[var(--r-md)] border p-4 transition', payOption === 'full' ? 'border-fg bg-surface-2/60' : 'border-line')}>
+                  <input type="radio" name="pay" checked={payOption === 'full'} onChange={() => setPayOption('full')} className="mt-1 accent-[var(--accent)]" />
+                  <span>
+                    <span className="block font-medium">Pay in full now</span>
+                    <span className="mt-0.5 block text-sm tabular text-fg-muted">{money(total, data.currency)} online now</span>
+                  </span>
+                </label>
+              </div>
+              <p className="flex items-center gap-2 text-sm text-fg-muted">
+                <ShieldCheck className="size-4 text-success" />
+                {payOption === 'premises'
+                  ? 'Your reservation is confirmed immediately. Settle by Cash, Mobile Money (MTN / Airtel), or Card at the front desk upon check-in.'
+                  : 'MTN MoMo, Airtel Money, Visa or Mastercard through Pesapal. We never see your card.'}
+              </p>
             </fieldset>
             <div className="grid gap-4 rounded-[var(--r-md)] bg-surface-2 p-5 text-sm">
               <p><b>Cancellation:</b> {t(pick.plan.cancellation)}</p>
@@ -303,9 +324,20 @@ export function BookingFlow() {
             </div>
             <button type="submit" className="btn btn-lg justify-self-start" disabled={submitting || !consent || !guest.name || !guest.phone || !guest.email}>
               {submitting ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
-              <span className="btn-label">{submitting ? 'Holding your room…' : `Hold my room and pay ${money(payInFull || depositPct >= 100 ? total : deposit, data.currency)}`}</span>
+              <span className="btn-label">
+                {submitting
+                  ? 'Confirming your reservation…'
+                  : payOption === 'premises'
+                    ? `Confirm booking · Pay ${money(total, data.currency)} at the premises`
+                    : `Hold my room and pay ${money(payOption === 'full' || depositPct >= 100 ? total : deposit, data.currency)}`}
+              </span>
             </button>
-            <p className="-mt-6 text-sm text-fg-subtle">Your room is held for 20 minutes while you pay. Questions? <a className="underline" href={site.contact.whatsapp ? `https://wa.me/${site.contact.whatsapp.replace(/\D/g, '')}` : '/contact'}>WhatsApp us</a>.</p>
+            <p className="-mt-6 text-sm text-fg-subtle">
+              {payOption === 'premises'
+                ? 'Instant confirmation voucher sent to your email.'
+                : 'Your room is held for 20 minutes while you pay.'}{' '}
+              Questions? <a className="underline" href={site.contact.whatsapp ? `https://wa.me/${site.contact.whatsapp.replace(/\D/g, '')}` : '/contact'}>WhatsApp us</a>.
+            </p>
           </form>
           <aside className="lg:sticky lg:top-28 lg:self-start"><Summary /></aside>
         </section>

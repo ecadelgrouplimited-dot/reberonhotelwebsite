@@ -90,6 +90,7 @@ export const zBookingInput = z.object({
   rooms: z.coerce.number().int().min(1).max(10).default(1),
   extras: z.array(z.object({ extraId: z.string().uuid(), quantity: z.coerce.number().int().min(1).max(20) })).max(10).default([]),
   payInFull: z.boolean().default(false),
+  payAtPremises: z.boolean().default(false),
   guest: z.object({
     name: z.string().trim().min(2, 'Tell us your name').max(120),
     phone: z.string().trim().min(7, 'A phone number, please').max(40),
@@ -108,7 +109,7 @@ export interface BookingStartedDTO {
   code: string;
   status: ReservationStatus;
   holdExpiresAt: string | null;
-  payment: { merchantReference: string; redirectUrl: string; amountMinor: string; currency: CurrencyCode; provider: 'PESAPAL' | 'TEST' };
+  payment: { merchantReference: string; redirectUrl: string; amountMinor: string; currency: CurrencyCode; provider: 'PESAPAL' | 'TEST' | 'PREMISES' };
   /** Secret the browser keeps to read its own booking */
   accessToken: string;
 }
@@ -207,7 +208,7 @@ export const zPackageInput = z.object({
 });
 
 export const zManualReservationInput = zBookingInput
-  .omit({ consent: true, payInFull: true, guest: true })
+  .omit({ consent: true, payInFull: true, payAtPremises: true, guest: true })
   .extend({
     source: z.enum(RESERVATION_SOURCES).default('PHONE'),
     guest: z.object({ name: z.string().trim().min(2).max(120), phone: z.string().trim().min(7).max(40), email: z.string().trim().email().max(200).optional().or(z.literal('').transform(() => undefined)) }),

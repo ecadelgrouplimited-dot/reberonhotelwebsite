@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Fraunces, Inter, JetBrains_Mono } from 'next/font/google';
 import { draftMode } from 'next/headers';
-import { api } from '@/lib/api';
+import { api, getStaffSession } from '@/lib/api';
 import { hotelJsonLd, JsonLd, WEB_URL } from '@/lib/seo';
 import { BootScript } from '@/components/site/boot-script';
 import { SiteProvider } from '@/components/site/site-provider';
@@ -12,6 +12,7 @@ import { EnquirySheet } from '@/components/site/enquiry-sheet';
 import { SmoothScroll } from '@/components/site/smooth-scroll';
 import { RevealFallback } from '@/components/site/reveal-fallback';
 import { PreviewBanner } from '@/components/site/preview-banner';
+import { ComingSoonGate, StaffPreviewBar } from '@/components/site/coming-soon-gate';
 import { t } from '@reberon/contracts';
 import './globals.css';
 
@@ -41,7 +42,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [site, rooms, draft] = await Promise.all([api.site(), api.roomTypes(), draftMode()]);
+  const [site, rooms, draft, staffSession] = await Promise.all([api.site(), api.roomTypes(), draftMode(), getStaffSession()]);
+  const isMaintenance = site.features.maintenanceMode ?? true;
+  const canViewSite = !isMaintenance || draft.isEnabled || !!staffSession;
+
   return (
     <html lang="en-UG" className={`${fraunces.variable} ${inter.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
@@ -50,14 +54,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <SiteProvider site={site} rooms={rooms}>
-          {draft.isEnabled && <PreviewBanner />}
-          <Header />
-          <main id="main">{children}</main>
-          <Footer site={site} />
-          <ActionBar />
-          <EnquirySheet />
-          <SmoothScroll />
-          <RevealFallback />
+          {canViewSite ? (
+            <>
+              {draft.isEnabled && <PreviewBanner />}
+              {isMaintenance && staffSession && <StaffPreviewBar userName={staffSession.name} userEmail={staffSession.email} />}
+              <Header />
+              <main id="main">{children}</main>
+              <Footer site={site} />
+              <ActionBar />
+              <EnquirySheet />
+              <SmoothScroll />
+              <RevealFallback />
+            </>
+          ) : (
+            <ComingSoonGate site={site} />
+          )}
         </SiteProvider>
       </body>
     </html>

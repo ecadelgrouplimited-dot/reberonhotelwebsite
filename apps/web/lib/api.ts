@@ -1,10 +1,39 @@
 import 'server-only';
 import { draftMode, cookies } from 'next/headers';
 import type {
-  SiteDTO, PageDTO, RoomTypeCardDTO, RoomTypeDetailDTO, DestinationCardDTO, DestinationDetailDTO, FacilityDTO, ProgressDTO, Paginated, LText,
+  SiteDTO, PageDTO, RoomTypeCardDTO, RoomTypeDetailDTO, DestinationCardDTO, DestinationDetailDTO, FacilityDTO, ProgressDTO, Paginated, LText, MeDTO,
 } from '@reberon/contracts';
 
 const API = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+
+/** Verify if the current browser request holds an active admin/staff session (rb_at or rb_rt cookie). */
+export async function getStaffSession(): Promise<MeDTO | null> {
+  try {
+    const jar = await cookies();
+    const at = jar.get('rb_at')?.value;
+    const rt = jar.get('rb_rt')?.value;
+    if (!at && !rt) return null;
+    const cookieHeader = [at ? `rb_at=${at}` : '', rt ? `rb_rt=${rt}` : ''].filter(Boolean).join('; ');
+    if (at) {
+      const res = await fetch(`${API}/v1/admin/auth/me`, {
+        headers: { cookie: cookieHeader },
+        cache: 'no-store',
+      });
+      if (res.ok) return (await res.json()) as MeDTO;
+    }
+    if (rt) {
+      const res = await fetch(`${API}/v1/admin/auth/refresh`, {
+        method: 'POST',
+        headers: { cookie: cookieHeader, 'x-reberon-client': 'admin' },
+        cache: 'no-store',
+      });
+      if (res.ok) return (await res.json()) as MeDTO;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export class ApiError extends Error {
   constructor(

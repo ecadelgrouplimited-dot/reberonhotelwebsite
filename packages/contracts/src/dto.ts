@@ -49,7 +49,7 @@ export interface SiteDTO {
   checkInTime: string;
   checkOutTime: string;
   openingLabel: LText;
-  features: { bookingEnabled: boolean; waitlistEnabled: boolean; progressEnabled: boolean; toursEnabled: boolean };
+  features: { bookingEnabled: boolean; waitlistEnabled: boolean; progressEnabled: boolean; toursEnabled: boolean; maintenanceMode?: boolean };
   seo: { titleTemplate: string; defaultTitle: string; defaultDescription: LText; shareImage: MediaRef | null };
   footerNote: LText;
   nav: Record<NavMenuKey, NavItemDTO[]>;
