@@ -4,7 +4,7 @@ import { prisma } from './lib.js';
 
 /**
  * First owner on a fresh production database (no demo data there).
- *   OWNER_EMAIL=denis@reberonhotel.ug OWNER_NAME="Denis Mayamba" npx tsx seed/owner.ts
+ *   OWNER_EMAIL=denis@reberonhotel.com OWNER_NAME="Denis Mayamba" npx tsx seed/owner.ts
  * Prints a one-time password; the owner changes it after signing in (Account).
  * Refuses to run if an active owner already exists.
  */

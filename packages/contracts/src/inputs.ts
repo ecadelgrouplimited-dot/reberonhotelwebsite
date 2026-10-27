@@ -96,9 +96,16 @@ export const zUserUpdateInput = z.object({
   accessExpiresAt: z.string().datetime({ offset: true }).nullable().optional(),
   grants: z.array(z.string().max(40)).max(60).optional(),
   revokes: z.array(z.string().max(40)).max(60).optional(),
+  password: zPasswordSchema.optional(),
+  sendCredentials: z.boolean().optional(),
 });
 
-/** A person on the staff list. They sign in only if canSignIn (then an email is needed for the invitation). */
+export const zAdminSetPasswordInput = z.object({
+  password: zPasswordSchema,
+  sendCredentials: z.boolean().default(true),
+});
+
+/** A person on the staff list. They sign in only if canSignIn (then an email is needed for the invitation or credentials). */
 export const zStaffCreateInput = z
   .object({
     name: z.string().trim().min(2).max(120),
@@ -107,8 +114,10 @@ export const zStaffCreateInput = z
     email: z.string().trim().toLowerCase().email().optional().or(z.literal('').transform(() => undefined)),
     role: z.enum(ROLES),
     canSignIn: z.boolean().default(true),
+    password: zPasswordSchema.optional().or(z.literal('').transform(() => undefined)),
+    sendCredentials: z.boolean().default(true),
   })
-  .refine((v) => !v.canSignIn || !!v.email, { path: ['email'], message: 'An email is needed to send the invitation' });
+  .refine((v) => !v.canSignIn || !!v.email, { path: ['email'], message: 'An email is needed for sign-in access' });
 
 /* ---------- Content ---------- */
 

@@ -270,11 +270,11 @@ Open questions for the owner, such as the room mix, real phone numbers and logo,
 
   | Account | Role |
   |---|---|
-  | `owner@reberonhotel.ug` | Owner |
-  | `manager@reberonhotel.ug` | Manager |
-  | `desk@reberonhotel.ug` | Front desk |
-  | `housekeeping@reberonhotel.ug` | Housekeeping |
-  | `relief.desk@reberonhotel.ug` | Front desk without "take payments", 07:00–19:00, access ends after three months |
+  | `owner@reberonhotel.com` | Owner |
+  | `manager@reberonhotel.com` | Manager |
+  | `desk@reberonhotel.com` | Front desk |
+  | `housekeeping@reberonhotel.com` | Housekeeping |
+  | `relief.desk@reberonhotel.com` | Front desk without "take payments", 07:00–19:00, access ends after three months |
 
 - **Demo data:**
   - three months of past stays, with guests in the house and arrivals today

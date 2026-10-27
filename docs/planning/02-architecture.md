@@ -5,7 +5,7 @@ Stack fixed by the spec: **Next.js** (public + desk screens), **NestJS** (engine
 ## 1. System view
 
 ```
-             reberonhotel.ug                      suite.reberonhotel.ug
+             reberonhotel.com                      suite.reberonhotel.com
         ┌──────────────────────┐              ┌──────────────────────────┐
 Guest → │  apps/web  (Next.js) │              │ apps/admin  (Next.js)    │ ← Owner / Manager / Desk / HK
         │  RSC + ISR, public   │              │ RSC + client islands     │
@@ -120,8 +120,8 @@ Upload (admin) → api streams to object storage `originals/` → `media` job ge
 | Env | Hosts | Data |
 |---|---|---|
 | local | `localhost:3000` web, `:3001` admin, `:4000` api | docker-compose; full seed |
-| staging | `staging.reberonhotel.ug`, `suite-staging…`, `api-staging…` | full seed, refreshed on demand |
-| production | `reberonhotel.ug`, `suite.reberonhotel.ug`, `api.reberonhotel.ug` | real data; seed limited to reference data + purged demo content |
+| staging | `staging.reberonhotel.com`, `suite-staging…`, `api-staging…` | full seed, refreshed on demand |
+| production | `reberonhotel.com`, `suite.reberonhotel.com`, `api.reberonhotel.com` | real data; seed limited to reference data + purged demo content |
 
 Deployment target (proposed, see ADR-006): a single VPS (Docker Compose, Caddy for TLS) close to East Africa for Movements I–II; managed Postgres backups nightly to off-site storage. Revisit when desk operations begin.
 

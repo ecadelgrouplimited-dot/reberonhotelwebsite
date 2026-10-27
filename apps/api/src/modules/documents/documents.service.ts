@@ -359,9 +359,146 @@ export class DocumentsService {
 
   /** Public check: is this receipt real? Only confirms what the holder already has. */
   async verify(number: string, check: string) {
-    const doc = await this.prisma.issuedDocument.findUnique({ where: { number: number.trim().toUpperCase() } });
-    if (!doc || this.checkCode(doc.number) !== check.trim().toUpperCase()) return { valid: false as const };
+    const cleanNo = number.trim().toUpperCase();
+    const cleanCheck = check.trim().toUpperCase();
+    if (cleanNo.startsWith('QUO-')) {
+      const quo = await this.prisma.quotation.findUnique({ where: { number: cleanNo } });
+      if (!quo || quo.checkCode.toUpperCase() !== cleanCheck) return { valid: false as const };
+      return {
+        valid: true as const,
+        kind: 'Quotation',
+        number: quo.number,
+        issuedAt: quo.createdAt.toISOString(),
+        currency: quo.currency,
+        amountMinor: quo.totalMinor.toString(),
+        voided: quo.status === 'DECLINED' || quo.status === 'EXPIRED',
+      };
+    }
+    const doc = await this.prisma.issuedDocument.findUnique({ where: { number: cleanNo } });
+    if (!doc || this.checkCode(doc.number) !== cleanCheck) return { valid: false as const };
     return { valid: true as const, kind: DOCUMENT_LABEL[doc.kind], number: doc.number, issuedAt: doc.issuedAt.toISOString(), currency: doc.currency, amountMinor: doc.amountMinor.toString(), voided: !!doc.voidedAt };
+  }
+
+  /** Issue a numbered receipt or invoice directly for POS, Health Club or Converted Quotations. */
+  async issueDirectDocument(o: {
+    kind: DocumentKind;
+    reservationId?: string | null;
+    currency: 'UGX' | 'USD';
+    amountMinor: bigint;
+    issuedTo: { name: string; phone: string | null; email: string | null };
+    lines: DocumentLine[];
+    payments?: DocumentLine[];
+    payment?: { method: string; reference: string | null; purpose: string } | null;
+    balanceMinor?: bigint;
+    note?: string | null;
+    actor: { id: string; name: string } | null;
+  }) {
+    const h = await this.hotel();
+    const now = new Date();
+    const vat = o.kind === 'INVOICE' ? await this.vat(o.amountMinor, h.vatRegistered) : null;
+    const paidMinor = o.kind === 'RECEIPT' ? o.amountMinor : (o.payments ?? []).reduce((a, p) => a + BigInt(p.amountMinor), 0n);
+    const balanceMinor = o.balanceMinor ?? (o.kind === 'RECEIPT' ? 0n : o.amountMinor - paidMinor);
+    const data: DocumentData = {
+      title: DOCUMENT_LABEL[o.kind],
+      hotel: h.hotel,
+      reservation: null,
+      payment: o.payment ? { ...o.payment, at: now.toISOString() } : null,
+      lines: o.lines,
+      payments: o.payments ?? [],
+      totals: {
+        chargesMinor: o.amountMinor.toString(),
+        paidMinor: paidMinor.toString(),
+        balanceMinor: balanceMinor.toString(),
+      },
+      vat,
+      amountInWords: amountInWords(o.amountMinor, o.currency),
+      issuedBy: o.actor?.name ?? 'Reberon Front Desk',
+      footer: h.footer,
+      note: o.note ?? null,
+    };
+    return this.prisma.$transaction((tx) =>
+      this.create(tx, o.kind, {
+        reservationId: o.reservationId ?? null,
+        currency: o.currency,
+        amountMinor: o.amountMinor,
+        issuedTo: o.issuedTo,
+        data,
+        issuedById: o.actor?.id ?? null,
+      }),
+    );
+  }
+
+  /** Printable HTML for a Quotation (A4 or 80mm) with QR code verification. */
+  async renderQuotationHtml(quotationId: string, paper: Paper, autoprint = false) {
+    const quo = await this.prisma.quotation.findUnique({ where: { id: quotationId }, include: { lines: { orderBy: { sortOrder: 'asc' } } } });
+    if (!quo) throw notFound('Quotation');
+    const h = await this.hotel();
+    const vat = await this.vat(quo.totalMinor, h.vatRegistered);
+    const dateStr = iso(quo.eventDate ?? quo.createdAt);
+    const lines: DocumentLine[] = quo.lines.map((l) => ({
+      date: dateStr,
+      description: `${l.description} (${l.quantity} × ${l.unit})`,
+      amountMinor: l.totalMinor.toString(),
+    }));
+    if (quo.discountMinor > 0n) {
+      lines.push({
+        date: dateStr,
+        description: 'Agreed Package Discount',
+        amountMinor: (-quo.discountMinor).toString(),
+      });
+    }
+    const data: DocumentData = {
+      title: 'Quotation',
+      hotel: h.hotel,
+      reservation: quo.eventTitle
+        ? {
+            code: quo.eventType,
+            arrival: iso(quo.eventDate ?? quo.createdAt),
+            departure: iso(quo.endDate ?? quo.eventDate ?? quo.validUntil),
+            nights: 1,
+            room: quo.hallSetup || 'Sipi Grand Hall & Grounds',
+            guests: quo.attendees ? `${quo.attendees} attendees · ${quo.eventTitle}` : quo.eventTitle,
+          }
+        : null,
+      payment: null,
+      lines,
+      payments: [],
+      totals: {
+        chargesMinor: quo.totalMinor.toString(),
+        paidMinor: '0',
+        balanceMinor: quo.totalMinor.toString(),
+      },
+      vat,
+      amountInWords: amountInWords(quo.totalMinor, quo.currency as 'UGX' | 'USD'),
+      issuedBy: quo.createdByName ?? 'Reberon Events & Reservations',
+      footer: quo.terms ?? h.footer,
+      note: [quo.notes, `Valid until ${new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeZone: 'UTC' }).format(quo.validUntil)}`].filter(Boolean).join(' — '),
+    };
+    const nonce = randomBytes(12).toString('base64');
+    return {
+      nonce,
+      html: renderDocument({
+        kind: 'QUOTATION',
+        number: quo.number,
+        issuedAt: quo.createdAt.toISOString(),
+        currency: quo.currency,
+        amountMinor: quo.totalMinor.toString(),
+        issuedTo: {
+          name: quo.clientOrganization ? `${quo.clientName} (${quo.clientOrganization})` : quo.clientName,
+          phone: quo.clientPhone,
+          email: quo.clientEmail,
+        },
+        data,
+        checkCode: quo.checkCode,
+        voided: quo.status === 'DECLINED' ? { at: quo.updatedAt.toISOString(), reason: 'Declined' } : null,
+        copy: 0,
+        paper,
+        autoprint,
+        nonce,
+        verifyUrl: `${env.WEB_URL.replace(/^https?:\/\//, '')}/verify`,
+        altPaperUrl: `?paper=${paper === '80MM' ? 'A4' : '80MM'}`,
+      }),
+    };
   }
 
   /**

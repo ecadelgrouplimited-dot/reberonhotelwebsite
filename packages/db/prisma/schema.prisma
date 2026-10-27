@@ -1471,3 +1471,423 @@ model DocumentSequence {
   series String @id
   next   Int    @default(1)
 }
+
+// ═════════════════════════ Movement V: Unified Operations, POS, Health Club, Events & Inventory ═════════════════════════
+
+enum PosOutletType {
+  KITCHEN
+  BAR
+  HEALTH_CLUB
+  CONFERENCE
+}
+
+enum PosOrderStatus {
+  PENDING
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum PosPaymentMethod {
+  CASH
+  MOBILE_MONEY
+  CARD
+  ROOM_FOLIO
+  BANK_TRANSFER
+}
+
+enum MembershipTier {
+  DAILY_PASS
+  MONTHLY
+  ANNUAL
+  RESIDENT_GUEST
+}
+
+enum HealthClubService {
+  GYM_ONLY
+  STEAM_ONLY
+  SAUNA_ONLY
+  STEAM_SAUNA
+  FULL_COMBO
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  CONVERTED
+  DECLINED
+  EXPIRED
+}
+
+enum EventType {
+  WEDDING
+  CONFERENCE
+  MEETING
+  WORKSHOP
+  RETREAT
+  BANQUET
+  GROUP_STAY
+  CUSTOM
+}
+
+enum InventoryCategory {
+  LINEN_GYM
+  LINEN_ROOM
+  CONSUMABLE
+  BEVERAGE
+  FOOD_KITCHEN
+  FIXED_ASSET
+}
+
+enum StockMovementType {
+  STOCK_IN
+  STOCK_OUT
+  LAUNDRY_SEND
+  LAUNDRY_RETURN
+  DAMAGED_LOST
+  ADJUSTMENT
+}
+
+enum RequisitionStatus {
+  PENDING
+  MANAGER_APPROVED
+  DIRECTOR_APPROVED
+  DISBURSED
+  REJECTED
+}
+
+enum Department {
+  KITCHEN
+  BAR
+  HEALTH_CLUB
+  HOUSEKEEPING
+  FRONT_DESK
+  CONFERENCE
+  MAINTENANCE
+}
+
+model PosOutlet {
+  id            String        @id @default(uuid(7)) @db.Uuid
+  code          String        @unique
+  name          String
+  type          PosOutletType
+  description   String?
+  deviceStation String?
+  isActive      Boolean       @default(true)
+  isSeed        Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  categories PosCategory[]
+  orders     PosOrder[]
+}
+
+model PosCategory {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  outletId  String   @db.Uuid
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  isSeed    Boolean  @default(false)
+
+  outlet PosOutlet @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  items  PosItem[]
+
+  @@index([outletId, sortOrder])
+}
+
+model PosItem {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  categoryId      String   @db.Uuid
+  sku             String   @unique
+  name            String
+  description     String?
+  priceMinorUGX   BigInt
+  priceMinorUSD   BigInt?
+  isAvailable     Boolean  @default(true)
+  prepMinutes     Int?     @db.SmallInt
+  inventoryItemId String?  @db.Uuid
+  isSeed          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  category   PosCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems PosOrderItem[]
+
+  @@index([categoryId])
+}
+
+model PosOrder {
+  id            String           @id @default(uuid(7)) @db.Uuid
+  orderNumber   String           @unique
+  outletId      String           @db.Uuid
+  reservationId String?          @db.Uuid
+  folioLineId   String?          @db.Uuid
+  documentId    String?          @db.Uuid
+  tableOrRoom   String?
+  customerName  String?
+  customerPhone String?
+  status        PosOrderStatus   @default(COMPLETED)
+  paymentMethod PosPaymentMethod @default(CASH)
+  currency      Currency         @default(UGX)
+  subtotalMinor BigInt
+  discountMinor BigInt           @default(0)
+  totalMinor    BigInt
+  notes         String?
+  servedById    String?          @db.Uuid
+  servedByName  String?
+  isSeed        Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  outlet PosOutlet      @relation(fields: [outletId], references: [id])
+  items  PosOrderItem[]
+
+  @@index([outletId, createdAt])
+  @@index([status])
+  @@index([reservationId])
+}
+
+model PosOrderItem {
+  id             String  @id @default(uuid(7)) @db.Uuid
+  orderId        String  @db.Uuid
+  itemId         String  @db.Uuid
+  itemName       String
+  quantity       Int     @default(1)
+  unitPriceMinor BigInt
+  totalMinor     BigInt
+  notes          String?
+
+  order PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item  PosItem  @relation(fields: [itemId], references: [id])
+
+  @@index([orderId])
+}
+
+model HealthClubMembership {
+  id           String            @id @default(uuid(7)) @db.Uuid
+  membershipNo String            @unique
+  memberName   String
+  memberPhone  String
+  memberEmail  String?
+  tier         MembershipTier
+  service      HealthClubService
+  currency     Currency          @default(UGX)
+  amountMinor  BigInt
+  startDate    DateTime
+  endDate      DateTime
+  isActive     Boolean           @default(true)
+  documentId   String?           @db.Uuid
+  notes        String?
+  isSeed       Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  accessLogs HealthClubAccessLog[]
+
+  @@index([memberPhone])
+  @@index([isActive, endDate])
+}
+
+model HealthClubAccessLog {
+  id                String                @id @default(uuid(7)) @db.Uuid
+  membershipId      String?               @db.Uuid
+  reservationId     String?               @db.Uuid
+  guestName         String
+  guestPhone        String?
+  service           HealthClubService
+  tier              MembershipTier
+  currency          Currency              @default(UGX)
+  amountPaidMinor   BigInt                @default(0)
+  paymentMethod     String?
+  documentId        String?               @db.Uuid
+  gymTowelsIssued   Int                   @default(1)
+  gymTowelsReturned Int                   @default(0)
+  sandalsIssued     Boolean               @default(false)
+  showerCapIssued   Boolean               @default(false)
+  ropeIssued        Boolean               @default(false)
+  lockerNumber      String?
+  attendantId       String?               @db.Uuid
+  attendantName     String?
+  checkedInAt       DateTime              @default(now())
+  checkedOutAt      DateTime?
+  isSeed            Boolean               @default(false)
+
+  membership HealthClubMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@index([checkedInAt])
+  @@index([membershipId])
+}
+
+model Quotation {
+  id                     String          @id @default(uuid(7)) @db.Uuid
+  number                 String          @unique
+  clientName             String
+  clientOrganization     String?
+  clientPhone            String
+  clientEmail            String?
+  eventType              EventType       @default(CONFERENCE)
+  eventTitle             String
+  eventDate              DateTime?
+  endDate                DateTime?
+  attendees              Int?
+  hallSetup              String?
+  validUntil             DateTime
+  currency               Currency        @default(UGX)
+  subtotalMinor          BigInt
+  discountMinor          BigInt          @default(0)
+  taxMinor               BigInt          @default(0)
+  totalMinor             BigInt
+  status                 QuotationStatus @default(DRAFT)
+  notes                  String?
+  terms                  String?
+  convertedInvoiceId     String?         @db.Uuid
+  convertedReservationId String?         @db.Uuid
+  createdById            String?         @db.Uuid
+  createdByName          String?
+  checkCode              String
+  isSeed                 Boolean         @default(false)
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  lines QuotationLine[]
+
+  @@index([status, createdAt])
+}
+
+model QuotationLine {
+  id             String @id @default(uuid(7)) @db.Uuid
+  quotationId    String @db.Uuid
+  category       String @default("GENERAL")
+  description    String
+  quantity       Int    @default(1)
+  unit           String @default("UNIT")
+  unitPriceMinor BigInt
+  totalMinor     BigInt
+  sortOrder      Int    @default(0)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId, sortOrder])
+}
+
+model InventoryItem {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  sku            String            @unique
+  name           String
+  category       InventoryCategory
+  department     Department
+  unit           String            @default("PIECE")
+  onHand         Int               @default(0)
+  inUseOrLaundry Int               @default(0)
+  parLevel       Int               @default(10)
+  unitCostMinor  BigInt            @default(0)
+  location       String?
+  condition      String            @default("GOOD")
+  lastCountedAt  DateTime?
+  isSeed         Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  movements StockMovement[]
+
+  @@index([category, department])
+}
+
+model StockMovement {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  itemId         String            @db.Uuid
+  type           StockMovementType
+  quantity       Int
+  balanceAfter   Int
+  department     String?
+  reference      String?
+  notes          String?
+  recordedById   String?           @db.Uuid
+  recordedByName String?
+  isSeed         Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, createdAt])
+}
+
+model Requisition {
+  id                   String            @id @default(uuid(7)) @db.Uuid
+  number               String            @unique
+  department           Department
+  title                String
+  priority             String            @default("NORMAL")
+  status               RequisitionStatus @default(PENDING)
+  currency             Currency          @default(UGX)
+  totalEstimatedMinor  BigInt
+  notes                String?
+  rejectionReason      String?
+  requestedById        String?           @db.Uuid
+  requestedByName      String
+  managerApprovedById  String?           @db.Uuid
+  managerApprovedBy    String?
+  managerApprovedAt    DateTime?
+  directorApprovedById String?           @db.Uuid
+  directorApprovedBy   String?
+  directorApprovedAt   DateTime?
+  disbursedById        String?           @db.Uuid
+  disbursedBy          String?
+  disbursedAt          DateTime?
+  isSeed               Boolean           @default(false)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  items RequisitionItem[]
+
+  @@index([status, createdAt])
+  @@index([department])
+}
+
+model RequisitionItem {
+  id                  String  @id @default(uuid(7)) @db.Uuid
+  requisitionId       String  @db.Uuid
+  inventoryItemId     String? @db.Uuid
+  itemName            String
+  unit                String  @default("PIECE")
+  quantityRequested   Int
+  quantityApproved    Int?
+  estimatedUnitMinor  BigInt
+  totalEstimatedMinor BigInt
+
+  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+
+  @@index([requisitionId])
+}
+
+model StaffAnnouncement {
+  id         String      @id @default(uuid(7)) @db.Uuid
+  department Department?
+  title      String
+  body       String
+  priority   String      @default("NORMAL")
+  authorId   String?     @db.Uuid
+  authorName String
+  authorRole String?
+  isPinned   Boolean     @default(false)
+  isSeed     Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+
+  @@index([isPinned, createdAt])
+}
+
+model TerminalDevice {
+  id         String     @id @default(uuid(7)) @db.Uuid
+  code       String     @unique
+  name       String
+  department Department
+  kind       String     @default("POS_TERMINAL")
+  paperSize  String     @default("80MM")
+  ipOrPort   String?
+  status     String     @default("ONLINE")
+  lastSeenAt DateTime   @default(now())
+  isSeed     Boolean    @default(false)
+}

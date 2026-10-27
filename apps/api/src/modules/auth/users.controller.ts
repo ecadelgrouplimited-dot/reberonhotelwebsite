@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
-import { OWNER_ONLY, PERMISSIONS, zInviteInput, zStaffCreateInput, zUserUpdateInput, type Permission, type SessionDTO, type UserDTO } from '@reberon/contracts';
+import argon2 from 'argon2';
+import { OWNER_ONLY, PERMISSIONS, zAdminSetPasswordInput, zInviteInput, zStaffCreateInput, zUserUpdateInput, type Permission, type SessionDTO, type UserDTO } from '@reberon/contracts';
 import type { z } from 'zod';
 import type { User } from '@reberon/db';
 import { normalizePhone } from '@reberon/utils';
@@ -12,6 +13,7 @@ import { ZodPipe } from '../../common/zod.pipe.js';
 import { badRequest, conflict, notFound } from '../../common/errors.js';
 import { env } from '../../config.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { ARGON_OPTS } from './auth.service.js';
 import { hashToken, newToken } from './tokens.js';
 
 const ROLE_WORD: Record<string, string> = { OWNER: 'owner', MANAGER: 'manager', DESK: 'front desk', HOUSEKEEPING: 'housekeeping' };
@@ -26,7 +28,8 @@ function device(ua: string | null) {
 /**
  * People and access. The role is a starting preset; the owner can add or take
  * away single permissions per person, keep someone as a staff record without
- * a login, limit the hours they can sign in, or end access on a date.
+ * a login, limit the hours they can sign in, end access on a date, or directly
+ * set/change passwords and dispatch credentials to their official email.
  */
 @Controller('v1/admin/users')
 export class UsersController {
@@ -94,14 +97,37 @@ export class UsersController {
     return env.NODE_ENV === 'production' ? undefined : url;
   }
 
+  private async sendCredentialsEmail(user: User, plainPassword: string, me: AuthUser) {
+    if (!user.email) throw badRequest('Add an official email address first before sending credentials');
+    const loginUrl = `${env.ADMIN_URL}/login`;
+    await this.notifications.email({
+      to: user.email,
+      subject: 'Your Reberon Hotel Suite login credentials',
+      heading: 'Your Reberon Suite Access',
+      paragraphs: [
+        `Hello ${user.name.split(' ')[0]},`,
+        `${me.name} has configured your sign-in credentials for the Reberon Hotel Management Suite (${ROLE_WORD[user.role]}).`,
+        'Use the official email and password below to sign in. Once signed in, you can change or reset your password at any time under Account settings.',
+      ],
+      facts: [
+        ['Official Email', user.email],
+        ['Password', plainPassword],
+        ['Role', ROLE_WORD[user.role] ?? user.role],
+        ['Portal URL', loginUrl],
+      ],
+      action: { label: 'Sign in to Reberon Suite', url: loginUrl },
+      footnote: 'Sent via alerts@reberonhotel.com. For security, please update your password after your first sign-in.',
+    });
+  }
+
   /** Kept for older screens: invite someone who signs in. */
   @Post('invite')
   @Requires('users:manage')
   async invite(@Body(new ZodPipe(zInviteInput)) body: z.infer<typeof zInviteInput>, @CurrentUser() me: AuthUser, @Req() req: Request) {
-    return this.create({ ...body, canSignIn: true }, me, req);
+    return this.create({ ...body, canSignIn: true, sendCredentials: true }, me, req);
   }
 
-  /** Add a person. With canSignIn they get an invitation email; without, they are a staff record only. */
+  /** Add a person. With canSignIn they either receive a direct password (and optional credentials email) or an invitation link; without, they are a staff record only. */
   @Post()
   @Requires('users:manage')
   async create(@Body(new ZodPipe(zStaffCreateInput)) body: z.infer<typeof zStaffCreateInput>, @CurrentUser() me: AuthUser, @Req() req: Request) {
@@ -109,13 +135,87 @@ export class UsersController {
     // Only an invitation that was never accepted may be re-used.
     if (existing && !(existing.status === 'INVITED' && !existing.deletedAt)) throw conflict('Someone with that email is already on the staff list');
     const phone = body.phone ? (normalizePhone(body.phone) ?? body.phone) : null;
-    const fields = { name: body.name, jobTitle: body.jobTitle ?? null, phone, role: body.role, canSignIn: body.canSignIn };
+    const passwordHash = body.canSignIn && body.password ? await argon2.hash(body.password, ARGON_OPTS) : undefined;
+    const status = !body.canSignIn ? 'ACTIVE' : passwordHash ? 'ACTIVE' : 'INVITED';
+    const fields = {
+      name: body.name,
+      jobTitle: body.jobTitle ?? null,
+      phone,
+      role: body.role,
+      canSignIn: body.canSignIn,
+      ...(passwordHash ? { passwordHash, status: 'ACTIVE' as const, failedLogins: 0, lockedUntil: null } : {}),
+    };
     const user = existing
       ? await this.prisma.user.update({ where: { id: existing.id }, data: fields })
-      : await this.prisma.user.create({ data: { ...fields, email: body.email ?? null, status: body.canSignIn ? 'INVITED' : 'ACTIVE' } });
-    const inviteUrl = body.canSignIn ? await this.sendInvite(user, me) : undefined;
-    await this.audit.record({ actor: me, action: 'user.create', entityType: 'User', entityId: user.id, summary: `Added ${user.name} (${ROLE_WORD[user.role]})${body.canSignIn ? ' and sent an invitation' : ', no sign-in'}`, req });
-    return { user: (await this.dto([user]))[0], inviteUrl };
+      : await this.prisma.user.create({ data: { ...fields, email: body.email ?? null, status } });
+
+    let inviteUrl: string | undefined;
+    let credentialsEmailed = false;
+    if (body.canSignIn) {
+      if (body.password) {
+        if (body.sendCredentials && user.email) {
+          await this.sendCredentialsEmail(user, body.password, me);
+          credentialsEmailed = true;
+        }
+      } else {
+        inviteUrl = await this.sendInvite(user, me);
+      }
+    }
+
+    await this.audit.record({
+      actor: me,
+      action: 'user.create',
+      entityType: 'User',
+      entityId: user.id,
+      summary: `Added ${user.name} (${ROLE_WORD[user.role]})${!body.canSignIn ? ', no sign-in' : body.password ? (credentialsEmailed ? ' with password and emailed credentials' : ' with password set') : ' and sent an invitation'}`,
+      req,
+    });
+    return { user: (await this.dto([user]))[0], inviteUrl, credentialsEmailed };
+  }
+
+  /** Directly set or change a user's password as Super Admin / Owner, with optional email dispatch of credentials. */
+  @Post(':id/password')
+  @HttpCode(200)
+  @Requires('users:manage')
+  async setPassword(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zAdminSetPasswordInput)) body: z.infer<typeof zAdminSetPasswordInput>,
+    @CurrentUser() me: AuthUser,
+    @Req() req: Request,
+  ) {
+    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null } });
+    if (!user) throw notFound('Person');
+    if (body.sendCredentials && !user.email) {
+      throw badRequest('Save an official email address for this person before sending credentials');
+    }
+    const passwordHash = await argon2.hash(body.password, ARGON_OPTS);
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: {
+        passwordHash,
+        canSignIn: true,
+        status: user.status === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
+        failedLogins: 0,
+        lockedUntil: null,
+      },
+    });
+    await this.prisma.userToken.updateMany({ where: { userId: id, usedAt: null }, data: { usedAt: new Date() } });
+
+    let emailed = false;
+    if (body.sendCredentials && updated.email) {
+      await this.sendCredentialsEmail(updated, body.password, me);
+      emailed = true;
+    }
+
+    await this.audit.record({
+      actor: me,
+      action: 'user.password_set',
+      entityType: 'User',
+      entityId: id,
+      summary: `Set password for ${updated.name}${emailed ? ` and emailed credentials to ${updated.email}` : ''}`,
+      req,
+    });
+    return { user: (await this.dto([updated]))[0], emailed };
   }
 
   @Post(':id/invite')
@@ -124,7 +224,7 @@ export class UsersController {
   async reinvite(@Param('id') id: string, @CurrentUser() me: AuthUser, @Req() req: Request) {
     const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null } });
     if (!user) throw notFound('Person');
-    if (user.passwordHash && user.status === 'ACTIVE') throw badRequest('They already have a password. They can use "Forgot password" on the sign-in page.');
+    if (user.passwordHash && user.status === 'ACTIVE') throw badRequest('They already have a password. Use the Password & Credentials panel to set a new password or send credentials.');
     const updated = await this.prisma.user.update({ where: { id }, data: { canSignIn: true, status: user.passwordHash ? user.status : 'INVITED' } });
     const inviteUrl = await this.sendInvite(updated, me);
     await this.audit.record({ actor: me, action: 'user.invite', entityType: 'User', entityId: id, summary: `Sent ${user.name} an invitation`, req });
@@ -153,14 +253,24 @@ export class UsersController {
     }
     const known = (xs?: string[]) => xs?.filter((p) => (PERMISSIONS as readonly string[]).includes(p) && !OWNER_ONLY.includes(p as Permission));
     if (body.email && body.email !== before.email && (await this.prisma.user.findUnique({ where: { email: body.email } }))) throw conflict('Someone else already uses that email');
+
+    const { password, sendCredentials, ...restBody } = body;
+    const passwordHash = password ? await argon2.hash(password, ARGON_OPTS) : undefined;
+
     const data = {
-      ...body,
-      phone: body.phone === undefined ? undefined : body.phone ? (normalizePhone(body.phone) ?? body.phone) : null,
-      accessExpiresAt: body.accessExpiresAt === undefined ? undefined : body.accessExpiresAt ? new Date(body.accessExpiresAt) : null,
-      grants: known(body.grants),
-      revokes: body.revokes?.filter((p) => (PERMISSIONS as readonly string[]).includes(p)),
+      ...restBody,
+      phone: restBody.phone === undefined ? undefined : restBody.phone ? (normalizePhone(restBody.phone) ?? restBody.phone) : null,
+      accessExpiresAt: restBody.accessExpiresAt === undefined ? undefined : restBody.accessExpiresAt ? new Date(restBody.accessExpiresAt) : null,
+      grants: known(restBody.grants),
+      revokes: restBody.revokes?.filter((p) => (PERMISSIONS as readonly string[]).includes(p)),
+      ...(passwordHash ? { passwordHash, status: 'ACTIVE' as const, failedLogins: 0, lockedUntil: null } : {}),
     };
     const user = await this.prisma.user.update({ where: { id }, data });
+
+    if (password && sendCredentials && user.email) {
+      await this.sendCredentialsEmail(user, password, me);
+    }
+
     // Taking access away ends their open sessions straight away.
     const shut = body.status === 'DISABLED' || body.canSignIn === false || (data.accessExpiresAt && data.accessExpiresAt <= new Date());
     if (shut) await this.prisma.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
@@ -176,8 +286,9 @@ export class UsersController {
       body.status && body.status !== before.status ? body.status.toLowerCase() : '',
       body.signInFrom !== undefined && body.signInFrom !== before.signInFrom ? (body.signInFrom ? `hours ${body.signInFrom}–${body.signInUntil}` : 'any hour') : '',
       body.accessExpiresAt !== undefined ? (body.accessExpiresAt ? `access ends ${body.accessExpiresAt.slice(0, 10)}` : 'no end date') : '',
+      password ? (sendCredentials && user.email ? `password set & emailed to ${user.email}` : 'password set') : '',
     ].filter(Boolean);
-    await this.audit.record({ actor: me, action: 'user.update', entityType: 'User', entityId: id, summary: `${user.name}: ${bits.join('; ') || 'details updated'}`, before: { role: before.role, grants: before.grants, revokes: before.revokes, status: before.status }, after: body, req });
+    await this.audit.record({ actor: me, action: 'user.update', entityType: 'User', entityId: id, summary: `${user.name}: ${bits.join('; ') || 'details updated'}`, before: { role: before.role, grants: before.grants, revokes: before.revokes, status: before.status }, after: restBody, req });
     return (await this.dto([user]))[0];
   }
 

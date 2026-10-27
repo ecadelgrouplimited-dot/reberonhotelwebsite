@@ -1,6 +1,6 @@
 # 06 · Public Website (the Face) — `apps/web`
 
-Domain `reberonhotel.ug`. Own voice, not a page on the construction company's site. Mobile first: *a booking or enquiry that works on a phone in a moving vehicle.*
+Domain `reberonhotel.com`. Own voice, not a page on the construction company's site. Mobile first: *a booking or enquiry that works on a phone in a moving vehicle.*
 
 ## 1. Sitemap (Movement I)
 

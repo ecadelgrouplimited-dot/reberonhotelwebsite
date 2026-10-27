@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "turbo run dev --parallel",
-    "build": "turbo run build",
+    "build": "NODE_OPTIONS=\"--dns-result-order=ipv4first\" turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

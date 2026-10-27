@@ -204,7 +204,7 @@ export function PageBuilder({ id }: { id: string }) {
         </Link>
         <div className="min-w-0">
           <p className="truncate text-[15px] font-semibold">{t(draft.title) || 'Untitled'}</p>
-          <p className="truncate font-mono text-[11.5px] text-fg-subtle">reberonhotel.ug/{draft.slug}</p>
+          <p className="truncate font-mono text-[11.5px] text-fg-subtle">reberonhotel.com/{draft.slug}</p>
         </div>
         <Status value={meta.status} />
         {meta.status === 'SCHEDULED' && meta.publishAt && <Pill tone="blue">{dateTime(meta.publishAt)}</Pill>}

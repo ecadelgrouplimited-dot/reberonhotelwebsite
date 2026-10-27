@@ -1,6 +1,6 @@
 # 07 · Management Platform (the House) — `apps/admin`
 
-Domain `suite.reberonhotel.ug`. `noindex`, strict CSP, cookie auth. Large buttons where staff work fast; dense tables where managers work long.
+Domain `suite.reberonhotel.com`. `noindex`, strict CSP, cookie auth. Large buttons where staff work fast; dense tables where managers work long.
 
 ## 1. Navigation (Movement I build, later items greyed/hidden by feature flag and role)
 

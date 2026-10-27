@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 
 const API = process.env.API_URL ?? 'http://localhost:4000';
 const PASSWORD = process.env.SEED_PASSWORD ?? 'Reberon@Elgon1900';
+const RUN_IP = `10.${(process.pid >> 8) & 255}.${process.pid & 255}.${Math.floor(Math.random() * 250) + 1}`;
 
 class Client {
   cookies = new Map<string, string>();
@@ -16,6 +17,7 @@ class Client {
     const res = await fetch(`${API}/v1${path}`, {
       method,
       headers: {
+        'x-forwarded-for': RUN_IP,
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
         ...(method !== 'GET' ? { 'x-reberon-client': 'admin' } : {}),
         cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; '),
@@ -111,7 +113,7 @@ describe('public API', () => {
 
 describe('auth', () => {
   test('wrong password is rejected with a generic message', async () => {
-    const r = await new Client().login('desk@reberonhotel.ug', 'wrong-password-123');
+    const r = await new Client().login('desk@reberonhotel.com', 'wrong-password-123');
     assert.equal(r.status, 401);
     assert.doesNotMatch(r.body.detail, /desk@/);
   });
@@ -122,14 +124,14 @@ describe('auth', () => {
   });
 
   test('mutations without the client header are refused (CSRF wall)', async () => {
-    const c = await as('manager@reberonhotel.ug');
+    const c = await as('manager@reberonhotel.com');
     const r = await c.req('PATCH', '/admin/settings', {}, { 'x-reberon-client': '' });
     assert.equal(r.status, 403);
   });
 
   test('refresh rotates; reusing an old refresh token ends the family', async () => {
     const c = new Client();
-    assert.equal((await c.login('desk@reberonhotel.ug')).status, 200);
+    assert.equal((await c.login('desk@reberonhotel.com')).status, 200);
     const old = c.cookies.get('rb_rt')!;
     const r1 = await c.post('/admin/auth/refresh');
     assert.equal(r1.status, 200);
@@ -147,7 +149,7 @@ describe('role walls (the API is the wall)', () => {
   let hk: Client;
   let manager: Client;
   before(async () => {
-    [desk, hk, manager] = await Promise.all([as('desk@reberonhotel.ug'), as('housekeeping@reberonhotel.ug'), as('manager@reberonhotel.ug')]);
+    [desk, hk, manager] = await Promise.all([as('desk@reberonhotel.com'), as('housekeeping@reberonhotel.com'), as('manager@reberonhotel.com')]);
   });
 
   test('housekeeping cannot see the inbox, content or payments-adjacent data', async () => {
@@ -168,7 +170,7 @@ describe('role walls (the API is the wall)', () => {
   });
 
   test('the timezone is locked', async () => {
-    const owner = await as('owner@reberonhotel.ug');
+    const owner = await as('owner@reberonhotel.com');
     const r = await owner.patch('/admin/settings', { 'hotel.timezone': 'Europe/London' });
     assert.equal(r.status, 400);
   });
@@ -176,7 +178,7 @@ describe('role walls (the API is the wall)', () => {
 
 describe('pages: draft → publish', () => {
   test('drafts are private; publish validates strictly; versions are kept', async () => {
-    const m = await as('manager@reberonhotel.ug');
+    const m = await as('manager@reberonhotel.com');
     const slug = `test-page-${Date.now()}`;
     const created = await m.post('/admin/pages', { title: { en: 'Test page' }, slug });
     assert.equal(created.status, 201);
@@ -220,7 +222,7 @@ describe('pages: draft → publish', () => {
   });
 
   test('home and system pages cannot be deleted', async () => {
-    const m = await as('manager@reberonhotel.ug');
+    const m = await as('manager@reberonhotel.com');
     const home = (await m.get('/admin/pages')).body.find((p: { slug: string }) => p.slug === '');
     assert.equal((await m.del(`/admin/pages/${home.id}`)).status, 400);
   });
@@ -228,7 +230,7 @@ describe('pages: draft → publish', () => {
 
 describe('media', () => {
   test('an image in use cannot be deleted', async () => {
-    const m = await as('manager@reberonhotel.ug');
+    const m = await as('manager@reberonhotel.com');
     const room = (await m.get('/admin/room-types')).body[0];
     const heroId = room.hero.id;
     const r = await m.del(`/admin/media/${heroId}`);
@@ -248,9 +250,9 @@ describe('lockout', () => {
 });
 
 describe('the house (Movement IV)', () => {
-  const OWNER = 'owner@reberonhotel.ug';
-  const DESK = 'desk@reberonhotel.ug';
-  const HK = 'housekeeping@reberonhotel.ug';
+  const OWNER = 'owner@reberonhotel.com';
+  const DESK = 'desk@reberonhotel.com';
+  const HK = 'housekeeping@reberonhotel.com';
 
   test('the desk board adds up', async () => {
     const r = await (await as(DESK)).get('/admin/desk');
@@ -343,24 +345,34 @@ describe('the house (Movement IV)', () => {
 
 describe('the walk (Movement III) and messaging', () => {
   test('tours stay off the website until switched on', async () => {
-    const r = await new Client().get('/public/tours');
-    assert.equal(r.status, 200);
-    assert.deepEqual(r.body, []);
-    const room = await new Client().get('/public/room-types/elgon-view-king');
-    assert.equal(room.body.tour, null);
+    const owner = await as('owner@reberonhotel.com');
+    const settings = (await owner.get('/admin/settings')).body as Record<string, { value: unknown }>;
+    const prev = settings?.['features.toursEnabled']?.value;
+    await owner.patch('/admin/settings', { 'features.toursEnabled': false });
+    try {
+      const r = await new Client().get('/public/tours');
+      assert.equal(r.status, 200);
+      assert.deepEqual(r.body, []);
+      const room = await new Client().get('/public/room-types/elgon-view-king');
+      assert.equal(room.body.tour, null);
+    } finally {
+      if (prev !== undefined && prev !== false) {
+        await owner.patch('/admin/settings', { 'features.toursEnabled': prev });
+      }
+    }
   });
 
   test('tour links are checked and the desk cannot edit tours', async () => {
-    const owner = await as('owner@reberonhotel.ug');
+    const owner = await as('owner@reberonhotel.com');
     const bad = await owner.post('/admin/tours', { slug: 'test-bad-link', title: { en: 'TEST' }, space: 'LOBBY', provider: 'MATTERPORT', embedUrl: 'https://example.com/x', stage: 'LIVE', status: 'PUBLISHED' });
     assert.equal(bad.status, 422);
-    assert.equal((await (await as('desk@reberonhotel.ug')).post('/admin/tours', {})).status, 403);
+    assert.equal((await (await as('desk@reberonhotel.com')).post('/admin/tours', {})).status, 403);
     assert.equal((await new Client().post('/public/tours/00000000-0000-7000-8000-000000000000/events', { sessionId: 'x', event: 'OPENED', context: 'PAGE' })).status, 422);
   });
 
   test('only the owner holds the keys; templates refuse unknown fields', async () => {
-    assert.equal((await (await as('manager@reberonhotel.ug')).get('/admin/integrations')).status, 403);
-    const owner = await as('owner@reberonhotel.ug');
+    assert.equal((await (await as('manager@reberonhotel.com')).get('/admin/integrations')).status, 403);
+    const owner = await as('owner@reberonhotel.com');
     const list = await owner.get('/admin/integrations');
     assert.equal(list.status, 200);
     assert.doesNotMatch(JSON.stringify(list.body), /secretsEnc|consumerSecret":"[^"n]/);
@@ -373,7 +385,7 @@ describe('the walk (Movement III) and messaging', () => {
 
 describe('people, access and receipts', () => {
   test('staff records without sign-in are on the list and can be given cleaning', async () => {
-    const owner = await as('owner@reberonhotel.ug');
+    const owner = await as('owner@reberonhotel.com');
     const people = (await owner.get('/admin/users')).body as { id: string; name: string; canSignIn: boolean; email: string | null }[];
     const esther = people.find((p) => p.name === 'Esther Chebet');
     assert.ok(esther && !esther.canSignIn && esther.email === null);
@@ -382,9 +394,9 @@ describe('people, access and receipts', () => {
   });
 
   test('per-person access: owner-only powers cannot be granted; changes are reversible', async () => {
-    const owner = await as('owner@reberonhotel.ug');
+    const owner = await as('owner@reberonhotel.com');
     const people = (await owner.get('/admin/users')).body as { id: string; email: string | null; grants: string[]; revokes: string[] }[];
-    const joan = people.find((p) => p.email === 'relief.desk@reberonhotel.ug')!;
+    const joan = people.find((p) => p.email === 'relief.desk@reberonhotel.com')!;
     const r = await owner.patch(`/admin/users/${joan.id}`, { grants: ['reports:read', 'vault:manage'] });
     assert.equal(r.status, 200);
     assert.ok(r.body.permissions.includes('reports:read'));
@@ -394,11 +406,25 @@ describe('people, access and receipts', () => {
     assert.deepEqual(back.body.grants, joan.grants);
     const self = (await owner.get('/admin/auth/me')).body.id as string;
     assert.equal((await owner.patch(`/admin/users/${self}`, { revokes: ['reports:read'] })).status, 400);
-    assert.equal((await (await as('manager@reberonhotel.ug')).patch(`/admin/users/${joan.id}`, { grants: [] })).status, 403);
+    assert.equal((await (await as('manager@reberonhotel.com')).patch(`/admin/users/${joan.id}`, { grants: [] })).status, 403);
+
+    // Super admin (owner) can directly set another user's password and send credentials to their official email
+    const newPass = 'Reberon#AdminSet2026!';
+    const setPw = await owner.post(`/admin/users/${joan.id}/password`, { password: newPass, sendCredentials: true });
+    assert.equal(setPw.status, 200);
+    assert.equal(setPw.body.emailed, true);
+    assert.equal(setPw.body.user.hasPassword, true);
+
+    // Non-owner cannot set another user's password
+    assert.equal((await (await as('manager@reberonhotel.com')).post(`/admin/users/${joan.id}/password`, { password: newPass, sendCredentials: false })).status, 403);
+
+    // Restore Joan's password to SEED_PASSWORD
+    const restorePw = await owner.post(`/admin/users/${joan.id}/password`, { password: PASSWORD, sendCredentials: false });
+    assert.equal(restorePw.status, 200);
   });
 
   test('receipts are numbered, verifiable and walled', async () => {
-    const owner = await as('owner@reberonhotel.ug');
+    const owner = await as('owner@reberonhotel.com');
     const reg = await owner.get('/admin/documents?kind=RECEIPT');
     assert.equal(reg.status, 200);
     const docs = reg.body.data as { number: string; checkCode: string; amountMinor: string }[];
@@ -408,7 +434,150 @@ describe('people, access and receipts', () => {
     assert.equal(v.body.valid, true);
     assert.equal(v.body.amountMinor, docs[0]!.amountMinor);
     assert.deepEqual((await new Client().get(`/public/documents/verify?number=${docs[0]!.number}&check=0000-0000`)).body, { valid: false });
-    assert.equal((await (await as('housekeeping@reberonhotel.ug')).get('/admin/documents')).status, 403);
-    assert.equal((await (await as('desk@reberonhotel.ug')).post(`/admin/documents/00000000-0000-7000-8000-000000000000/void`, { reason: 'test' })).status, 403);
+    assert.equal((await (await as('housekeeping@reberonhotel.com')).get('/admin/documents')).status, 403);
+    assert.equal((await (await as('desk@reberonhotel.com')).post(`/admin/documents/00000000-0000-7000-8000-000000000000/void`, { reason: 'test' })).status, 403);
+  });
+});
+
+describe('movement V: POS, health club, quotations, inventory & requisitions', () => {
+  test('POS outlets, orders, KDS queue and auto-issued receipts', async () => {
+    const owner = await as('owner@reberonhotel.com');
+    const outletsRes = await owner.get('/admin/pos/outlets');
+    assert.equal(outletsRes.status, 200);
+    const outlets = outletsRes.body as { id: string; code: string; categories: { items: { id: string }[] }[] }[];
+    assert.ok(outlets.length >= 4);
+    const bar = outlets.find((o) => o.code === 'BAR') ?? outlets[0]!;
+    const item = bar.categories[0]!.items[0]!;
+
+    const orderRes = await owner.post('/admin/pos/orders', {
+      outletId: bar.id,
+      customerName: 'POS Test Guest',
+      tableOrRoom: 'Terrace 2',
+      paymentMethod: 'CASH',
+      currency: 'UGX',
+      items: [{ itemId: item.id, quantity: 2, notes: 'Extra hot' }],
+    });
+    assert.equal(orderRes.status, 201);
+    assert.match(orderRes.body.orderNumber, /^ORD-\d{4}-\d{5}$/);
+    assert.ok(orderRes.body.documentId, 'cash POS order auto-issues a receipt');
+
+    const kds = await owner.patch(`/admin/pos/orders/${orderRes.body.id}/status`, { status: 'COMPLETED' });
+    assert.equal(kds.status, 200);
+    assert.equal(kds.body.status, 'COMPLETED');
+  });
+
+  test('health club check-in, gym towel issuance and return reconciliation', async () => {
+    const owner = await as('owner@reberonhotel.com');
+    const dash = await owner.get('/admin/healthclub');
+    assert.equal(dash.status, 200);
+    assert.ok(dash.body.stats.activeMembers >= 1);
+
+    const checkIn = await owner.post('/admin/healthclub/checkin', {
+      guestName: 'Altitude Runner',
+      guestPhone: '+256772000111',
+      service: 'FULL_COMBO',
+      tier: 'DAILY_PASS',
+      currency: 'UGX',
+      amountPaidMinor: '60000',
+      paymentMethod: 'CASH',
+      gymTowelsIssued: 2,
+      sandalsIssued: true,
+      showerCapIssued: true,
+      ropeIssued: true,
+      lockerNumber: 'L-09',
+    });
+    assert.equal(checkIn.status, 201);
+    assert.equal(checkIn.body.gymTowelsIssued, 2);
+    assert.ok(checkIn.body.documentId, 'walk-in daily pass issues an official receipt');
+
+    const checkOut = await owner.patch(`/admin/healthclub/access/${checkIn.body.id}/checkout`, {
+      gymTowelsReturned: 2,
+    });
+    assert.equal(checkOut.status, 200);
+    assert.equal(checkOut.body.gymTowelsReturned, 2);
+    assert.ok(checkOut.body.checkedOutAt);
+  });
+
+  test('quotation creation, QR verification, and conversion to invoice & receipt', async () => {
+    const owner = await as('owner@reberonhotel.com');
+    const created = await owner.post('/admin/quotations', {
+      clientName: 'Kapchorwa Coffee Union',
+      clientOrganization: 'KCU Co-op',
+      clientPhone: '+256772123999',
+      clientEmail: 'events@kcu.ug',
+      eventType: 'CONFERENCE',
+      eventTitle: 'Annual Highland Growers Symposium',
+      attendees: 40,
+      hallSetup: 'Banquet',
+      validDays: 14,
+      currency: 'UGX',
+      discountMinor: '0',
+      lines: [
+        {
+          category: 'CONFERENCE',
+          description: 'Sipi Grand Hall Full Day Package',
+          quantity: 40,
+          unit: 'PAX',
+          unitPriceMinor: '85000',
+        },
+      ],
+    });
+    assert.equal(created.status, 201);
+    assert.match(created.body.number, /^QUO-\d{4}-\d{5}$/);
+
+    // Public verification of Quotation number + checkCode (used by QR code)
+    const verifyQuo = await new Client().get(
+      `/public/documents/verify?number=${created.body.number}&check=${created.body.checkCode}`,
+    );
+    assert.equal(verifyQuo.status, 200);
+    assert.equal(verifyQuo.body.valid, true);
+    assert.equal(verifyQuo.body.amountMinor, '3400000');
+
+    // Convert quotation -> official Invoice + Payment Receipt
+    const conv = await owner.post(`/admin/quotations/${created.body.id}/convert`, {
+      recordPaymentNow: true,
+      paymentMethod: 'MOBILE_MONEY',
+      paymentReference: 'MOMO-TEST-991',
+    });
+    assert.equal(conv.status, 200);
+    assert.equal(conv.body.quotation.status, 'CONVERTED');
+    assert.ok(conv.body.invoiceId);
+    assert.ok(conv.body.receiptId);
+  });
+
+  test('segregated linen inventory (gym vs room towels) and departmental requisitions', async () => {
+    const owner = await as('owner@reberonhotel.com');
+    const inv = await owner.get('/admin/inventory');
+    assert.equal(inv.status, 200);
+    assert.ok(inv.body.summary.gymTowelsClean > 0, 'gym towels tracked separately');
+    assert.ok(inv.body.summary.roomTowelsClean > 0, 'room bathroom towels tracked separately');
+
+    const reqRes = await owner.post('/admin/requisitions', {
+      department: 'HEALTH_CLUB',
+      title: 'Steam Bath Eucalyptus Oil Restock',
+      priority: 'NORMAL',
+      items: [
+        {
+          itemName: 'Organic Eucalyptus Steam Oil (Litres)',
+          unit: 'LITRE',
+          quantityRequested: 5,
+          estimatedUnitMinor: '45000',
+        },
+      ],
+    });
+    assert.equal(reqRes.status, 201);
+    assert.match(reqRes.body.number, /^REQ-\d{4}-\d{5}$/);
+
+    const mgr = await owner.post(`/admin/requisitions/${reqRes.body.id}/review`, { action: 'MANAGER_APPROVE' });
+    assert.equal(mgr.status, 200);
+    assert.equal(mgr.body.status, 'MANAGER_APPROVED');
+
+    const dir = await owner.post(`/admin/requisitions/${reqRes.body.id}/review`, { action: 'DIRECTOR_APPROVE' });
+    assert.equal(dir.status, 200);
+    assert.equal(dir.body.status, 'DIRECTOR_APPROVED');
+
+    const disb = await owner.post(`/admin/requisitions/${reqRes.body.id}/review`, { action: 'DISBURSE' });
+    assert.equal(disb.status, 200);
+    assert.equal(disb.body.status, 'DISBURSED');
   });
 });

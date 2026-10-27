@@ -121,7 +121,7 @@ function NewPage({ open, onClose, pages }: { open: boolean; onClose: () => void;
     >
       <div className="grid gap-4">
         <TextInput label="Title" required autoFocus value={title} onChange={(e) => { setTitle(e.target.value); if (!touched) setSlug(slugify(e.target.value)); }} error={errors.title} />
-        <TextInput label="Address" required value={slug} onChange={(e) => { setTouched(true); setSlug(e.target.value.toLowerCase()); }} error={errors.slug} hint={<span className="font-mono">reberonhotel.ug/{slug || '…'}</span>} />
+        <TextInput label="Address" required value={slug} onChange={(e) => { setTouched(true); setSlug(e.target.value.toLowerCase()); }} error={errors.slug} hint={<span className="font-mono">reberonhotel.com/{slug || '…'}</span>} />
         <SelectInput label="Start from" value={template} onChange={(e) => setTemplate(e.target.value)}>
           <option value="">A blank page</option>
           {pages.filter((p) => p.kind !== 'SYSTEM').map((p) => (

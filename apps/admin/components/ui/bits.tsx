@@ -16,7 +16,7 @@ export type Tone = keyof typeof TONES;
 
 export function Pill({ tone = 'neutral', children, dot, className }: { tone?: Tone; children: ReactNode; dot?: boolean; className?: string }) {
   return (
-    <span className={cn('inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-full border px-2 text-[11.5px] font-semibold', TONES[tone], className)}>
+    <span className={cn('inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold leading-none', TONES[tone], className)}>
       {dot && <span className="size-1.5 rounded-full bg-current" />}
       {children}
     </span>
@@ -29,9 +29,9 @@ export const STATUS_TONE: Record<string, Tone> = {
   NEW: 'red', OPEN: 'amber', HELD: 'amber', CONFIRMED: 'green', IN_HOUSE: 'blue', CHECKED_OUT: 'neutral', NO_SHOW: 'red', SUCCEEDED: 'green', PENDING: 'amber', REFUNDED: 'neutral', HIDDEN: 'neutral', ARCHIVED: 'neutral', DISABLED: 'neutral', SPAM: 'neutral', DECLINED: 'neutral', EXPIRED: 'neutral', FAILED: 'red',
 };
 export const STATUS_LABEL: Record<string, string> = {
-  WAITING_GUEST: 'Waiting on guest', COMING_SOON: 'Being built', NEW: 'New', OPEN: 'Open', DONE: 'Done', SPAM: 'Spam', DRAFT: 'Draft',
+  WAITING_GUEST: 'Waiting', COMING_SOON: 'Building', NEW: 'New', OPEN: 'Open', DONE: 'Done', SPAM: 'Spam', DRAFT: 'Draft',
   PUBLISHED: 'Published', SCHEDULED: 'Scheduled', HIDDEN: 'Hidden', AVAILABLE: 'Available', CONTACTED: 'Contacted', CONVERTED: 'Converted',
-  DECLINED: 'Declined', EXPIRED: 'Expired', HELD: 'Awaiting payment', CONFIRMED: 'Confirmed', CANCELLED: 'Cancelled', IN_HOUSE: 'In house', CHECKED_OUT: 'Checked out', NO_SHOW: 'No-show', SUCCEEDED: 'Paid', PENDING: 'Pending', REFUNDED: 'Refunded', ACTIVE: 'Active', INVITED: 'Invited', DISABLED: 'Disabled', ARCHIVED: 'Archived', READY: 'Ready', PROCESSING: 'Processing', FAILED: 'Failed',
+  DECLINED: 'Declined', EXPIRED: 'Expired', HELD: 'Held', CONFIRMED: 'Confirmed', CANCELLED: 'Cancelled', IN_HOUSE: 'In-House', CHECKED_OUT: 'Checked Out', NO_SHOW: 'No-Show', SUCCEEDED: 'Paid', PENDING: 'Pending', REFUNDED: 'Refunded', ACTIVE: 'Active', INVITED: 'Invited', DISABLED: 'Disabled', ARCHIVED: 'Archived', READY: 'Ready', PROCESSING: 'Processing', FAILED: 'Failed',
 };
 
 export function Status({ value }: { value: string }) {
@@ -44,9 +44,9 @@ export function Status({ value }: { value: string }) {
 
 export function PageHeader({ title, description, actions, crumbs, children }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; crumbs?: { label: string; href?: string }[]; children?: ReactNode }) {
   return (
-    <header className="mb-6">
+    <header className="mb-4">
       {crumbs && (
-        <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1 text-[12.5px] text-fg-subtle">
+        <nav aria-label="Breadcrumb" className="mb-1 flex items-center gap-1 text-[11.5px] text-fg-subtle">
           {crumbs.map((c, i) => (
             <span key={i} className="flex items-center gap-1">
               {i > 0 && <ChevronRight className="size-3" />}
@@ -61,10 +61,10 @@ export function PageHeader({ title, description, actions, crumbs, children }: { 
           ))}
         </nav>
       )}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="display text-[1.9rem] leading-tight">{title}</h1>
-          {description && <p className="mt-1 max-w-2xl text-[13.5px] text-fg-muted">{description}</p>}
+          <h1 className="text-[1.25rem] font-semibold leading-tight tracking-tight text-fg">{title}</h1>
+          {description && <p className="mt-0.5 max-w-2xl text-[12px] text-fg-muted">{description}</p>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
@@ -75,11 +75,11 @@ export function PageHeader({ title, description, actions, crumbs, children }: { 
 
 export function Empty({ icon, title, body, action }: { icon?: ReactNode; title: string; body?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="grid place-items-center px-6 py-16 text-center">
-      {icon && <div className="mb-4 grid size-12 place-items-center rounded-full bg-surface-2 text-fg-subtle">{icon}</div>}
-      <p className="text-[15px] font-semibold">{title}</p>
-      {body && <p className="mt-1 max-w-sm text-[13px] text-fg-muted">{body}</p>}
-      {action && <div className="mt-5">{action}</div>}
+    <div className="grid place-items-center px-4 py-10 text-center">
+      {icon && <div className="mb-2.5 grid size-9 place-items-center rounded-lg bg-surface-2 text-fg-subtle">{icon}</div>}
+      <p className="text-[13.5px] font-semibold">{title}</p>
+      {body && <p className="mt-0.5 max-w-xs text-[12px] text-fg-muted">{body}</p>}
+      {action && <div className="mt-3.5">{action}</div>}
     </div>
   );
 }
@@ -90,7 +90,7 @@ export function Skeleton({ className }: { className?: string }) {
 
 export function Tabs<T extends string>({ value, onChange, items, className }: { value: T; onChange: (v: T) => void; items: { value: T; label: ReactNode; count?: number }[]; className?: string }) {
   return (
-    <div role="tablist" className={cn('flex gap-1 overflow-x-auto border-b border-line', className)}>
+    <div role="tablist" className={cn('flex gap-0.5 overflow-x-auto border-b border-line', className)}>
       {items.map((it) => (
         <button
           key={it.value}
@@ -98,10 +98,10 @@ export function Tabs<T extends string>({ value, onChange, items, className }: { 
           type="button"
           aria-selected={value === it.value}
           onClick={() => onChange(it.value)}
-          className={cn('relative -mb-px flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-[13px] font-medium transition-colors', value === it.value ? 'border-fg text-fg' : 'border-transparent text-fg-muted hover:text-fg')}
+          className={cn('relative -mb-px flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-[12.5px] font-medium transition-colors', value === it.value ? 'border-fg text-fg font-semibold' : 'border-transparent text-fg-muted hover:text-fg')}
         >
           {it.label}
-          {it.count !== undefined && <span className="rounded-full bg-surface-2 px-1.5 text-[11px] tabular text-fg-subtle">{it.count}</span>}
+          {it.count !== undefined && <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10.5px] font-semibold tabular text-fg-subtle">{it.count}</span>}
         </button>
       ))}
     </div>
@@ -109,22 +109,22 @@ export function Tabs<T extends string>({ value, onChange, items, className }: { 
 }
 
 export function Kbd({ children }: { children: ReactNode }) {
-  return <kbd className="rounded border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] text-fg-muted">{children}</kbd>;
+  return <kbd className="rounded border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-fg-muted">{children}</kbd>;
 }
 
 export function Section({ title, description, children, actions, className }: { title?: ReactNode; description?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string }) {
   return (
     <section className={cn('card', className)}>
       {(title || actions) && (
-        <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-3.5">
+        <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
           <div>
-            {title && <h2 className="text-[14px] font-semibold">{title}</h2>}
-            {description && <p className="mt-0.5 text-[12.5px] text-fg-muted">{description}</p>}
+            {title && <h2 className="text-[13px] font-semibold">{title}</h2>}
+            {description && <p className="text-[11.5px] text-fg-muted">{description}</p>}
           </div>
           {actions}
         </header>
       )}
-      <div className="p-5">{children}</div>
+      <div className="p-4">{children}</div>
     </section>
   );
 }

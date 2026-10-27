@@ -29,7 +29,7 @@ const schema = z.object({
   SMTP_PORT: z.coerce.number().default(1025),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  MAIL_FROM: z.string().default('Reberon Hotel <hello@reberonhotel.ug>'),
+  MAIL_FROM: z.string().default('Reberon Hotel <alerts@reberonhotel.com>'),
   TURNSTILE_SECRET: z.string().optional(),
   /** TEST = simulated payments (never in production). PESAPAL = real money. */
   PAYMENT_PROVIDER: z.enum(['TEST', 'PESAPAL']).default('TEST'),

@@ -196,7 +196,7 @@ export async function seedPages(refs: Refs, ownerId: string) {
       block('story', {
         eyebrow: en('Who built it'),
         heading: en('Denis, the builders, and a long view'),
-        body: rt.md('Reberon is owned by Denis Mayamba and built by Ecadel Group Limited, working with masons, carpenters and electricians from Kapchorwa and Mbale.\n\nWe set out to build something modest and well made: ten rooms, not fifty; a restaurant that serves the district’s food; a hall the district can use. The view did the rest.'),
+        body: rt.md('Reberon is owned and built by Denis Mayamba, working with masons, carpenters and electricians from Kapchorwa and Mbale. The hotel technology suite and digital platform are created and managed by [Ecadel Group Limited](https://ecadelgroup.com).\n\nWe set out to build something modest and well made: ten rooms, not fifty; a restaurant that serves the district’s food; a hall the district can use. The view did the rest.'),
         media: aboutStory,
       }, { variant: 'left' }),
       block('features', {
@@ -335,7 +335,7 @@ Hotel staff who need it. Payment details are handled by our payment provider and
 Enquiries and waitlist names that do not become bookings are deleted or anonymised after 24 months.
 
 ## Your rights
-Under Uganda’s Data Protection and Privacy Act, 2019, you may ask to see, correct or delete what we hold. Write to hello@reberonhotel.ug.`,
+Under Uganda’s Data Protection and Privacy Act, 2019, you may ask to see, correct or delete what we hold. Write to hello@reberonhotel.com.`,
     ],
     [
       'legal/booking-terms',

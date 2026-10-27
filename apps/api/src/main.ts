@@ -39,5 +39,4 @@ async function bootstrap() {
   await app.listen(env.PORT);
   new Logger('Bootstrap').log(`API ready on ${env.API_URL} (media from ${storage.root})`);
 }
-
 bootstrap();

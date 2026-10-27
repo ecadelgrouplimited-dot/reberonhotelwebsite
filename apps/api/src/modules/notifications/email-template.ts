@@ -34,7 +34,7 @@ export function renderEmail(c: EmailContent, hotelName = 'Reberon Hotel') {
         ${facts}${action}
         ${c.footnote ? `<p style="font-size:13px;line-height:1.6;color:#8A867B;margin:18px 0 0">${esc(c.footnote)}</p>` : ''}
       </td></tr>
-      <tr><td style="padding:20px 32px;background:#F6F1E7;color:#8A867B;font-size:12px;line-height:1.6">${esc(hotelName)} · Kapchorwa, Uganda · reberonhotel.ug</td></tr>
+      <tr><td style="padding:20px 32px;background:#F6F1E7;color:#8A867B;font-size:12px;line-height:1.6">${esc(hotelName)} · Kapchorwa, Uganda · reberonhotel.com</td></tr>
     </table>
   </td></tr></table></body></html>`;
   const text = [

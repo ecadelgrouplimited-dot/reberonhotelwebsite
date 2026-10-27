@@ -8,6 +8,7 @@ async function main() {
   const demoRes = await prisma.reservation.findMany({ where: { isSeed: true }, select: { id: true } });
   await prisma.$transaction([
     prisma.paymentIntent.deleteMany({ where: { reservationId: { in: demoRes.map((r) => r.id) } } }),
+    prisma.roomAssignment.deleteMany({ where: { room: { isSeed: true } } }),
     prisma.reservation.deleteMany({ where: { isSeed: true } }),
     prisma.housekeepingTask.deleteMany({ where: { isSeed: true } }),
     prisma.issuedDocument.deleteMany({ where: { isSeed: true } }),
@@ -16,6 +17,16 @@ async function main() {
     prisma.inventoryDay.deleteMany({}),
     prisma.extra.deleteMany({ where: { isSeed: true } }),
     prisma.package.deleteMany({ where: { isSeed: true } }),
+    prisma.posOrder.deleteMany({}),
+    prisma.posOutlet.deleteMany({ where: { isSeed: true } }),
+    prisma.healthClubAccessLog.deleteMany({}),
+    prisma.healthClubMembership.deleteMany({ where: { isSeed: true } }),
+    prisma.quotation.deleteMany({}),
+    prisma.requisition.deleteMany({}),
+    prisma.stockMovement.deleteMany({}),
+    prisma.inventoryItem.deleteMany({ where: { isSeed: true } }),
+    prisma.staffAnnouncement.deleteMany({ where: { isSeed: true } }),
+    prisma.terminalDevice.deleteMany({ where: { isSeed: true } }),
   ]);
   const counts = await prisma.$transaction([
     prisma.auditLog.deleteMany({ where: { isSeed: true } }),

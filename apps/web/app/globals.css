@@ -268,3 +268,81 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
   .reveal-io .contour-draw path { stroke-dashoffset: 0; }
   .hero-parallax, .hero-fade, .parallax-slow { animation: none !important; }
 }
+
+/* ───────────── Print Layout & Styling ───────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
+
+  :root,
+  :root[data-theme='dark'],
+  html,
+  body {
+    color-scheme: light !important;
+    --bg: #ffffff !important;
+    --bg-warm: #ffffff !important;
+    --surface: #ffffff !important;
+    --surface-2: #f7f7f5 !important;
+    --fg: #121513 !important;
+    --fg-muted: #3a3e3b !important;
+    --fg-subtle: #5f5c55 !important;
+    --line: #dcd7ce !important;
+    --line-strong: #b5b1a8 !important;
+    --brand: #1e2b24 !important;
+    --shadow-soft: none !important;
+    --shadow-lift: none !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color: #121513 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Hide navigation, footers, action bars, dialogs, and non-printable elements */
+  .site-header,
+  footer,
+  footer.site-footer,
+  .action-bar,
+  .preview-banner,
+  .no-print,
+  [data-no-print='true'],
+  button.btn,
+  a.btn,
+  dialog {
+    display: none !important;
+  }
+
+  main,
+  section,
+  .container-x {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-inline: 0 !important;
+    margin-inline: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Prevent awkward page-break splits */
+  .print-avoid-break,
+  .stay-print-card {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}

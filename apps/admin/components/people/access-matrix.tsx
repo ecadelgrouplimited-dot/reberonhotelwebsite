@@ -22,18 +22,18 @@ export function AccessMatrix({ role, grants, revokes, onChange, disabled }: { ro
   const changed = grants.length + revokes.length > 0;
 
   return (
-    <div className="grid gap-5">
-      {isOwner && <p className="rounded-xl bg-surface-2 px-4 py-3 text-[13px]">Owners can do everything. That cannot be narrowed — give someone the manager role instead if they need less.</p>}
+    <div className="grid gap-4">
+      {isOwner && <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-fg-muted">Owners hold full system access. Assign the Manager role to restrict individual permissions.</p>}
       {!isOwner && changed && (
-        <p className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-[13px]">
-          <span>Different from the {ROLE_LABEL[role].toLowerCase()} role: {grants.length ? `${grants.length} added` : ''}{grants.length && revokes.length ? ', ' : ''}{revokes.length ? `${revokes.length} removed` : ''}.</span>
-          {!disabled && <button type="button" className="flex items-center gap-1.5 font-semibold underline-offset-4 hover:underline" onClick={() => onChange({ grants: [], revokes: [] })}><RotateCcw className="size-3.5" /> Back to the role</button>}
+        <p className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs">
+          <span>Custom overrides vs. {ROLE_LABEL[role]} preset: {grants.length ? `+${grants.length} granted` : ''}{grants.length && revokes.length ? ', ' : ''}{revokes.length ? `−${revokes.length} revoked` : ''}.</span>
+          {!disabled && <button type="button" className="flex items-center gap-1 font-semibold underline-offset-4 hover:underline" onClick={() => onChange({ grants: [], revokes: [] })}><RotateCcw className="size-3" /> Reset to role preset</button>}
         </p>
       )}
       {groups.map((g) => (
         <section key={g}>
-          <p className="mb-2 text-[11.5px] font-semibold uppercase tracking-wider text-fg-subtle">{g}</p>
-          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+          <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-fg-subtle">{g}</p>
+          <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">
             {PERMISSION_INFO.filter((p) => p.group === g).map((p) => {
               const on = has(p.key);
               const ownerOnly = OWNER_ONLY.includes(p.key);
@@ -42,20 +42,20 @@ export function AccessMatrix({ role, grants, revokes, onChange, disabled }: { ro
               const removed = !isOwner && preset.has(p.key) && !on;
               return (
                 <li key={p.key}>
-                  <label className={cn('flex items-center gap-4 px-4 py-3 transition', locked ? 'cursor-default' : 'cursor-pointer hover:bg-surface-2/50', removed && 'bg-danger/[0.03]', added && 'bg-success/[0.04]')}>
+                  <label className={cn('flex items-center gap-3 px-3 py-2 transition', locked ? 'cursor-default' : 'cursor-pointer hover:bg-surface-2/50', removed && 'bg-danger/[0.03]', added && 'bg-success/[0.04]')}>
                     <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-2 text-[13.5px] font-medium">
+                      <span className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
                         {p.label}
-                        {p.money && <Banknote className="size-3.5 text-warning" aria-label="Touches money" />}
-                        {ownerOnly && <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-fg-subtle"><Lock className="size-3" /> owners only</span>}
-                        {added && <span className="rounded-full bg-success/15 px-2 text-[11px] font-semibold text-success">added</span>}
-                        {removed && <span className="rounded-full bg-danger/10 px-2 text-[11px] font-semibold text-danger">removed</span>}
+                        {p.money && <Banknote className="size-3 text-warning" aria-label="Touches money" />}
+                        {ownerOnly && <span className="inline-flex items-center gap-0.5 text-[10.5px] font-semibold text-fg-subtle"><Lock className="size-2.5" /> Owner only</span>}
+                        {added && <span className="rounded bg-success/15 px-1.5 py-0.5 text-[10px] font-semibold text-success">+Added</span>}
+                        {removed && <span className="rounded bg-danger/10 px-1.5 py-0.5 text-[10px] font-semibold text-danger">−Removed</span>}
                       </span>
-                      <span className="block text-[12.5px] text-fg-muted">{p.description}</span>
+                      <span className="block text-[11px] text-fg-muted">{p.description}</span>
                     </span>
                     <input type="checkbox" role="switch" className="peer sr-only" checked={on} disabled={locked} onChange={() => toggle(p.key)} />
-                    <span aria-hidden className={cn('relative h-6 w-11 shrink-0 rounded-full transition peer-focus-visible:ring-2 peer-focus-visible:ring-fg', on ? 'bg-success' : 'bg-line-strong', locked && 'opacity-50')}>
-                      <span className={cn('absolute top-0.5 size-5 rounded-full bg-white shadow transition-all', on ? 'left-[22px]' : 'left-0.5')} />
+                    <span aria-hidden className={cn('relative h-5 w-9 shrink-0 rounded-full transition peer-focus-visible:ring-2 peer-focus-visible:ring-fg', on ? 'bg-success' : 'bg-line-strong', locked && 'opacity-50')}>
+                      <span className={cn('absolute top-0.5 size-4 rounded-full bg-white shadow transition-all', on ? 'left-[18px]' : 'left-0.5')} />
                     </span>
                   </label>
                 </li>

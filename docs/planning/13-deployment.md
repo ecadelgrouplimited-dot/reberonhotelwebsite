@@ -9,9 +9,9 @@ One small VPS (ADR-006): 2 vCPU, 4 GB RAM and 40 GB of disk is plenty for ten ro
 | Container | What it is | Public address |
 |---|---|---|
 | `caddy` | HTTPS (automatic Let's Encrypt) and reverse proxy | ports 80 and 443 |
-| `web` | The website (Next.js, standalone) | `https://reberonhotel.ug` |
-| `admin` | The House (Next.js, standalone). It proxies `/v1` to the API, so its cookies stay first-party | `https://house.reberonhotel.ug` |
-| `api` | NestJS API, job queues and crons, plus the media files | `https://api.reberonhotel.ug` |
+| `web` | The website (Next.js, standalone) | `https://reberonhotel.com` |
+| `admin` | The House (Next.js, standalone). It proxies `/v1` to the API, so its cookies stay first-party | `https://house.reberonhotel.com` |
+| `api` | NestJS API, job queues and crons, plus the media files | `https://api.reberonhotel.com` |
 | `postgres` | PostgreSQL 16 (volume `pgdata`) | internal only |
 | `redis` | Queues and cache, persisted with AOF (volume `redisdata`) | internal only |
 | `migrate` | One-off job: runs migrations and loads reference data. It never loads demo data | none |
@@ -20,7 +20,7 @@ Files: `infra/docker-compose.prod.yml`, `infra/docker/*.Dockerfile`, `infra/Cadd
 
 ## 2. First deploy
 
-1. **DNS.** Point `A` records for `reberonhotel.ug`, `www.reberonhotel.ug`, `house.reberonhotel.ug` and `api.reberonhotel.ug` at the server.
+1. **DNS.** Point `A` records for `reberonhotel.com`, `www.reberonhotel.com`, `house.reberonhotel.com` and `api.reberonhotel.com` at the server.
 2. **Server.**
    ```sh
    apt install docker.io docker-compose-v2 git
@@ -43,7 +43,7 @@ Files: `infra/docker-compose.prod.yml`, `infra/docker/*.Dockerfile`, `infra/Cadd
 5. **The owner account.** On a fresh database there are no users. Create the owner once:
    ```sh
    docker compose --env-file .env.production -f infra/docker-compose.prod.yml run --rm \
-     -e OWNER_EMAIL=denis@reberonhotel.ug -e OWNER_NAME="Denis Mayamba" migrate npx tsx seed/owner.ts
+     -e OWNER_EMAIL=denis@reberonhotel.com -e OWNER_NAME="Denis Mayamba" migrate npx tsx seed/owner.ts
    ```
    It prints a one-time password. The owner signs in and changes it under Account, then invites the others from People.
 6. **Backups.** Add `infra/backup.sh` to cron (see the header of the script), and copy `/var/backups/reberon` off the server.
@@ -91,7 +91,7 @@ Until a channel is connected, nothing breaks:
 
 ## 5. Operating notes
 
-- **Health.** `GET https://api.reberonhotel.ug/v1/health` reports the database and Redis. The API container has a Docker health check against it.
+- **Health.** `GET https://api.reberonhotel.com/v1/health` reports the database and Redis. The API container has a Docker health check against it.
 - **Logs.** Use `docker compose … logs -f api`. Every staff action is also in House → Audit log.
 - **Restore.**
   ```sh

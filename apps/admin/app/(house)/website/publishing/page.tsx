@@ -49,7 +49,7 @@ export default function PublishingPage() {
 
   return (
     <div className="fade-in">
-      <PageHeader title="Publishing" description="What is live on reberonhotel.ug, what is waiting, and what still needs doing before launch." actions={<a className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line-strong px-4 text-[13px] font-semibold hover:bg-surface-2" href={WEB_URL} target="_blank" rel="noopener noreferrer">Open the website <ExternalLink className="size-3.5" /></a>} />
+      <PageHeader title="Publishing" description="What is live on reberonhotel.com, what is waiting, and what still needs doing before launch." actions={<a className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line-strong px-4 text-[13px] font-semibold hover:bg-surface-2" href={WEB_URL} target="_blank" rel="noopener noreferrer">Open the website <ExternalLink className="size-3.5" /></a>} />
       <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
         <div className="grid content-start gap-5">
           <Section

@@ -27,7 +27,35 @@ export function Footer({ site }: { site: SiteDTO }) {
               <Link className="btn btn-secondary" href="/first-stay">
                 Claim a first stay
               </Link>
+              <Link className="btn btn-secondary" href="/verify">
+                Verify receipt / quote
+              </Link>
             </div>
+            {(site.social.tiktok || site.social.instagram || site.social.facebook || site.social.x) && (
+              <div className="mt-6 flex flex-wrap items-center gap-3 text-xs uppercase tracking-widest text-fg-subtle">
+                <span>Follow @reberonhotel:</span>
+                {site.social.tiktok && (
+                  <a href={site.social.tiktok} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-mist-50 hover:underline">
+                    TikTok
+                  </a>
+                )}
+                {site.social.instagram && (
+                  <a href={site.social.instagram} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-mist-50 hover:underline">
+                    Instagram
+                  </a>
+                )}
+                {site.social.facebook && (
+                  <a href={site.social.facebook} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-mist-50 hover:underline">
+                    Facebook
+                  </a>
+                )}
+                {site.social.x && (
+                  <a href={site.social.x} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-mist-50 hover:underline">
+                    X
+                  </a>
+                )}
+              </div>
+            )}
           </div>
           <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
             {site.nav.FOOTER_PRIMARY.map((col) => (
@@ -76,7 +104,28 @@ export function Footer({ site }: { site: SiteDTO }) {
                 {t(i.label)}
               </Link>
             ))}
-            <span>{t(site.footerNote)}</span>
+            {(() => {
+              const note = t(site.footerNote);
+              if (!note) return null;
+              const match = note.match(/(.*?\b)(ECADEL GROUP LIMITED|Ecadel Group Limited)(\b.*)?/i);
+              if (match) {
+                return (
+                  <span>
+                    {match[1]}
+                    <a
+                      href="https://ecadelgroup.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2 transition-colors hover:text-fg"
+                    >
+                      {match[2]}
+                    </a>
+                    {match[3] ?? ''}
+                  </span>
+                );
+              }
+              return <span>{note}</span>;
+            })()}
           </div>
           <div className="flex items-center gap-3">
             <CurrencyToggle />
@@ -85,7 +134,7 @@ export function Footer({ site }: { site: SiteDTO }) {
         </div>
       </div>
       <p aria-hidden className="pointer-events-none mt-16 select-none text-center font-display text-[22vw] leading-[0.8] tracking-[-0.04em] text-mist-50/[0.04]">
-        Elgon
+        Reberon
       </p>
     </footer>
   );

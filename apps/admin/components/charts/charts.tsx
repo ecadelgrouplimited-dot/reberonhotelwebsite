@@ -7,10 +7,10 @@ import { cn } from '@/lib/cn';
 export function StatTile({ label, value, note, href }: { label: string; value: number | string; note?: string; href?: string }) {
   const Tag = href ? 'a' : 'div';
   return (
-    <Tag href={href} className={cn('card block p-5', href && 'transition-colors hover:border-line-strong')}>
-      <p className="text-[12.5px] font-medium text-fg-muted">{label}</p>
-      <p className={cn('mt-2 font-semibold leading-none tracking-tight', String(value).length > 13 ? 'text-[1.55rem]' : 'text-[2rem]')}>{typeof value === 'number' ? value.toLocaleString('en') : value}</p>
-      {note && <p className="mt-2 text-[12px] text-fg-subtle">{note}</p>}
+    <Tag href={href} className={cn('card block p-3.5', href && 'transition-colors hover:border-line-strong')}>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">{label}</p>
+      <p className={cn('mt-1.5 font-bold leading-none tracking-tight tabular', String(value).length > 13 ? 'text-base' : 'text-xl')}>{typeof value === 'number' ? value.toLocaleString('en') : value}</p>
+      {note && <p className="mt-1 text-[11px] text-fg-muted">{note}</p>}
     </Tag>
   );
 }
@@ -24,17 +24,11 @@ function niceMax(v: number) {
   return m % 2 ? m + 1 : m;
 }
 
-/**
- * Columns over time, single series. 24px max bars, 4px rounded tops square at the
- * baseline, 2px surface gap, hairline grid, per-bar hover/focus tooltip, table view.
- */
-export function ColumnChart({ data, label, height = 180, caption, max: fixedMax, format = (n: number) => String(n), endLabel = 'Today' }: {
+export function ColumnChart({ data, label, height = 160, caption, max: fixedMax, format = (n: number) => String(n), endLabel = 'Today' }: {
   data: { date: string; count: number }[];
   label: string;
   height?: number;
-  /** Replaces the default "label · total in 30 days". */
   caption?: ReactNode;
-  /** A fixed top (e.g. 100 for percentages). */
   max?: number;
   format?: (n: number) => string;
   endLabel?: string;
@@ -49,17 +43,17 @@ export function ColumnChart({ data, label, height = 180, caption, max: fixedMax,
 
   return (
     <figure>
-      <div className="mb-3 flex items-center justify-between">
-        <figcaption className="text-[12.5px] text-fg-muted">
+      <div className="mb-2.5 flex items-center justify-between">
+        <figcaption className="text-xs text-fg-muted">
           {caption ?? <>{label} · <span className="font-semibold text-fg tabular">{total}</span> in 30 days</>}
         </figcaption>
-        <button type="button" onClick={() => setTable((v) => !v)} className="flex items-center gap-1.5 rounded-full px-2 py-1 text-[12px] text-fg-muted hover:bg-surface-2" aria-pressed={table}>
-          {table ? <BarChart3 className="size-3.5" /> : <Table2 className="size-3.5" />} {table ? 'Chart' : 'Table'}
+        <button type="button" onClick={() => setTable((v) => !v)} className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium text-fg-muted hover:bg-surface-2" aria-pressed={table}>
+          {table ? <BarChart3 className="size-3" /> : <Table2 className="size-3" />} {table ? 'Chart' : 'Table'}
         </button>
       </div>
       {table ? (
-        <div className="scrollbar-thin max-h-[220px] overflow-y-auto">
-          <table className="w-full text-[12.5px]">
+        <div className="scrollbar-thin max-h-[200px] overflow-y-auto">
+          <table className="w-full text-xs">
             <thead className="text-left text-fg-subtle">
               <tr>
                 <th className="py-1 font-medium">Day</th>
@@ -78,13 +72,13 @@ export function ColumnChart({ data, label, height = 180, caption, max: fixedMax,
         </div>
       ) : (
         <div className="relative flex gap-2" style={{ height }}>
-          <div className="flex flex-col justify-between pb-6 text-right text-[11px] tabular text-fg-subtle">
+          <div className="flex flex-col justify-between pb-5 text-right text-[10.5px] tabular text-fg-subtle">
             {[...ticks].reverse().map((t) => (
               <span key={t} className="-translate-y-1/2 leading-none">{format(t)}</span>
             ))}
           </div>
           <div className="relative flex-1">
-            <div className="absolute inset-x-0 top-0 bottom-6">
+            <div className="absolute inset-x-0 top-0 bottom-5">
               {ticks.map((t) => (
                 <div key={t} className="absolute inset-x-0 border-t border-line" style={{ bottom: `${(t / max) * 100}%` }} />
               ))}
@@ -101,11 +95,11 @@ export function ColumnChart({ data, label, height = 180, caption, max: fixedMax,
                     aria-label={`${fmt(d.date)}: ${format(d.count)}`}
                   >
                     <span
-                      className={cn('block w-full max-w-6 rounded-t-[4px] transition-opacity', hover !== null && hover !== i && 'opacity-45')}
+                      className={cn('block w-full max-w-6 rounded-t-[3px] transition-opacity', hover !== null && hover !== i && 'opacity-45')}
                       style={{ height: `${(d.count / max) * 100}%`, minHeight: d.count ? 3 : 0, background: 'var(--series)' }}
                     />
                     {i === peak && d.count > 0 && hover === null && (
-                      <span className="absolute text-[11px] font-semibold tabular text-fg" style={{ bottom: `calc(${(d.count / max) * 100}% + 4px)` }}>
+                      <span className="absolute text-[10.5px] font-semibold tabular text-fg" style={{ bottom: `calc(${(d.count / max) * 100}% + 3px)` }}>
                         {format(d.count)}
                       </span>
                     )}
@@ -113,14 +107,14 @@ export function ColumnChart({ data, label, height = 180, caption, max: fixedMax,
                 ))}
               </div>
             </div>
-            <div className="absolute inset-x-0 bottom-0 flex justify-between text-[11px] text-fg-subtle">
+            <div className="absolute inset-x-0 bottom-0 flex justify-between text-[10.5px] text-fg-subtle">
               <span>{fmt(data[0]!.date)}</span>
               <span>{fmt(data[Math.floor(data.length / 2)]!.date)}</span>
               <span>{endLabel === 'last' ? fmt(data[data.length - 1]!.date) : endLabel}</span>
             </div>
             {hover !== null && (
               <div
-                className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12px] shadow-[var(--shadow-soft)]"
+                className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-md border border-line bg-surface px-2 py-1 text-[11px] shadow-[var(--shadow-soft)]"
                 style={{ left: `${((hover + 0.5) / data.length) * 100}%`, top: -8 }}
                 role="status"
               >
@@ -138,12 +132,12 @@ export function ColumnChart({ data, label, height = 180, caption, max: fixedMax,
 export function BarList({ data }: { data: { label: string; value: number }[] }) {
   const max = Math.max(1, ...data.map((d) => d.value));
   return (
-    <ul className="grid gap-3">
+    <ul className="grid gap-2">
       {data.map((d) => (
-        <li key={d.label} className="grid grid-cols-[8.5rem_1fr] items-center gap-3 text-[13px]" title={`${d.label}: ${d.value}`}>
+        <li key={d.label} className="grid grid-cols-[8rem_1fr] items-center gap-2.5 text-xs" title={`${d.label}: ${d.value}`}>
           <span className="truncate text-fg-muted">{d.label}</span>
           <span className="flex items-center gap-2">
-            <span className="h-[18px] rounded-r-[4px]" style={{ width: `${(d.value / max) * 85}%`, minWidth: 4, background: 'var(--series)' }} />
+            <span className="h-3.5 rounded-r-[3px]" style={{ width: `${(d.value / max) * 85}%`, minWidth: 4, background: 'var(--series)' }} />
             <span className="font-semibold tabular">{d.value}</span>
           </span>
         </li>

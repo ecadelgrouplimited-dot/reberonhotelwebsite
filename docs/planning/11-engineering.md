@@ -10,7 +10,7 @@ pnpm db:reset            # migrate + seed (reference + demo + placeholder media)
 pnpm dev                 # web :3000 · admin :3001 · api :4000 · mailpit :8025 · minio :9001
 ```
 
-Default logins after seed: `owner@reberonhotel.ug`, `manager@…`, `desk@…`, `housekeeping@…` with `SEED_PASSWORD`.
+Default logins after seed: `owner@reberonhotel.com`, `manager@…`, `desk@…`, `housekeeping@…` with `SEED_PASSWORD`.
 
 ## 2. Conventions
 

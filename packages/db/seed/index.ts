@@ -14,6 +14,7 @@ import { seedAudit } from './demo/audit.js';
 import { seedBooking } from './demo/booking.js';
 import { seedArrivalsToday, seedHouse } from './demo/house.js';
 import { seedTours } from './demo/tours.js';
+import { seedOperations } from './demo/operations.js';
 
 const referenceOnly = process.argv.includes('--reference-only');
 
@@ -33,15 +34,23 @@ async function main() {
   const destinations = await seedDestinations();
   await seedProgress();
   const faqs = await seedFaqs();
-  await seedPages({ rooms, facilities, destinations, faqs }, users['owner@reberonhotel.ug']!);
+  await seedPages({ rooms, facilities, destinations, faqs }, users['owner@reberonhotel.com']!);
   await seedNavigation();
-  const staff = [users['owner@reberonhotel.ug']!, users['manager@reberonhotel.ug']!, users['desk@reberonhotel.ug']!];
+  const staff = [users['owner@reberonhotel.com']!, users['manager@reberonhotel.com']!, users['desk@reberonhotel.com']!];
   await seedInboxAndWaitlist(staff, Object.values(rooms));
   await seedAudit(staff);
-  await seedBooking(users['owner@reberonhotel.ug']!, users['desk@reberonhotel.ug']!);
-  await seedHouse({ ownerId: users['owner@reberonhotel.ug']!, deskId: users['desk@reberonhotel.ug']!, housekeepingId: users['housekeeping@reberonhotel.ug']! });
-  await seedArrivalsToday(users['desk@reberonhotel.ug']!);
+  await seedBooking(users['owner@reberonhotel.com']!, users['desk@reberonhotel.com']!);
+  await seedHouse({ ownerId: users['owner@reberonhotel.com']!, deskId: users['desk@reberonhotel.com']!, housekeepingId: users['housekeeping@reberonhotel.com']! });
+  await seedArrivalsToday(users['desk@reberonhotel.com']!);
   await seedTours();
+  await seedOperations({
+    ownerId: users['owner@reberonhotel.com']!,
+    managerId: users['manager@reberonhotel.com']!,
+    deskId: users['desk@reberonhotel.com']!,
+    barId: users['bar@reberonhotel.com'],
+    kitchenId: users['kitchen@reberonhotel.com'],
+    gymId: users['gym@reberonhotel.com'],
+  });
   const shareImage = await prisma.mediaAsset.findFirst({ where: { storageKey: 'seed/page-share-default' } });
   if (shareImage) await prisma.setting.update({ where: { key: 'seo.shareImageId' }, data: { value: shareImage.id } });
   console.log(`Done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);

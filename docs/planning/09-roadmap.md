@@ -76,7 +76,7 @@ The API integration suite (19 tests) passes.
 | 1.12 | Admin: inbox + waitlist | Assign, reply (email), notes, status, CSV export |
 | 1.13 | Admin: settings, users & invitations, audit log | OWNER-only walls enforced in API tests |
 | 1.14 | Performance, a11y and SEO pass; content load with real copy/photos | Targets in [01 §6](01-product-scope.md) met |
-| 1.15 | Production deploy, backups, monitoring, purge demo, go-live | `reberonhotel.ug` live |
+| 1.15 | Production deploy, backups, monitoring, purge demo, go-live | `reberonhotel.com` live |
 
 ## Phase 2 — Movement II · Door (starts when rates exist)
 

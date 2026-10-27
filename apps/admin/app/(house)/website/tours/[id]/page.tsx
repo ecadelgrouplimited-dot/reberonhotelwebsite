@@ -159,7 +159,18 @@ function Editor({ id }: { id: string }) {
                       setSpot(placing, { frame: Math.min(frame, f.mediaIds.length - 1), x: Math.round(((e.clientX - r.left) / r.width) * 1000) / 1000, y: Math.round(((e.clientY - r.top) / r.height) * 1000) / 1000 });
                       setPlacing(null);
                     }}>
-                    <img src={thumb(curFrame, 960)} alt="" className="absolute inset-0 size-full object-cover" onLoad={(e) => setRatios((r) => ({ ...r, [curFrame]: e.currentTarget.naturalWidth / e.currentTarget.naturalHeight }))} />
+                    <img
+                      src={thumb(curFrame, 960)}
+                      alt=""
+                      className="absolute inset-0 size-full object-cover"
+                      onLoad={(e) => {
+                        const img = e.currentTarget;
+                        if (img?.naturalWidth && img?.naturalHeight) {
+                          const ratio = img.naturalWidth / img.naturalHeight;
+                          setRatios((r) => ({ ...r, [curFrame]: ratio }));
+                        }
+                      }}
+                    />
                     {f.hotspots.map((h, i) => h.frame === Math.min(frame, f.mediaIds.length - 1) && h.x !== null && h.y !== null && (
                       <span key={i} className="absolute grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-basalt-950/80 text-[11px] font-bold text-white shadow" style={{ left: `${h.x * 100}%`, top: `${h.y * 100}%` }} title={h.label.en}>{i + 1}</span>
                     ))}

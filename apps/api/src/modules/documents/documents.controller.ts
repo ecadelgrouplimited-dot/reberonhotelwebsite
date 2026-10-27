@@ -8,6 +8,7 @@ import { ZodPipe } from '../../common/zod.pipe.js';
 import { notFound } from '../../common/errors.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { stayToken } from '../../common/stay-token.js';
+import { env } from '../../config.js';
 import { DocumentsService } from './documents.service.js';
 import type { Paper } from './render.js';
 
@@ -16,7 +17,7 @@ const paperOf = (p?: string, fallback: Paper = 'A4'): Paper => (p ? (p.toUpperCa
 /** The page is ours alone: only its own inline style and script (by nonce) may run. */
 function sendHtml(res: Response, out: { html: string; nonce: string }) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Content-Security-Policy', `default-src 'none'; style-src 'nonce-${out.nonce}'; script-src 'nonce-${out.nonce}'; img-src data: https:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`);
+  res.setHeader('Content-Security-Policy', `default-src 'none'; style-src 'nonce-${out.nonce}'; script-src 'nonce-${out.nonce}'; img-src data: https:; base-uri 'none'; form-action 'none'; frame-ancestors 'self' ${env.WEB_URL} ${env.ADMIN_URL}`);
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
   res.send(out.html);

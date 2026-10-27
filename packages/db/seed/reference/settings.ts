@@ -13,15 +13,15 @@ export const SETTING_DEFAULTS: { key: string; group: SettingGroup; value: unknow
   { key: 'hotel.checkOutTime', group: 'BOOKING', value: '10:30' },
   { key: 'hotel.openingLabel', group: 'GENERAL', value: en('Opening 2027') },
   { key: 'hotel.logoId', group: 'GENERAL', value: null },
-  { key: 'hotel.footerNote', group: 'GENERAL', value: en('Built in Kapchorwa by Ecadel Group Limited.') },
+  { key: 'hotel.footerNote', group: 'GENERAL', value: en('Technology created and managed by ECADEL GROUP LIMITED.') },
   { key: 'contact.phones', group: 'CONTACT', value: ['+256 700 000 000'] },
   { key: 'contact.whatsapp', group: 'CONTACT', value: '+256700000000' },
-  { key: 'contact.email', group: 'CONTACT', value: 'hello@reberonhotel.ug' },
+  { key: 'contact.email', group: 'CONTACT', value: 'hello@reberonhotel.com' },
   { key: 'contact.address', group: 'CONTACT', value: en('Kapchorwa, on the Mbale–Kapchorwa road, Eastern Uganda') },
   { key: 'contact.geo', group: 'CONTACT', value: { lat: 1.396, lng: 34.45 } },
   { key: 'contact.hours', group: 'CONTACT', value: en('Enquiries answered 7:00–21:00, every day') },
   { key: 'contact.responsePromise', group: 'CONTACT', value: en('We reply within four hours, 7:00–21:00.') },
-  { key: 'social', group: 'CONTACT', value: { instagram: '', facebook: '', x: '' } },
+  { key: 'social', group: 'CONTACT', value: { tiktok: 'https://tiktok.com/@reberonhotel', instagram: 'https://instagram.com/reberonhotel', facebook: 'https://facebook.com/reberonhotel', x: 'https://x.com/reberonhotel' } },
   { key: 'seo.titleTemplate', group: 'SEO', value: '%s · Reberon Hotel, Kapchorwa' },
   { key: 'seo.defaultTitle', group: 'SEO', value: 'Reberon Hotel — Kapchorwa, Mount Elgon' },
   {
@@ -39,7 +39,7 @@ export const SETTING_DEFAULTS: { key: string; group: SettingGroup; value: unknow
   { key: 'receipts.vatRegistered', group: 'BOOKING', value: false },
   { key: 'receipts.footer', group: 'BOOKING', value: 'Thank you for staying with us on the mountain. Keep this for your records.' },
   { key: 'receipts.paper', group: 'BOOKING', value: 'A4' },
-  { key: 'notifications.staffEmails', group: 'NOTIFICATIONS', value: ['frontdesk@reberonhotel.ug'] },
+  { key: 'notifications.staffEmails', group: 'NOTIFICATIONS', value: ['alerts@reberonhotel.com'] },
   { key: 'notifications.ownerBriefTime', group: 'NOTIFICATIONS', value: '19:00' },
 ];
 
@@ -50,6 +50,24 @@ export async function seedSettings() {
       create: { key: s.key, group: s.group, value: s.value as object },
       update: {},
     });
+  }
+  // Ensure legacy .ug domain values in settings are migrated to .com
+  const contactEmail = await prisma.setting.findUnique({ where: { key: 'contact.email' } });
+  if (contactEmail && typeof contactEmail.value === 'string' && contactEmail.value.endsWith('@reberonhotel.ug')) {
+    await prisma.setting.update({ where: { key: 'contact.email' }, data: { value: contactEmail.value.replace('@reberonhotel.ug', '@reberonhotel.com') } });
+  }
+  const staffEmails = await prisma.setting.findUnique({ where: { key: 'notifications.staffEmails' } });
+  if (staffEmails && Array.isArray(staffEmails.value) && staffEmails.value.some((e) => String(e).includes('@reberonhotel.ug') || String(e).includes('frontdesk@'))) {
+    await prisma.setting.update({ where: { key: 'notifications.staffEmails' }, data: { value: ['alerts@reberonhotel.com'] } });
+  }
+  const privacyPage = await prisma.page.findUnique({ where: { slug: 'legal/privacy' } });
+  if (privacyPage) {
+    const raw = JSON.stringify(privacyPage.publishedBlocks ?? []);
+    if (raw.includes('reberonhotel.ug')) {
+      const updatedBlocks = JSON.parse(raw.replace(/reberonhotel\.ug/g, 'reberonhotel.com'));
+      const updatedDraft = JSON.parse(JSON.stringify(privacyPage.draftBlocks ?? []).replace(/reberonhotel\.ug/g, 'reberonhotel.com'));
+      await prisma.page.update({ where: { id: privacyPage.id }, data: { publishedBlocks: updatedBlocks, draftBlocks: updatedDraft } });
+    }
   }
   log('settings', `${SETTING_DEFAULTS.length} keys`);
 }

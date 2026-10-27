@@ -1,5 +1,6 @@
 import type { DocumentData } from '@reberon/contracts';
 import { formatMoney, type Currency } from '@reberon/utils';
+import { renderQrSvg } from './qr.js';
 
 export type Paper = 'A4' | '80MM';
 
@@ -9,7 +10,7 @@ const day = (iso: string) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', 
 const stamp = (iso: string) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' }).format(new Date(iso));
 
 export interface RenderInput {
-  kind: 'RECEIPT' | 'REFUND' | 'INVOICE' | 'STATEMENT';
+  kind: 'RECEIPT' | 'REFUND' | 'INVOICE' | 'STATEMENT' | 'QUOTATION';
   number: string;
   issuedAt: string;
   currency: string;
@@ -33,7 +34,9 @@ export function renderDocument(d: RenderInput): string {
   const narrow = d.paper === '80MM';
   const x = d.data;
   const cur = d.currency;
-  const isInvoice = d.kind === 'INVOICE' || d.kind === 'STATEMENT';
+  const isInvoice = d.kind === 'INVOICE' || d.kind === 'STATEMENT' || d.kind === 'QUOTATION';
+  const qrTarget = d.checkCode && d.verifyUrl ? `https://${d.verifyUrl.replace(/^https?:\/\//, '')}?number=${encodeURIComponent(d.number)}&check=${encodeURIComponent(d.checkCode)}` : null;
+  const qrSvg = qrTarget ? renderQrSvg(qrTarget, narrow ? 56 : 72) : '';
   const hotelLines = [x.hotel.legalName && x.hotel.legalName !== x.hotel.name ? x.hotel.legalName : null, x.hotel.address, [x.hotel.phone, x.hotel.email].filter(Boolean).join(' · ') || null, x.hotel.tin ? `TIN ${x.hotel.tin}` : null].filter(Boolean);
   const rows = (lines: { date: string; description: string; amountMinor: string }[], negate = false) =>
     lines.map((l) => `<tr><td class="d">${esc(day(l.date))}</td><td>${esc(l.description)}</td><td class="n">${esc(money(negate ? -BigInt(l.amountMinor) : BigInt(l.amountMinor), cur))}</td></tr>`).join('');
@@ -60,12 +63,14 @@ export function renderDocument(d: RenderInput): string {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(x.title)} ${esc(d.number)}</title>
 <style nonce="${d.nonce}">
-  @page { size: ${narrow ? '80mm auto' : 'A4'}; margin: ${narrow ? '4mm' : '16mm'}; }
+  @page { size: ${narrow ? '80mm auto' : 'A4'}; margin: ${narrow ? '4mm' : '14mm'}; }
   * { box-sizing: border-box; }
   body { margin: 0; background: #ECE8DF; color: #121513; font: ${narrow ? '12px' : '13.5px'}/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .sheet { position: relative; width: ${narrow ? '72mm' : '178mm'}; min-height: ${narrow ? 'auto' : '250mm'}; margin: 24px auto; background: #fff; padding: ${narrow ? '4mm' : '14mm 16mm'}; box-shadow: 0 10px 40px -20px rgb(0 0 0 / .35); overflow: hidden; }
+  .sheet { position: relative; width: ${narrow ? '72mm' : '180mm'}; min-height: ${narrow ? 'auto' : '250mm'}; margin: 24px auto; background: #fff; padding: ${narrow ? '4mm' : '14mm 16mm'}; box-shadow: 0 10px 40px -20px rgb(0 0 0 / .35); overflow: hidden; }
   header { display: flex; ${narrow ? 'flex-direction: column; text-align: center; gap: 2mm;' : 'justify-content: space-between; gap: 10mm;'} border-bottom: 2px solid #121513; padding-bottom: ${narrow ? '3mm' : '6mm'}; }
-  .brand b { display: block; font: 600 ${narrow ? '17px' : '24px'}/1.1 Georgia, "Times New Roman", serif; letter-spacing: .01em; }
+  .brand-head { display: inline-flex; align-items: center; ${narrow ? 'justify-content: center;' : ''} gap: 8px; margin-bottom: 3px; }
+  .brand-logo { width: ${narrow ? '26px' : '32px'}; height: ${narrow ? '16px' : '20px'}; shrink-0: 0; }
+  .brand b { display: block; font: 600 ${narrow ? '17px' : '23px'}/1.1 Georgia, "Times New Roman", serif; letter-spacing: .01em; }
   .brand span { display: block; color: #55594F; font-size: ${narrow ? '10.5px' : '12px'}; }
   .doc { text-align: ${narrow ? 'center' : 'right'}; }
   .doc .t { font-size: ${narrow ? '13px' : '12px'}; letter-spacing: .18em; text-transform: uppercase; color: #9E2A2B; font-weight: 700; }
@@ -93,24 +98,45 @@ export function renderDocument(d: RenderInput): string {
   h3 { margin-top: 5mm; }
   .total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4mm; padding: 3mm 0; border-top: 2px solid #121513; font-size: ${narrow ? '14px' : '16px'}; }
   .total b { font-size: ${narrow ? '17px' : '22px'}; }
-  footer { margin-top: ${narrow ? '4mm' : '10mm'}; padding-top: 3mm; border-top: 1px solid #CFCBC0; color: #55594F; font-size: 11.5px; ${narrow ? 'text-align:center;' : ''} }
+  footer { margin-top: ${narrow ? '4mm' : '10mm'}; padding-top: 3mm; border-top: 1px solid #CFCBC0; color: #55594F; font-size: 11.5px; ${narrow ? 'text-align:center;' : 'display:flex; justify-content:space-between; align-items:flex-end; gap:6mm;'} }
   footer p { margin: 0 0 1mm; }
+  footer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .qr-box { ${narrow ? 'margin: 2mm auto 0;' : 'shrink: 0;'} text-align: center; }
+  .qr-box svg { border: 1px solid #E7E2D6; padding: 2px; border-radius: 4px; background: #fff; display: inline-block; }
+  .qr-box span { display: block; font-size: 9px; color: #7C786E; letter-spacing: .06em; text-transform: uppercase; margin-top: 1px; }
+  .credit { margin-top: 2.5mm; font-size: 10px; color: #7C786E; }
   .check { font-family: ui-monospace, monospace; letter-spacing: .08em; color: #121513; }
   .note { margin-top: 3mm; padding: 2mm 3mm; background: #F4F1EA; font-size: 12px; }
   .void { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
   .void span { transform: rotate(-24deg); font: 700 ${narrow ? '42px' : '110px'}/1 Georgia, serif; color: rgb(158 42 43 / .18); border: 6px solid rgb(158 42 43 / .18); padding: 0 6mm; letter-spacing: .1em; }
   .voidnote { color: #9E2A2B; font-weight: 600; }
-  .toolbar { position: sticky; top: 0; display: flex; justify-content: center; gap: 8px; padding: 10px; background: rgb(236 232 223 / .92); backdrop-filter: blur(6px); }
-  .toolbar button, .toolbar a { font: 600 13px system-ui, sans-serif; padding: 8px 16px; border-radius: 999px; border: 1px solid #121513; background: #121513; color: #fff; cursor: pointer; text-decoration: none; }
+  .toolbar { position: sticky; top: 0; display: flex; justify-content: center; gap: 8px; padding: 10px; background: rgb(236 232 223 / .92); backdrop-filter: blur(6px); z-index: 10; }
+  .toolbar button, .toolbar a { font: 600 13px system-ui, sans-serif; padding: 8px 16px; border-radius: 999px; border: 1px solid #121513; background: #121513; color: #fff; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
   .toolbar a { background: transparent; color: #121513; }
-  @media print { body { background: #fff; } .sheet { margin: 0; box-shadow: none; width: auto; min-height: 0; padding: 0; } .toolbar { display: none; } }
+  .toolbar button:hover { background: #262B27; }
+  .toolbar a:hover { background: #E2DED4; }
+  @media print {
+    body { background: #fff !important; }
+    .sheet { margin: 0 !important; box-shadow: none !important; width: 100% !important; min-height: 0 !important; padding: ${narrow ? '0' : '2mm 0'} !important; }
+    .toolbar { display: none !important; }
+  }
 </style></head>
 <body>
-  <div class="toolbar"><button type="button" id="print">Print</button><a href="${esc(d.altPaperUrl)}">${narrow ? 'A4 page' : 'Receipt printer (80 mm)'}</a></div>
+  <div class="toolbar"><button type="button" id="print"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>Print</button><a href="${esc(d.altPaperUrl)}">${narrow ? 'A4 page' : 'Receipt printer (80 mm)'}</a></div>
   <main class="sheet">
     ${d.voided ? '<div class="void" aria-hidden="true"><span>VOID</span></div>' : ''}
     <header>
-      <div class="brand"><b>${esc(x.hotel.name)}</b>${hotelLines.map((l) => `<span>${esc(l)}</span>`).join('')}</div>
+      <div class="brand">
+        <div class="brand-head">
+          <svg viewBox="0 0 40 24" class="brand-logo" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">
+            <path d="M1 22 L11 9 L16 14 L24 3 L39 22" />
+            <path d="M6 22 L13 15.5" opacity=".5" />
+            <circle cx="30" cy="6" r="2.2" fill="#CF8F2E" stroke="none" />
+          </svg>
+          <b>${esc(x.hotel.name)}</b>
+        </div>
+        ${hotelLines.map((l) => `<span>${esc(l)}</span>`).join('')}
+      </div>
       <div class="doc">
         <div class="t">${esc(x.title)}</div>
         <div class="no">${esc(d.number)}</div>
@@ -125,11 +151,16 @@ export function renderDocument(d: RenderInput): string {
     ${body}
     ${x.note ? `<p class="note">${esc(x.note)}</p>` : ''}
     <footer>
-      ${d.voided ? `<p class="voidnote">Voided ${esc(stamp(d.voided.at))}: ${esc(d.voided.reason)}</p>` : ''}
-      ${x.issuedBy ? `<p>Issued by ${esc(x.issuedBy)}</p>` : ''}
-      ${x.footer ? `<p>${esc(x.footer)}</p>` : ''}
-      ${d.checkCode ? `<p>Check code <span class="check">${esc(d.checkCode)}</span>${d.verifyUrl ? ` · verify at ${esc(d.verifyUrl)}` : ''}</p>` : ''}
-      ${d.kind === 'STATEMENT' ? '<p><b>Statement of account — not a receipt.</b></p>' : ''}
+      <div>
+        ${d.voided ? `<p class="voidnote">Voided ${esc(stamp(d.voided.at))}: ${esc(d.voided.reason)}</p>` : ''}
+        ${x.issuedBy ? `<p>Issued by ${esc(x.issuedBy)}</p>` : ''}
+        ${x.footer ? `<p>${esc(x.footer)}</p>` : ''}
+        ${d.checkCode ? `<p>Check code <span class="check">${esc(d.checkCode)}</span>${d.verifyUrl ? ` · verify at ${esc(d.verifyUrl)}` : ''}</p>` : ''}
+        ${d.kind === 'STATEMENT' ? '<p><b>Statement of account — not a receipt.</b></p>' : ''}
+        ${d.kind === 'QUOTATION' ? '<p><b>Pro-forma quotation — valid until date stated above.</b></p>' : ''}
+        <p class="credit">Technology created and managed by <a href="https://ecadelgroup.com" target="_blank" rel="noopener">ECADEL GROUP LIMITED</a></p>
+      </div>
+      ${qrSvg ? `<div class="qr-box">${qrSvg}<span>Scan to verify</span></div>` : ''}
     </footer>
   </main>
   <script nonce="${d.nonce}">

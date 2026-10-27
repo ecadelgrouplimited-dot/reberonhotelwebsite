@@ -82,7 +82,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       { name: 'port', label: 'Port', required: true, placeholder: '587' },
       { name: 'user', label: 'Username' },
       { name: 'pass', label: 'Password', secret: true },
-      { name: 'from', label: 'From', placeholder: 'Reberon Hotel <hello@reberonhotel.ug>' },
+      { name: 'from', label: 'From', placeholder: 'Reberon Hotel <alerts@reberonhotel.com>' },
     ],
   },
 ];
@@ -134,18 +134,18 @@ const LEAVE = v('departure', 'Departure date', 'Sun 18 October 2026');
 const ROOM = v('room', 'Room', 'Elgon View King');
 const HOTEL = v('hotelName', 'Hotel name', 'Reberon Hotel');
 const WA = v('whatsapp', 'Hotel WhatsApp', '+256 700 000 000');
-const LINK = v('stayLink', 'Link to their stay page', 'https://reberonhotel.ug/stay?code=RB-7KQ2M&t=…');
+const LINK = v('stayLink', 'Link to their stay page', 'https://reberonhotel.com/stay?code=RB-7KQ2M&t=…');
 const CHECKIN = v('checkInTime', 'Check-in time', '14:00');
 
 export const TEMPLATES: TemplateDef[] = [
   { key: 'booking.confirmed', label: 'Booking confirmed', when: 'The moment a booking is confirmed (paid online, or confirmed by staff).', channels: ['EMAIL', 'SMS', 'WHATSAPP'], facts: true, vars: [GUEST, CODE, ARRIVE, LEAVE, v('nights', 'Nights', '2'), ROOM, v('total', 'Total', 'UGX 640,000'), v('paid', 'Paid', 'UGX 192,000'), v('balance', 'Balance', 'UGX 448,000'), CHECKIN, v('checkOutTime', 'Check-out time', '10:30'), LINK, HOTEL, WA] },
   { key: 'booking.payment_failed', label: 'Payment did not go through', when: 'A payment attempt fails while the rooms are still held.', channels: ['EMAIL', 'SMS'], vars: [GUEST, CODE, v('holdUntil', 'Hold ends', '15:40'), LINK, WA] },
-  { key: 'booking.hold_expired', label: 'Hold ended', when: 'Nobody paid in time and the rooms were released.', channels: ['EMAIL', 'SMS'], vars: [GUEST, CODE, v('bookAgainLink', 'Link to start again', 'https://reberonhotel.ug/book?…'), WA] },
+  { key: 'booking.hold_expired', label: 'Hold ended', when: 'Nobody paid in time and the rooms were released.', channels: ['EMAIL', 'SMS'], vars: [GUEST, CODE, v('bookAgainLink', 'Link to start again', 'https://reberonhotel.com/book?…'), WA] },
   { key: 'booking.cancelled', label: 'Booking cancelled', when: 'A confirmed booking is cancelled.', channels: ['EMAIL', 'SMS'], vars: [GUEST, CODE, ARRIVE, LEAVE, v('refund', 'Refund due', 'UGX 192,000'), WA] },
-  { key: 'stay.pre_arrival', label: 'Before you come', when: 'Sent automatically the day before arrival, at 10:00.', channels: ['EMAIL', 'SMS', 'WHATSAPP'], vars: [GUEST, CODE, ARRIVE, CHECKIN, v('balance', 'Balance', 'UGX 448,000'), v('directionsLink', 'Directions link', 'https://reberonhotel.ug/kapchorwa/getting-here'), LINK, WA] },
+  { key: 'stay.pre_arrival', label: 'Before you come', when: 'Sent automatically the day before arrival, at 10:00.', channels: ['EMAIL', 'SMS', 'WHATSAPP'], vars: [GUEST, CODE, ARRIVE, CHECKIN, v('balance', 'Balance', 'UGX 448,000'), v('directionsLink', 'Directions link', 'https://reberonhotel.com/kapchorwa/getting-here'), LINK, WA] },
   { key: 'stay.running_late', label: 'Are you still coming?', when: 'Sent by the desk when a guest has not arrived by evening.', channels: ['SMS', 'WHATSAPP'], vars: [GUEST, CODE, HOTEL, WA] },
-  { key: 'stay.thank_you', label: 'Thank you', when: 'After check-out, when the desk did not record feedback.', channels: ['EMAIL', 'SMS', 'WHATSAPP'], vars: [GUEST, v('feedbackLink', 'Feedback link', 'https://reberonhotel.ug/stay?…#feedback'), HOTEL] },
-  { key: 'document.issued', label: 'Receipt or invoice', when: 'When a receipt, refund note or invoice is sent to a guest (automatically after an online payment, or by the desk).', channels: ['EMAIL', 'SMS', 'WHATSAPP'], vars: [GUEST, v('documentName', 'Document', 'receipt RCT-2026-00042'), v('amount', 'Amount', 'UGX 448,000'), v('documentLink', 'Link to the document', 'https://api.reberonhotel.ug/v1/public/documents/…'), CODE, HOTEL] },
+  { key: 'stay.thank_you', label: 'Thank you', when: 'After check-out, when the desk did not record feedback.', channels: ['EMAIL', 'SMS', 'WHATSAPP'], vars: [GUEST, v('feedbackLink', 'Feedback link', 'https://reberonhotel.com/stay?…#feedback'), HOTEL] },
+  { key: 'document.issued', label: 'Receipt or invoice', when: 'When a receipt, refund note or invoice is sent to a guest (automatically after an online payment, or by the desk).', channels: ['EMAIL', 'SMS', 'WHATSAPP'], vars: [GUEST, v('documentName', 'Document', 'receipt RCT-2026-00042'), v('amount', 'Amount', 'UGX 448,000'), v('documentLink', 'Link to the document', 'https://api.reberonhotel.com/v1/public/documents/…'), CODE, HOTEL] },
   { key: 'stay.otp', label: 'One-time code', when: 'A guest looks up their stay by phone (only when SMS is live).', channels: ['SMS'], vars: [v('otp', 'Code', '482913'), HOTEL] },
 ];
 

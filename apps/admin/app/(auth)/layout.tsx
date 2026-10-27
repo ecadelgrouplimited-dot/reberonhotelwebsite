@@ -19,7 +19,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <p className="display text-[3.2rem] leading-[1.05]">The House.</p>
             <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-mist-50/70">Website, inbox and first-stay list today. Rates, bookings and the desk as the building opens.</p>
           </div>
-          <p className="text-xs text-mist-50/50">Kapchorwa · 1,900 m · Built by Ecadel Group Limited</p>
+          <p className="text-xs text-mist-50/50">
+            Kapchorwa · 1,900 m · Technology created and managed by{' '}
+            <a href="https://ecadelgroup.com" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-mist-50/80">
+              ECADEL GROUP LIMITED
+            </a>
+          </p>
         </div>
       </aside>
       <main className="grid place-items-center p-6">

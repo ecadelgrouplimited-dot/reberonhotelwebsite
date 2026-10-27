@@ -35,7 +35,7 @@
 | # | Question | Blocks | Default until answered |
 |---|---|---|---|
 | Q1 | Final room types, names and count per type | Rooms content (not build) | 4 types / 10 rooms per [08 §4](08-seed-data.md) |
-| Q2 | Domain `reberonhotel.ug` registered? DNS access? | Production deploy | — |
+| Q2 | Domain `reberonhotel.com` registered? DNS access? | Production deploy | — |
 | Q3 | Logo and brand mark — existing or to be designed? | Header, share cards | Wordmark in Fraunces |
 | Q4 | Official phone, WhatsApp number, email | Contact, forms ack | Placeholders |
 | Q5 | Exact map pin / gate location and last-mile description | Getting here | Kapchorwa town approx. |

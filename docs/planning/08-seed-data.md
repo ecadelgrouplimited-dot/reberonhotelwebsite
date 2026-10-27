@@ -52,7 +52,7 @@ Movement II seed (added in Phase 2): rate plans (Rack, B&B, Long Stay, Seasonal)
 | Room mix per type | 4 / 3 / 2 / 1 | Denis |
 | Room sizes | 22 / 24 / 32 / 40 m² | Architect |
 | From-prices | UGX 250k / 230k / 380k / 520k; USD 70 / 65 / 105 / 145 | Denis |
-| Phone, WhatsApp, email | `+256 700 000 000` style placeholders, `hello@reberonhotel.ug` | Denis |
+| Phone, WhatsApp, email | `+256 700 000 000` style placeholders, `hello@reberonhotel.com` | Denis |
 | Exact location pin | Kapchorwa town centre approx. `1.3960, 34.4500` | Wilson |
 | Drive times | Kampala→Mbale ~4 h 30, Mbale→Kapchorwa ~1 h 30 | Verify |
 | Check-in / out | 14:00 / 10:30 | Denis |

@@ -38,6 +38,12 @@ export const PERMISSIONS = [
   'receipts:read',
   'receipts:issue',
   'receipts:void',
+  'pos:operate',
+  'healthclub:operate',
+  'quotations:manage',
+  'inventory:manage',
+  'requisitions:request',
+  'requisitions:approve',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -47,7 +53,13 @@ const ALL = [...PERMISSIONS];
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   OWNER: ALL,
   MANAGER: ALL.filter((p) => !['settings:features', 'users:manage', 'vault:manage'].includes(p)),
-  DESK: ['dashboard:view', 'media:read', 'media:upload', 'inbox:read', 'inbox:write', 'waitlist:read', 'waitlist:write', 'rooms:status', 'bookings:read', 'bookings:write', 'rates:read', 'payments:record', 'desk:operate', 'rooms:inspect', 'guests:read', 'guests:write', 'messages:read', 'receipts:read', 'receipts:issue'],
+  DESK: [
+    'dashboard:view', 'media:read', 'media:upload', 'inbox:read', 'inbox:write',
+    'waitlist:read', 'waitlist:write', 'rooms:status', 'bookings:read', 'bookings:write',
+    'rates:read', 'payments:record', 'desk:operate', 'rooms:inspect', 'guests:read',
+    'guests:write', 'messages:read', 'receipts:read', 'receipts:issue',
+    'pos:operate', 'healthclub:operate', 'quotations:manage', 'inventory:manage', 'requisitions:request',
+  ],
   HOUSEKEEPING: ['rooms:status'],
 };
 
@@ -105,6 +117,13 @@ export const PERMISSION_INFO: PermissionInfo[] = [
   { key: 'receipts:issue', group: 'Money', label: 'Print and send receipts', description: 'Print, reprint and send documents to guests.', money: true },
   { key: 'receipts:void', group: 'Money', label: 'Void receipts', description: 'Cancel a wrong document and issue a corrected one.', money: true },
   { key: 'reports:read', group: 'Money', label: 'Reports', description: 'Occupancy, rates, revenue and where bookings come from.', money: true },
+
+  { key: 'pos:operate', group: 'Operations & POS', label: 'Kitchen & Bar POS', description: 'Take dining and beverage orders, charge to room folios or settle bills.', money: true },
+  { key: 'healthclub:operate', group: 'Operations & POS', label: 'Health Club & Spa', description: 'Manage gym, steam and sauna passes, memberships and gym towel logs.', money: true },
+  { key: 'quotations:manage', group: 'Operations & POS', label: 'Quotations & Events', description: 'Issue pro-forma quotations for conferences, weddings and group stays, and convert to invoices.', money: true },
+  { key: 'inventory:manage', group: 'Operations & POS', label: 'Inventory, Linen & Assets', description: 'Track stock in/out, gym vs bathroom towels, consumables and fixed assets.' },
+  { key: 'requisitions:request', group: 'Operations & POS', label: 'Submit requisitions', description: 'Request departmental stock replenishment, supplies or maintenance.' },
+  { key: 'requisitions:approve', group: 'Operations & POS', label: 'Approve & disburse requisitions', description: 'Manager/Director approval and store disbursement for requisitions.', money: true },
 
   { key: 'guests:read', group: 'Guests', label: 'Guest profiles', description: 'Guest history, notes and feedback.' },
   { key: 'guests:write', group: 'Guests', label: 'Edit guest profiles', description: 'Contact details, notes, tags, VIP.' },

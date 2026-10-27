@@ -1,7 +1,8 @@
 import type { Permission } from '@reberon/contracts';
 import {
   BedDouble, BookOpenText, CalendarRange, CircleHelp, ConciergeBell, FileText, Hammer, Home, Image, Inbox, ListChecks, Map, Navigation, ScrollText,
-  Settings, Shuffle, SprayCan, Building2, Users, Rocket, Gift, Sunset, LayoutGrid, Contact, MessageCircleHeart, ChartColumnBig, Send, PlugZap, MessagesSquare, Rotate3d, ReceiptText, type LucideIcon,
+  Settings, Shuffle, SprayCan, Building2, Users, Rocket, Gift, Sunset, LayoutGrid, Contact, MessageCircleHeart, ChartColumnBig, Send, PlugZap, MessagesSquare, Rotate3d, ReceiptText,
+  UtensilsCrossed, Dumbbell, FileSpreadsheet, Boxes, ClipboardCheck, type LucideIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -61,6 +62,16 @@ export const NAV: NavGroup[] = [
       { label: 'Guests', href: '/guests', icon: Contact, perm: 'guests:read' },
       { label: 'Feedback', href: '/feedback', icon: MessageCircleHeart, perm: 'guests:read' },
       { label: 'Reports', href: '/reports', icon: ChartColumnBig, perm: 'reports:read' },
+    ],
+  },
+  {
+    label: 'Operations & POS',
+    items: [
+      { label: 'POS: Kitchen & Bar', href: '/pos', icon: UtensilsCrossed, perm: 'pos:operate' },
+      { label: 'Health Club & Spa', href: '/health-club', icon: Dumbbell, perm: 'healthclub:operate' },
+      { label: 'Quotations & Events', href: '/quotations', icon: FileSpreadsheet, perm: 'quotations:manage' },
+      { label: 'Inventory & Linen', href: '/inventory', icon: Boxes, perm: 'inventory:manage' },
+      { label: 'Requisitions & Comms', href: '/requisitions', icon: ClipboardCheck, perm: 'requisitions:request' },
     ],
   },
   {

@@ -108,12 +108,12 @@ export async function seedBooking(ownerId: string, deskId: string) {
 }
 
 async function seedReservations(plans: { id: string; code: string; depositPercent: number; minNights: number }[], rooms: { id: string; name: unknown }[], ownerId: string, deskId: string) {
-  if (await prisma.reservation.count({ where: { isSeed: true } })) return;
+  const today = hotelToday();
+  if (await prisma.reservation.count({ where: { isSeed: true, status: 'CONFIRMED', arrival: { gt: day(today) } } })) return;
   faker.seed(1901);
   const contacts = await prisma.contact.findMany({ where: { isSeed: true }, take: 40, orderBy: { createdAt: 'asc' } });
   const physical = await prisma.room.groupBy({ by: ['roomTypeId'], where: { isActive: true }, _count: true });
   const capacity = new Map(physical.map((p) => [p.roomTypeId, p._count]));
-  const today = hotelToday();
   const used = new Map<string, number>(); // roomTypeId|date → rooms taken
   const flexible = await prisma.cancellationPolicy.findFirst({ where: { isDefault: true } });
   let made = 0;
