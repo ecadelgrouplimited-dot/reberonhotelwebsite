@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { z } from 'zod';
 import {
   zAppendPosOrderItemsInput,
+  zAdjustStockCountInput,
   zCheckInHealthClubInput,
   zCheckOutHealthClubInput,
   zConvertQuotationToInvoiceInput,
@@ -19,6 +20,7 @@ import {
   zReviewRequisitionInput,
   zSettlePosOrderInput,
   zTogglePosItemInput,
+  zUpdateInventoryItemInput,
   zUpdatePosOrderStatusInput,
   zUpdateQuotationStatusInput,
 } from '@reberon/contracts';
@@ -264,6 +266,38 @@ export class OperationsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.ops.createInventoryItem(body, user);
+  }
+
+  @Patch('inventory/items/:id')
+  @Requires('inventory:manage')
+  updateInventoryItem(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zUpdateInventoryItemInput)) body: z.infer<typeof zUpdateInventoryItemInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.updateInventoryItem(id, body, user);
+  }
+
+  @Delete('inventory/items/:id')
+  @Requires('inventory:manage')
+  deleteInventoryItem(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ops.deleteInventoryItem(id, user);
+  }
+
+  @Post('inventory/items/:id/adjust')
+  @Requires('inventory:manage')
+  adjustStockCount(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zAdjustStockCountInput)) body: z.infer<typeof zAdjustStockCountInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.adjustStockCount(id, body, user);
+  }
+
+  @Get('inventory/items/:id/movements')
+  @Requires('inventory:manage')
+  getItemMovements(@Param('id') id: string) {
+    return this.ops.getItemMovements(id);
   }
 
   @Post('inventory/movements')

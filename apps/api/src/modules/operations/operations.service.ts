@@ -21,6 +21,7 @@ import type {
 import { z } from 'zod';
 import {
   zAppendPosOrderItemsInput,
+  zAdjustStockCountInput,
   zCheckInHealthClubInput,
   zConvertQuotationToInvoiceInput,
   zCreateAnnouncementInput,
@@ -36,6 +37,7 @@ import {
   zReviewRequisitionInput,
   zSettlePosOrderInput,
   zTogglePosItemInput,
+  zUpdateInventoryItemInput,
 } from '@reberon/contracts';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
@@ -1388,6 +1390,10 @@ export class OperationsService {
 
     const gymTowels = items.filter((i) => i.category === 'LINEN_GYM');
     const roomTowels = items.filter((i) => i.category === 'LINEN_ROOM');
+    const totalValuationMinor = items.reduce(
+      (sum, i) => sum + BigInt(i.onHand) * BigInt(i.unitCostMinor),
+      0n,
+    );
 
     return {
       items: items.map((i) => ({
@@ -1428,6 +1434,8 @@ export class OperationsService {
         roomTowelsInUseOrLaundry: roomTowels.reduce((a, x) => a + x.inUseOrLaundry, 0),
         lowStockCount: items.filter((i) => i.onHand <= i.parLevel && i.category !== 'FIXED_ASSET').length,
         totalFixedAssets: items.filter((i) => i.category === 'FIXED_ASSET').reduce((a, x) => a + x.onHand, 0),
+        totalInventoryValueMinor: totalValuationMinor.toString(),
+        totalActiveSkus: items.length,
       },
     };
   }
@@ -1470,6 +1478,149 @@ export class OperationsService {
       isLowStock: item.onHand <= item.parLevel,
       updatedAt: item.updatedAt.toISOString(),
     };
+  }
+
+  async updateInventoryItem(id: string, input: z.infer<typeof zUpdateInventoryItemInput>, actor: AuthUser): Promise<InventoryItemDTO> {
+    const existing = await this.prisma.inventoryItem.findUnique({ where: { id } });
+    if (!existing) throw notFound('Inventory Item');
+
+    const data: Record<string, unknown> = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.category !== undefined) data.category = input.category;
+    if (input.department !== undefined) data.department = input.department;
+    if (input.unit !== undefined) data.unit = input.unit;
+    if (input.parLevel !== undefined) data.parLevel = input.parLevel;
+    if (input.unitCostMinor !== undefined) data.unitCostMinor = BigInt(input.unitCostMinor);
+    if (input.location !== undefined) data.location = input.location;
+    if (input.condition !== undefined) data.condition = input.condition;
+
+    const item = await this.prisma.inventoryItem.update({
+      where: { id },
+      data,
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'inventory.item.update',
+      entityType: 'InventoryItem',
+      entityId: item.id,
+      summary: `Updated inventory SKU ${item.sku} (${item.name})`,
+    });
+
+    return {
+      id: item.id,
+      sku: item.sku,
+      name: item.name,
+      category: item.category,
+      department: item.department,
+      unit: item.unit,
+      onHand: item.onHand,
+      inUseOrLaundry: item.inUseOrLaundry,
+      parLevel: item.parLevel,
+      unitCostMinor: item.unitCostMinor.toString(),
+      location: item.location,
+      condition: item.condition,
+      isLowStock: item.category !== 'FIXED_ASSET' && item.onHand <= item.parLevel,
+      updatedAt: item.updatedAt.toISOString(),
+    };
+  }
+
+  async deleteInventoryItem(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    const existing = await this.prisma.inventoryItem.findUnique({ where: { id } });
+    if (!existing) throw notFound('Inventory Item');
+
+    await this.prisma.inventoryItem.delete({ where: { id } });
+
+    await this.audit.record({
+      actor,
+      action: 'inventory.item.delete',
+      entityType: 'InventoryItem',
+      entityId: id,
+      summary: `Deleted inventory SKU ${existing.sku} (${existing.name})`,
+    });
+
+    return { ok: true };
+  }
+
+  async adjustStockCount(id: string, input: z.infer<typeof zAdjustStockCountInput>, actor: AuthUser): Promise<InventoryItemDTO> {
+    const item = await this.prisma.inventoryItem.findUnique({ where: { id } });
+    if (!item) throw notFound('Inventory Item');
+
+    const previousCount = item.onHand;
+    const diff = input.actualCount - previousCount;
+
+    const updated = await this.prisma.inventoryItem.update({
+      where: { id },
+      data: {
+        onHand: input.actualCount,
+        lastCountedAt: new Date(),
+      },
+    });
+
+    const notes = input.notes || (diff >= 0 ? `Physical stock count surplus (+${diff})` : `Physical stock count deficit (${diff})`);
+
+    await this.prisma.stockMovement.create({
+      data: {
+        itemId: item.id,
+        type: 'ADJUSTMENT',
+        quantity: Math.abs(diff),
+        balanceAfter: input.actualCount,
+        department: item.department,
+        reference: 'STOCK_COUNT',
+        notes,
+        recordedById: actor.id,
+        recordedByName: actor.name,
+      },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'inventory.item.adjust',
+      entityType: 'InventoryItem',
+      entityId: id,
+      summary: `Physical count for ${item.sku}: ${previousCount} → ${input.actualCount} (${notes})`,
+    });
+
+    return {
+      id: updated.id,
+      sku: updated.sku,
+      name: updated.name,
+      category: updated.category,
+      department: updated.department,
+      unit: updated.unit,
+      onHand: updated.onHand,
+      inUseOrLaundry: updated.inUseOrLaundry,
+      parLevel: updated.parLevel,
+      unitCostMinor: updated.unitCostMinor.toString(),
+      location: updated.location,
+      condition: updated.condition,
+      isLowStock: updated.category !== 'FIXED_ASSET' && updated.onHand <= updated.parLevel,
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  async getItemMovements(id: string): Promise<StockMovementDTO[]> {
+    const movements = await this.prisma.stockMovement.findMany({
+      where: { itemId: id },
+      include: { item: { select: { name: true, sku: true, category: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 60,
+    });
+    return movements.map((m) => ({
+      id: m.id,
+      itemId: m.itemId,
+      itemName: m.item.name,
+      itemSku: m.item.sku,
+      category: m.item.category,
+      type: m.type,
+      quantity: m.quantity,
+      balanceAfter: m.balanceAfter,
+      department: m.department,
+      reference: m.reference,
+      notes: m.notes,
+      recordedByName: m.recordedByName,
+      createdAt: m.createdAt.toISOString(),
+    }));
   }
 
   async recordStockMovement(input: z.infer<typeof zRecordStockMovementInput>, actor: AuthUser): Promise<StockMovementDTO> {

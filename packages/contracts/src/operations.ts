@@ -437,6 +437,8 @@ export interface InventoryDashboardDTO {
     roomTowelsInUseOrLaundry: number;
     lowStockCount: number;
     totalFixedAssets: number;
+    totalInventoryValueMinor?: string;
+    totalActiveSkus?: number;
   };
 }
 
@@ -459,6 +461,22 @@ export const zCreateInventoryItemInput = z.object({
   parLevel: z.number().int().min(0).default(10),
   unitCostMinor: z.string().regex(/^\d+$/).default('0'),
   location: z.string().trim().max(80).optional(),
+});
+
+export const zUpdateInventoryItemInput = z.object({
+  name: z.string().trim().min(2).max(140).optional(),
+  category: z.enum(INVENTORY_CATEGORIES).optional(),
+  department: z.enum(DEPARTMENTS).optional(),
+  unit: z.string().trim().max(24).optional(),
+  parLevel: z.number().int().min(0).optional(),
+  unitCostMinor: z.string().regex(/^\d+$/).optional(),
+  location: z.string().trim().max(80).optional().nullable(),
+  condition: z.string().trim().max(40).optional(),
+});
+
+export const zAdjustStockCountInput = z.object({
+  actualCount: z.number().int().min(0),
+  notes: z.string().trim().max(300).optional(),
 });
 
 // ───────────────────────── Requisitions & Internal Communications ─────────────────────────
