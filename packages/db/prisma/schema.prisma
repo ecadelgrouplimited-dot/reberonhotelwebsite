@@ -1980,3 +1980,137 @@ model ItemCategory {
 
   @@index([isActive, sortOrder])
 }
+
+// ───────────────────────── Human Resource Management (HRM) ─────────────────────────
+
+model StaffProfile {
+  id                       String               @id @default(uuid(7)) @db.Uuid
+  employeeNumber           String               @unique
+  userId                   String?              @db.Uuid
+  firstName                String
+  lastName                 String
+  otherNames               String?
+  gender                   String               @default("OTHER")
+  dateOfBirth              DateTime?
+  nationalIdNumber         String?
+  phone                    String
+  alternatePhone           String?
+  email                    String?
+  residenceAddress         String?
+  emergencyContactName     String
+  emergencyContactPhone    String
+  emergencyContactRelation String               @default("NEXT_OF_KIN")
+  departmentCode           String
+  jobTitle                 String
+  employmentType           String               @default("FULL_TIME")
+  dateJoined               DateTime             @default(now())
+  contractEndDate          DateTime?
+  baseSalaryMinor          BigInt               @default(0)
+  currency                 Currency             @default(UGX)
+  paymentMethod            String               @default("BANK_TRANSFER")
+  bankName                 String?
+  bankAccountNumber        String?
+  mobileMoneyNumber        String?
+  nssfNumber               String?
+  tinNumber                String?
+  status                   String               @default("ACTIVE")
+  avatarUrl                String?
+  notes                    String?
+  isSeed                   Boolean              @default(false)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+
+  shifts                   StaffShift[]
+  leaveRequests            StaffLeaveRequest[]
+  payrollRecords           StaffPayrollRecord[]
+  documents                StaffDocument[]
+
+  @@index([departmentCode, status])
+  @@index([status])
+}
+
+model StaffShift {
+  id                 String       @id @default(uuid(7)) @db.Uuid
+  staffId            String       @db.Uuid
+  departmentCode     String
+  date               DateTime     @db.Date
+  shiftType          String       @default("MORNING")
+  scheduledStartTime String?
+  scheduledEndTime   String?
+  actualCheckIn      DateTime?
+  actualCheckOut     DateTime?
+  attendanceStatus   String       @default("SCHEDULED")
+  notes              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  staff              StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([date, departmentCode])
+  @@index([staffId, date])
+}
+
+model StaffLeaveRequest {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  staffId        String       @db.Uuid
+  leaveType      String       @default("ANNUAL")
+  startDate      DateTime     @db.Date
+  endDate        DateTime     @db.Date
+  daysCount      Int          @default(1)
+  reason         String
+  handoverNotes  String?
+  status         String       @default("PENDING")
+  reviewedById   String?      @db.Uuid
+  reviewedByName String?
+  reviewNotes    String?
+  reviewedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  staff          StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([status, startDate])
+  @@index([staffId])
+}
+
+model StaffPayrollRecord {
+  id                     String       @id @default(uuid(7)) @db.Uuid
+  staffId                String       @db.Uuid
+  periodMonth            String
+  baseSalaryMinor        BigInt       @default(0)
+  overtimeMinor          BigInt       @default(0)
+  allowancesMinor        BigInt       @default(0)
+  grossSalaryMinor       BigInt       @default(0)
+  payeTaxMinor           BigInt       @default(0)
+  nssfEmployeeMinor      BigInt       @default(0)
+  nssfEmployerMinor      BigInt       @default(0)
+  advancesDeductionMinor BigInt       @default(0)
+  otherDeductionsMinor   BigInt       @default(0)
+  netSalaryMinor         BigInt       @default(0)
+  currency               Currency     @default(UGX)
+  paymentStatus          String       @default("DRAFT")
+  paymentReference       String?
+  paidAt                 DateTime?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  staff                  StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, periodMonth])
+  @@index([periodMonth, paymentStatus])
+}
+
+model StaffDocument {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  staffId    String       @db.Uuid
+  title      String
+  kind       String       @default("CONTRACT")
+  fileUrl    String
+  expiryDate DateTime?    @db.Date
+  notes      String?
+  createdAt  DateTime     @default(now())
+
+  staff      StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId])
+}

@@ -45,6 +45,7 @@ export const PERMISSIONS = [
   'requisitions:request',
   'requisitions:approve',
   'expenses:manage',
+  'hr:manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -126,6 +127,7 @@ export const PERMISSION_INFO: PermissionInfo[] = [
   { key: 'requisitions:request', group: 'Operations & POS', label: 'Submit requisitions', description: 'Request departmental stock replenishment, supplies or maintenance.' },
   { key: 'requisitions:approve', group: 'Operations & POS', label: 'Approve & disburse requisitions', description: 'Manager/Director approval and store disbursement for requisitions.', money: true },
   { key: 'expenses:manage', group: 'Operations & POS', label: 'Expense Management & Cost Drivers', description: 'Record, edit, and categorize hotel operational expenses, utility bills, and supplier payments.', money: true },
+  { key: 'hr:manage', group: 'Operations & POS', label: 'Human Resource Management', description: 'Manage employee profiles, shift rosters, leave requests, and payroll records.', money: true },
 
   { key: 'guests:read', group: 'Guests', label: 'Guest profiles', description: 'Guest history, notes and feedback.' },
   { key: 'guests:write', group: 'Guests', label: 'Edit guest profiles', description: 'Contact details, notes, tags, VIP.' },

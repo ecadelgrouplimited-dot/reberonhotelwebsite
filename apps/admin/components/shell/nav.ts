@@ -57,6 +57,7 @@ export const NAV: NavGroup[] = [
       { label: 'Quotations & Events', href: '/quotations', icon: FileSpreadsheet, perm: 'quotations:manage' },
       { label: 'Inventory & Linen', href: '/inventory', icon: Boxes, perm: 'inventory:manage' },
       { label: 'Requisitions & Comms', href: '/requisitions', icon: ClipboardCheck, perm: 'requisitions:request' },
+      { label: 'Human Resources', href: '/hr', icon: Users, perm: 'inventory:manage' },
     ],
   },
   {
