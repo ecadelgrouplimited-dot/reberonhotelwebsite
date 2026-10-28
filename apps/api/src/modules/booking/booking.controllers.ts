@@ -154,15 +154,78 @@ export class ReservationsAdminController {
   @Requires('bookings:read')
   async list(@Query() q: Record<string, string>) {
     const where: Prisma.ReservationWhereInput = {};
-    if (q.status === 'upcoming') Object.assign(where, { status: { in: ['CONFIRMED', 'HELD'] }, departure: { gte: day(iso(new Date())) } });
-    else if (q.status) where.status = q.status as never;
+    if (q.status === 'upcoming') {
+      Object.assign(where, { status: { in: ['CONFIRMED', 'HELD'] }, departure: { gte: day(iso(new Date())) } });
+    } else if (q.status && q.status !== 'all') {
+      where.status = q.status as never;
+    }
+
     if (q.from) where.departure = { ...(where.departure as object), gt: day(q.from) };
     if (q.to) where.arrival = { lt: day(q.to) };
-    if (q.q) where.OR = [{ code: { contains: q.q.toUpperCase() } }, { contact: { name: { contains: q.q, mode: 'insensitive' } } }, { contact: { phone: { contains: q.q.replace(/\s/g, '') } } }];
-    const rows = await this.prisma.reservation.findMany({ where, include: { contact: true, rooms: true }, orderBy: q.sort === 'created' ? { createdAt: 'desc' } : { arrival: 'asc' }, take: 300 });
+
+    if (q.source && q.source !== 'ALL') {
+      where.source = q.source as never;
+    }
+
+    const todayStr = iso(new Date());
+    if (q.window === 'today_arrivals') {
+      where.arrival = { gte: day(todayStr), lt: new Date(day(todayStr).getTime() + 86_400_000) };
+    } else if (q.window === 'today_departures') {
+      where.departure = { gte: day(todayStr), lt: new Date(day(todayStr).getTime() + 86_400_000) };
+    } else if (q.window === 'this_week') {
+      where.arrival = { gte: day(todayStr), lt: new Date(day(todayStr).getTime() + 7 * 86_400_000) };
+    } else if (q.window === 'this_month') {
+      const monthStart = `${todayStr.slice(0, 8)}01`;
+      where.arrival = { gte: day(monthStart) };
+    }
+
+    if (q.q) {
+      const term = q.q.trim();
+      where.OR = [
+        { code: { contains: term.toUpperCase() } },
+        { contact: { name: { contains: term, mode: 'insensitive' } } },
+        { contact: { phone: { contains: term.replace(/\s/g, '') } } },
+        { contact: { email: { contains: term, mode: 'insensitive' } } },
+      ];
+    }
+
+    let orderBy: Prisma.ReservationOrderByWithRelationInput = { arrival: 'asc' };
+    if (q.sort === 'latest' || q.sort === 'created') {
+      orderBy = { createdAt: 'desc' };
+    } else if (q.sort === 'arrival_desc') {
+      orderBy = { arrival: 'desc' };
+    } else if (q.sort === 'arrival_asc') {
+      orderBy = { arrival: 'asc' };
+    } else if (q.status !== 'upcoming') {
+      orderBy = { createdAt: 'desc' };
+    }
+
+    const rows = await this.prisma.reservation.findMany({
+      where,
+      include: { contact: true, rooms: true },
+      orderBy,
+      take: 300,
+    });
     const names = await this.booking.roomTypeNames();
     const counts = await this.prisma.reservation.groupBy({ by: ['status'], _count: true });
-    return { data: rows.map((r) => this.booking.summary(r, names)), counts: Object.fromEntries(counts.map((c) => [c.status, c._count])) };
+    let mapped = rows.map((r) => this.booking.summary(r, names));
+
+    if (q.balance === 'PAID') {
+      mapped = mapped.filter((r) => BigInt(r.balanceMinor) <= 0n);
+    } else if (q.balance === 'UNPAID') {
+      mapped = mapped.filter((r) => BigInt(r.balanceMinor) > 0n);
+    }
+
+    if (q.roomTypeId && q.roomTypeId !== 'ALL') {
+      mapped = mapped.filter((r) =>
+        rows.find((row) => row.id === r.id)?.rooms.some((rm) => rm.roomTypeId === q.roomTypeId),
+      );
+    }
+
+    return {
+      data: mapped,
+      counts: Object.fromEntries(counts.map((c) => [c.status, c._count])),
+    };
   }
 
   @Get('reservations/:id')

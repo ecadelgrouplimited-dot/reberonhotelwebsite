@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowRight, Boxes, ClipboardCheck, ConciergeBell, Dumbbell, FileSpreadsheet,
+  ArrowRight, Boxes, CalendarDays, ClipboardCheck, ConciergeBell, Dumbbell, FileSpreadsheet,
   FileText, Hammer, Image as ImageIcon, LayoutGrid, Plus, ReceiptText, SprayCan,
   Sunset, Users, UtensilsCrossed, type LucideIcon,
 } from 'lucide-react';
@@ -51,6 +51,9 @@ export default function Today() {
 
   // Prioritize only the most critical high-demand daily actions for this user
   const criticalActions: QuickAction[] = [
+    ...(can('bookings:read')
+      ? [{ label: 'Reservations', sub: 'All bookings & stays', href: '/reservations?sort=latest', icon: CalendarDays, primary: true }]
+      : []),
     ...(can('desk:operate')
       ? [{ label: 'Front Desk', sub: 'Check-in & departures', href: '/desk', icon: ConciergeBell, primary: true }]
       : []),
@@ -96,6 +99,11 @@ export default function Today() {
         description={`${today} · Kapchorwa HQ`}
         actions={
           <>
+            {can('bookings:read') && (
+              <Button size="sm" variant="secondary" href="/reservations?sort=latest" icon={<CalendarDays className="size-3.5" />}>
+                Reservations
+              </Button>
+            )}
             {can('desk:operate') && (
               <Button size="sm" href="/desk" icon={<ConciergeBell className="size-3.5" />}>
                 Front Desk

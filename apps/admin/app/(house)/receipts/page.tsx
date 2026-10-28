@@ -12,6 +12,12 @@ import { DocumentRow } from '@/components/documents/documents-panel';
 
 const kampala = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kampala' }).format(d);
 const monthStart = () => `${kampala().slice(0, 8)}01`;
+const weekStart = () => {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return kampala(new Date(d.setDate(diff)));
+};
 
 export default function ReceiptsPage() {
   const [kind, setKind] = useState<'' | DocumentKind>('');
@@ -80,10 +86,54 @@ export default function ReceiptsPage() {
               />
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-xs">
-            <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} className="input !h-7 !min-h-0 px-2 text-xs" />
-            <span className="text-fg-subtle">→</span>
-            <input type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} className="input !h-7 !min-h-0 px-2 text-xs" />
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <div className="flex rounded-md border border-line bg-surface p-0.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => {
+                  setFrom(kampala());
+                  setTo(kampala());
+                }}
+                className={cn('rounded px-2 py-0.5 font-medium transition', from === kampala() && to === kampala() ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg')}
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFrom(weekStart());
+                  setTo(kampala());
+                }}
+                className={cn('rounded px-2 py-0.5 font-medium transition', from === weekStart() && to === kampala() ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg')}
+              >
+                This Week
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFrom(monthStart());
+                  setTo(kampala());
+                }}
+                className={cn('rounded px-2 py-0.5 font-medium transition', from === monthStart() && to === kampala() ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg')}
+              >
+                This Month
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFrom('');
+                  setTo('');
+                }}
+                className={cn('rounded px-2 py-0.5 font-medium transition', !from && !to ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg')}
+              >
+                All
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} className="input !h-7 !min-h-0 px-2 text-xs" />
+              <span className="text-fg-subtle">→</span>
+              <input type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} className="input !h-7 !min-h-0 px-2 text-xs" />
+            </div>
           </div>
         </div>
 

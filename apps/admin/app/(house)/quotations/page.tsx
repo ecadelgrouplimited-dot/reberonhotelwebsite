@@ -9,6 +9,7 @@ import {
 import type { EventType, QuotationDTO, QuotationStatus } from '@reberon/contracts';
 import { ApiError, get, patch, post } from '@/lib/api';
 import { money, toMinorStr } from '@/lib/money';
+import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
@@ -92,30 +93,58 @@ export default function QuotationsPage() {
 
       {/* Compact Pipeline KPI Strip */}
       <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <div className="card px-3.5 py-2.5">
+        <button
+          type="button"
+          onClick={() => setFilter(filter === 'SENT' ? 'ALL' : 'SENT')}
+          className={cn(
+            'card px-3.5 py-2.5 text-left transition',
+            filter === 'SENT' ? '!border-fg ring-1 ring-fg' : 'hover:border-line-strong',
+          )}
+        >
           <span className="text-[11px] font-medium text-fg-muted">1. Open Quotes</span>
           <p className="mt-0.5 text-[1.2rem] font-bold tabular">
             {(quotations ?? []).filter((q) => q.status === 'DRAFT' || q.status === 'SENT').length}
           </p>
-        </div>
-        <div className="card px-3.5 py-2.5">
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter(filter === 'ACCEPTED' ? 'ALL' : 'ACCEPTED')}
+          className={cn(
+            'card px-3.5 py-2.5 text-left transition',
+            filter === 'ACCEPTED' ? '!border-fg ring-1 ring-fg' : 'hover:border-line-strong',
+          )}
+        >
           <span className="text-[11px] font-medium text-fg-muted">2. Client Accepted</span>
           <p className="mt-0.5 text-[1.2rem] font-bold tabular text-info">
             {(quotations ?? []).filter((q) => q.status === 'ACCEPTED').length}
           </p>
-        </div>
-        <div className="card px-3.5 py-2.5">
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter(filter === 'CONVERTED' ? 'ALL' : 'CONVERTED')}
+          className={cn(
+            'card px-3.5 py-2.5 text-left transition',
+            filter === 'CONVERTED' ? '!border-fg ring-1 ring-fg' : 'hover:border-line-strong',
+          )}
+        >
           <span className="text-[11px] font-medium text-fg-muted">3. Converted to Invoice</span>
           <p className="mt-0.5 text-[1.2rem] font-bold tabular text-success">
             {(quotations ?? []).filter((q) => q.status === 'CONVERTED').length}
           </p>
-        </div>
-        <div className="card px-3.5 py-2.5">
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter('ALL')}
+          className={cn(
+            'card px-3.5 py-2.5 text-left transition',
+            filter === 'ALL' ? '!border-fg ring-1 ring-fg' : 'hover:border-line-strong',
+          )}
+        >
           <span className="text-[11px] font-medium text-fg-muted">Pipeline Value</span>
           <p className="mt-0.5 text-[1.2rem] font-bold tabular">
             {money(pipelineValueMinor.toString(), 'UGX')}
           </p>
-        </div>
+        </button>
       </div>
 
       <div className="card overflow-hidden">

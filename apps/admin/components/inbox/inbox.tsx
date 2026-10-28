@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -33,15 +33,27 @@ function initials(n: string) {
 }
 
 export function Inbox({ selectedId }: { selectedId: string | null }) {
-  const [status, setStatus] = useState<'active' | 'NEW' | 'DONE' | 'SPAM' | ''>('active');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialQ = searchParams ? searchParams.get('q') || searchParams.get('ref') || '' : '';
+
+  const [status, setStatus] = useState<'active' | 'NEW' | 'DONE' | 'SPAM' | ''>(initialQ ? '' : 'active');
   const [assignee, setAssignee] = useState('');
   const [channel, setChannel] = useState('');
-  const [q, setQ] = useState('');
-  const [debounced, setDebounced] = useState('');
+  const [q, setQ] = useState(initialQ);
+  const [debounced, setDebounced] = useState(initialQ);
   const [creating, setCreating] = useState(false);
-  const router = useRouter();
   const can = useCan();
   const qc = useQueryClient();
+
+  useEffect(() => {
+    if (!searchParams) return;
+    const query = searchParams.get('q') || searchParams.get('ref');
+    if (query !== null && query !== undefined && query !== q) {
+      setQ(query);
+      setStatus('');
+    }
+  }, [searchParams]);
 
   const syncEmailsMut = useMutation({
     mutationFn: () => post<{ ok: boolean; syncedCount: number; message: string }>('/conversations/sync-email'),
