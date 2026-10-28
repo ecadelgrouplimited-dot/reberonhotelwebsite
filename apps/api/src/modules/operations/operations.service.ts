@@ -39,9 +39,10 @@ import {
 } from '@reberon/contracts';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
-import type { AuthUser } from '../../common/auth.js';
-import { badRequest, notFound } from '../../common/errors.js';
+import { has, type AuthUser } from '../../common/auth.js';
+import { badRequest, forbidden, notFound } from '../../common/errors.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 @Injectable()
 export class OperationsService {
@@ -49,6 +50,7 @@ export class OperationsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly docs: DocumentsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private async nextSeq(prefix: string): Promise<string> {
@@ -1544,12 +1546,45 @@ export class OperationsService {
 
   /* ───────────────────────── 5. Requisitions, Internal Comms & Devices ───────────────────────── */
 
-  async requisitions(): Promise<RequisitionDTO[]> {
+  async requisitions(q?: Record<string, string>, actor?: AuthUser): Promise<RequisitionDTO[]> {
+    const where: any = {};
+    if (q?.department && q.department !== 'ALL') {
+      where.department = q.department;
+    }
+    if (q?.status && q.status !== 'ALL') {
+      where.status = q.status;
+    }
+    if (q?.priority && q.priority !== 'ALL') {
+      where.priority = q.priority;
+    }
+    if (q?.mine === '1' && actor) {
+      where.requestedById = actor.id;
+    }
+    if (q?.q) {
+      const term = q.q.trim();
+      where.OR = [
+        { number: { contains: term, mode: 'insensitive' } },
+        { title: { contains: term, mode: 'insensitive' } },
+        { requestedByName: { contains: term, mode: 'insensitive' } },
+        { notes: { contains: term, mode: 'insensitive' } },
+        { items: { some: { itemName: { contains: term, mode: 'insensitive' } } } },
+      ];
+    }
     const rows = await this.prisma.requisition.findMany({
+      where,
       include: { items: true },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map((r) => this.mapRequisition(r));
+  }
+
+  async getRequisition(id: string): Promise<RequisitionDTO> {
+    const req = await this.prisma.requisition.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!req) throw notFound('Requisition');
+    return this.mapRequisition(req);
   }
 
   private mapRequisition(r: any): RequisitionDTO {
@@ -1564,6 +1599,7 @@ export class OperationsService {
       totalEstimatedMinor: r.totalEstimatedMinor.toString(),
       notes: r.notes,
       rejectionReason: r.rejectionReason,
+      requestedById: r.requestedById,
       requestedByName: r.requestedByName,
       managerApprovedBy: r.managerApprovedBy,
       managerApprovedAt: r.managerApprovedAt?.toISOString() ?? null,
@@ -1628,6 +1664,39 @@ export class OperationsService {
       summary: `Submitted requisition ${created.number} (${created.department}: ${created.title})`,
     });
 
+    // Notify managers & directors via email if urgent or high priority
+    if (input.priority === 'URGENT') {
+      try {
+        const managers = await this.prisma.user.findMany({
+          where: { role: { in: ['OWNER', 'MANAGER'] }, status: 'ACTIVE' },
+          select: { email: true, name: true },
+        });
+        const estUgx = Number(totalEst).toLocaleString('en-UG');
+        for (const m of managers) {
+          if (m.email) {
+            await this.notifications.email({
+              to: m.email,
+              subject: `[URGENT REQUISITION] ${created.number} · ${created.department}: ${created.title}`,
+              heading: `Urgent Requisition: ${created.number}`,
+              paragraphs: [
+                `${actor.name} submitted an urgent requisition for ${created.department}.`,
+                `Title: ${created.title}`,
+                `Items: ${items.map((it) => `${it.quantityRequested} ${it.unit} ${it.itemName}`).join(', ')}`,
+              ],
+              facts: [
+                ['Department', created.department],
+                ['Requested By', actor.name],
+                ['Estimated Total', `UGX ${estUgx}`],
+              ],
+              action: { label: 'Review Requisition', url: `${process.env.ADMIN_URL || 'https://reberonhotel.com:8443'}/requisitions` },
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        // Notification logging should not block requisition creation
+      }
+    }
+
     return this.mapRequisition(created);
   }
 
@@ -1638,59 +1707,88 @@ export class OperationsService {
     const now = new Date();
     let data: Record<string, unknown> = {};
 
-    if (input.action === 'MANAGER_APPROVE') {
-      data = {
-        status: 'MANAGER_APPROVED',
-        managerApprovedById: actor.id,
-        managerApprovedBy: actor.name,
-        managerApprovedAt: now,
-      };
-    } else if (input.action === 'DIRECTOR_APPROVE') {
-      data = {
-        status: 'DIRECTOR_APPROVED',
-        directorApprovedById: actor.id,
-        directorApprovedBy: actor.name,
-        directorApprovedAt: now,
-      };
-    } else if (input.action === 'DISBURSE') {
-      data = {
-        status: 'DISBURSED',
-        disbursedById: actor.id,
-        disbursedBy: actor.name,
-        disbursedAt: now,
-      };
-      // Automatically restock any linked inventory SKUs upon disbursement!
-      for (const item of req.items) {
-        if (item.inventoryItemId) {
-          const inv = await this.prisma.inventoryItem.findUnique({ where: { id: item.inventoryItemId } });
-          if (inv) {
-            const qty = item.quantityApproved ?? item.quantityRequested;
-            const nextOnHand = inv.onHand + qty;
-            await this.prisma.inventoryItem.update({
-              where: { id: inv.id },
-              data: { onHand: nextOnHand },
-            });
-            await this.prisma.stockMovement.create({
-              data: {
-                itemId: inv.id,
-                type: 'STOCK_IN',
-                quantity: qty,
-                balanceAfter: nextOnHand,
-                department: req.department,
-                reference: req.number,
-                notes: `Requisition ${req.number} disbursed`,
-                recordedById: actor.id,
-                recordedByName: actor.name,
-              },
-            });
-          }
-        }
+    if (input.action === 'CANCEL') {
+      const isOwner = req.requestedById === actor.id;
+      const canApprove = has(actor, 'requisitions:approve');
+      if (!isOwner && !canApprove) {
+        throw forbidden('You can only cancel your own pending requisition');
       }
-    } else if (input.action === 'REJECT') {
+      if (req.status !== 'PENDING') {
+        throw badRequest('Only pending requisitions can be cancelled');
+      }
       data = {
         status: 'REJECTED',
-        rejectionReason: input.rejectionReason || 'Declined by management',
+        rejectionReason: input.rejectionReason || 'Cancelled by requester',
       };
+    } else {
+      if (!has(actor, 'requisitions:approve')) {
+        throw forbidden('Manager approval permission required');
+      }
+
+      if (input.action === 'MANAGER_APPROVE') {
+        data = {
+          status: 'MANAGER_APPROVED',
+          managerApprovedById: actor.id,
+          managerApprovedBy: actor.name,
+          managerApprovedAt: now,
+        };
+      } else if (input.action === 'DIRECTOR_APPROVE') {
+        data = {
+          status: 'DIRECTOR_APPROVED',
+          directorApprovedById: actor.id,
+          directorApprovedBy: actor.name,
+          directorApprovedAt: now,
+        };
+      } else if (input.action === 'DISBURSE') {
+        data = {
+          status: 'DISBURSED',
+          disbursedById: actor.id,
+          disbursedBy: actor.name,
+          disbursedAt: now,
+        };
+        // Automatically restock any linked inventory SKUs upon disbursement
+        for (const item of req.items) {
+          if (item.inventoryItemId) {
+            const inv = await this.prisma.inventoryItem.findUnique({ where: { id: item.inventoryItemId } });
+            if (inv) {
+              const qty = item.quantityApproved ?? item.quantityRequested;
+              const nextOnHand = inv.onHand + qty;
+              await this.prisma.inventoryItem.update({
+                where: { id: inv.id },
+                data: { onHand: nextOnHand },
+              });
+              await this.prisma.stockMovement.create({
+                data: {
+                  itemId: inv.id,
+                  type: 'STOCK_IN',
+                  quantity: qty,
+                  balanceAfter: nextOnHand,
+                  department: req.department,
+                  reference: req.number,
+                  notes: `Requisition ${req.number} disbursed`,
+                  recordedById: actor.id,
+                  recordedByName: actor.name,
+                },
+              });
+            }
+          }
+        }
+      } else if (input.action === 'REJECT') {
+        data = {
+          status: 'REJECTED',
+          rejectionReason: input.rejectionReason || 'Declined by management',
+        };
+      }
+    }
+
+    // Apply approved quantities if provided
+    if (input.approvedQuantities && Object.keys(input.approvedQuantities).length > 0) {
+      for (const [itemId, qty] of Object.entries(input.approvedQuantities)) {
+        await this.prisma.requisitionItem.updateMany({
+          where: { id: itemId, requisitionId: id },
+          data: { quantityApproved: qty },
+        });
+      }
     }
 
     const updated = await this.prisma.requisition.update({
@@ -1707,7 +1805,300 @@ export class OperationsService {
       summary: `Requisition ${req.number} → ${updated.status}`,
     });
 
+    // Notify requester if email is known
+    if (req.requestedById && ['MANAGER_APPROVED', 'DIRECTOR_APPROVED', 'DISBURSED', 'REJECTED'].includes(updated.status)) {
+      try {
+        const requester = await this.prisma.user.findUnique({ where: { id: req.requestedById } });
+        if (requester?.email) {
+          const statusLabel = updated.status.replace(/_/g, ' ');
+          await this.notifications.email({
+            to: requester.email,
+            subject: `Requisition ${req.number} is now ${statusLabel}`,
+            heading: `Requisition Update: ${req.number}`,
+            paragraphs: [
+              `Hello ${requester.name},`,
+              `Your requisition ${req.number} (${req.title}) for department ${req.department} has been updated to ${statusLabel}.`,
+              ...(updated.rejectionReason ? [`Reason: ${updated.rejectionReason}`] : []),
+              `Reviewed by ${actor.name} on ${now.toLocaleDateString('en-GB')}.`,
+            ],
+            facts: [
+              ['Requisition #', req.number],
+              ['Status', statusLabel],
+              ['Department', req.department],
+            ],
+            action: { label: 'View Requisition', url: `${process.env.ADMIN_URL || 'https://reberonhotel.com:8443'}/requisitions` },
+          }).catch(() => {});
+        }
+      } catch (err) {}
+    }
+
     return this.mapRequisition(updated);
+  }
+
+  async renderRequisitionPrintHtml(id: string, paper: 'A4' | '80MM', autoprint: boolean) {
+    const req = await this.prisma.requisition.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!req) throw notFound('Requisition');
+
+    const nonce = randomBytes(16).toString('base64');
+    const esc = (s: string | null | undefined) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const fmtMoney = (minor: bigint | string, curr: string) =>
+      `${curr} ${Number(minor).toLocaleString('en-UG')}`;
+
+    const dateStr = new Intl.DateTimeFormat('en-GB', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Africa/Kampala',
+    }).format(req.createdAt);
+
+    const isA4 = paper === 'A4';
+    const statusTone = req.status === 'DISBURSED' ? '#15803d' : req.status === 'REJECTED' ? '#b91c1c' : '#b45309';
+
+    const itemsHtml = req.items
+      .map((it, idx) => {
+        const qtyAppr = it.quantityApproved ?? it.quantityRequested;
+        if (isA4) {
+          return `<tr>
+            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: center; font-family: monospace;">${idx + 1}</td>
+            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb;">
+              <strong>${esc(it.itemName)}</strong>
+            </td>
+            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">${esc(it.unit)}</td>
+            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: center; font-family: monospace; font-weight: 700;">${it.quantityRequested}</td>
+            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: center; font-family: monospace; font-weight: 700; color: #15803d;">${qtyAppr}</td>
+            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-family: monospace;">${fmtMoney(it.estimatedUnitMinor, req.currency)}</td>
+            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-family: monospace; font-weight: 700;">${fmtMoney(it.totalEstimatedMinor, req.currency)}</td>
+          </tr>`;
+        }
+        return `<tr>
+          <td style="padding: 4px 0; border-bottom: 1px dotted #888; font-weight: 800; width: 18%;">${it.quantityRequested} ${esc(it.unit)}</td>
+          <td style="padding: 4px 0; border-bottom: 1px dotted #888;">
+            <div><strong>${esc(it.itemName)}</strong></div>
+            <div style="font-size: 10px; color: #444;">Appr: ${qtyAppr} | @ ${fmtMoney(it.estimatedUnitMinor, req.currency)}</div>
+          </td>
+          <td style="padding: 4px 0; border-bottom: 1px dotted #888; text-align: right; font-weight: 700;">${fmtMoney(it.totalEstimatedMinor, req.currency)}</td>
+        </tr>`;
+      })
+      .join('');
+
+    const html = isA4
+      ? `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(req.number)} · Requisition Voucher</title>
+  <style nonce="${nonce}">
+    @page { size: A4; margin: 15mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #111827;
+      margin: 0;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111827; padding-bottom: 14px; margin-bottom: 18px; }
+    .brand h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+    .brand p { margin: 2px 0 0 0; color: #4b5563; font-size: 12px; }
+    .doc-meta { text-align: right; }
+    .doc-title { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin: 0; }
+    .doc-num { font-size: 16px; font-weight: 800; font-family: monospace; color: #0284c7; margin: 2px 0 0 0; }
+    .status-badge { display: inline-block; margin-top: 5px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; background: #f3f4f6; color: ${statusTone}; border: 1px solid ${statusTone}; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 18px; }
+    .grid .field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #6b7280; margin-bottom: 2px; }
+    .grid .field span { font-size: 12.5px; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+    th { background: #f3f4f6; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #d1d5db; color: #374151; }
+    .total-card { display: flex; justify-content: flex-end; margin-bottom: 24px; }
+    .total-box { min-width: 260px; background: #f9fafb; border: 1.5px solid #111827; border-radius: 6px; padding: 10px 14px; }
+    .total-box .line { display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; }
+    .sign-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 30px; }
+    .sign-box { border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; min-height: 85px; display: flex; flex-direction: column; justify-content: space-between; }
+    .sign-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: #4b5563; border-bottom: 1px dashed #e5e7eb; padding-bottom: 4px; }
+    .sign-name { font-size: 11.5px; font-weight: 600; color: #111827; }
+    .sign-line { border-top: 1px solid #9ca3af; margin-top: 25px; padding-top: 3px; font-size: 10px; color: #6b7280; display: flex; justify-content: space-between; }
+    .no-print { text-align: center; margin-bottom: 20px; }
+    .btn { padding: 8px 18px; background: #111827; color: #fff; border: 0; border-radius: 6px; font-weight: 700; cursor: pointer; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button class="btn" id="pbtn">Print Requisition Voucher (A4)</button>
+  </div>
+
+  <div class="header">
+    <div class="brand">
+      <h1>Reberon Hotel & Resort</h1>
+      <p>Kapchorwa HQ · Mount Elgon, Uganda · Finance & Operations</p>
+    </div>
+    <div class="doc-meta">
+      <div class="doc-title">Internal Requisition Voucher</div>
+      <div class="doc-num">${esc(req.number)}</div>
+      <div class="status-badge">${esc(req.status.replace(/_/g, ' '))}</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="field">
+      <label>Department</label>
+      <span>${esc(req.department)}</span>
+    </div>
+    <div class="field">
+      <label>Date & Time</label>
+      <span>${dateStr}</span>
+    </div>
+    <div class="field">
+      <label>Requested By</label>
+      <span>${esc(req.requestedByName)}</span>
+    </div>
+    <div class="field">
+      <label>Priority</label>
+      <span>${esc(req.priority)}</span>
+    </div>
+  </div>
+
+  ${req.notes ? `<div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 10px 14px; margin-bottom: 18px; font-size: 12px;"><strong>Purpose / Justification:</strong> ${esc(req.notes)}</div>` : ''}
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 40px; text-align: center;">#</th>
+        <th>Item Description</th>
+        <th style="width: 70px; text-align: center;">Unit</th>
+        <th style="width: 80px; text-align: center;">Qty Req.</th>
+        <th style="width: 80px; text-align: center;">Qty Appr.</th>
+        <th style="width: 120px; text-align: right;">Unit Price</th>
+        <th style="width: 130px; text-align: right;">Total Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsHtml}
+    </tbody>
+  </table>
+
+  <div class="total-card">
+    <div class="total-box">
+      <div class="line">
+        <span>Grand Total:</span>
+        <span>${fmtMoney(req.totalEstimatedMinor, req.currency)}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sign-grid">
+    <div class="sign-box">
+      <div class="sign-title">1. Initiated / Requested By</div>
+      <div class="sign-name">${esc(req.requestedByName)}</div>
+      <div class="sign-line"><span>Signature</span> <span>Date: ${new Date(req.createdAt).toLocaleDateString('en-GB')}</span></div>
+    </div>
+    <div class="sign-box">
+      <div class="sign-title">2. Head of Dept / Manager</div>
+      <div class="sign-name">${req.managerApprovedBy ? esc(req.managerApprovedBy) : 'Pending Review'}</div>
+      <div class="sign-line"><span>Signature</span> <span>Date: ${req.managerApprovedAt ? new Date(req.managerApprovedAt).toLocaleDateString('en-GB') : '__________'}</span></div>
+    </div>
+    <div class="sign-box">
+      <div class="sign-title">3. Director / GM Authorization</div>
+      <div class="sign-name">${req.directorApprovedBy ? esc(req.directorApprovedBy) : (req.managerApprovedBy ? 'Authorized' : 'Pending')}</div>
+      <div class="sign-line"><span>Signature</span> <span>Date: ${req.directorApprovedAt ? new Date(req.directorApprovedAt).toLocaleDateString('en-GB') : '__________'}</span></div>
+    </div>
+    <div class="sign-box">
+      <div class="sign-title">4. Stores / Disbursed By</div>
+      <div class="sign-name">${req.disbursedBy ? esc(req.disbursedBy) : 'Pending Issue'}</div>
+      <div class="sign-line"><span>Signature</span> <span>Date: ${req.disbursedAt ? new Date(req.disbursedAt).toLocaleDateString('en-GB') : '__________'}</span></div>
+    </div>
+    <div class="sign-box" style="grid-column: span 2;">
+      <div class="sign-title">5. Goods Received In Good Order By Department</div>
+      <div class="sign-name">Name: ____________________________________________________</div>
+      <div class="sign-line"><span>Recipient Signature: _______________________</span> <span>Date: ____ / ____ / 2026</span></div>
+    </div>
+  </div>
+
+  <script nonce="${nonce}">
+    document.getElementById('pbtn')?.addEventListener('click', () => window.print());
+    ${autoprint ? 'window.addEventListener("load", () => setTimeout(() => window.print(), 150));' : ''}
+  </script>
+</body>
+</html>`
+      : `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(req.number)} · Requisition Slip</title>
+  <style nonce="${nonce}">
+    @page { size: 80mm auto; margin: 4mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-monospace, 'Cascadia Mono', 'Courier New', monospace;
+      width: 72mm;
+      margin: 0 auto;
+      padding: 2mm 0;
+      color: #000;
+      font-size: 11.5px;
+      line-height: 1.35;
+    }
+    .hdr { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 6px; margin-bottom: 6px; }
+    .brand { font-size: 14px; font-weight: 800; text-transform: uppercase; }
+    .sub { font-size: 10px; margin-top: 2px; }
+    .badge { display: inline-block; margin-top: 4px; padding: 2px 6px; border: 1.5px solid #000; font-size: 11px; font-weight: 800; }
+    .meta { font-size: 11px; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 6px; }
+    .meta div { display: flex; justify-content: space-between; margin: 2px 0; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+    .totals { border-top: 2px dashed #000; padding-top: 6px; margin-top: 4px; font-size: 12.5px; font-weight: 800; display: flex; justify-content: space-between; }
+    .sig { border-top: 1px dashed #000; margin-top: 8px; padding-top: 6px; font-size: 10.5px; }
+    .sig div { margin: 4px 0; }
+    .no-print { text-align: center; margin-bottom: 10px; }
+    .btn { padding: 6px 14px; background: #111; color: #fff; border: 0; border-radius: 4px; font-weight: 700; cursor: pointer; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button class="btn" id="pbtn">Print 80mm Voucher</button>
+  </div>
+  <div class="hdr">
+    <div class="brand">Reberon Hotel</div>
+    <div class="sub">Store Requisition & Issue Slip</div>
+    <div class="badge">${esc(req.number)}</div>
+  </div>
+  <div class="meta">
+    <div><span>Dept:</span> <strong>${esc(req.department)}</strong></div>
+    <div><span>Date:</span> <span>${dateStr}</span></div>
+    <div><span>Req By:</span> <span>${esc(req.requestedByName)}</span></div>
+    <div><span>Status:</span> <strong>${esc(req.status)}</strong></div>
+    ${req.notes ? `<div><span>Note:</span> <span>${esc(req.notes)}</span></div>` : ''}
+  </div>
+  <table>
+    <tbody>
+      ${itemsHtml}
+    </tbody>
+  </table>
+  <div class="totals">
+    <span>Total Est:</span>
+    <span>${fmtMoney(req.totalEstimatedMinor, req.currency)}</span>
+  </div>
+  <div class="sig">
+    <div>Req: ${esc(req.requestedByName)}</div>
+    <div>Mgr: ${req.managerApprovedBy ? esc(req.managerApprovedBy) : '__________'}</div>
+    <div>Store Issue: ${req.disbursedBy ? esc(req.disbursedBy) : '__________'}</div>
+    <div>Recv Sig: ________________________</div>
+  </div>
+  <script nonce="${nonce}">
+    document.getElementById('pbtn')?.addEventListener('click', () => window.print());
+    ${autoprint ? 'window.addEventListener("load", () => setTimeout(() => window.print(), 150));' : ''}
+  </script>
+</body>
+</html>`;
+
+    return { html };
   }
 
   async announcements(): Promise<StaffAnnouncementDTO[]> {

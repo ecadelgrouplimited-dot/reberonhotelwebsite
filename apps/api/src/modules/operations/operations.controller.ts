@@ -279,8 +279,28 @@ export class OperationsController {
 
   @Get('requisitions')
   @Requires('requisitions:request')
-  requisitions() {
-    return this.ops.requisitions();
+  requisitions(@Query() q: Record<string, string>, @CurrentUser() user: AuthUser) {
+    return this.ops.requisitions(q, user);
+  }
+
+  @Get('requisitions/:id')
+  @Requires('requisitions:request')
+  getRequisition(@Param('id') id: string) {
+    return this.ops.getRequisition(id);
+  }
+
+  @Get('requisitions/:id/print')
+  @Requires('requisitions:request')
+  async printRequisition(
+    @Param('id') id: string,
+    @Query('paper') paper: string | undefined,
+    @Query('autoprint') autoprint: string | undefined,
+    @Res() res: Response,
+  ) {
+    const p = paper === '80MM' ? '80MM' : 'A4';
+    const out = await this.ops.renderRequisitionPrintHtml(id, p, autoprint === '1');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(out.html);
   }
 
   @Post('requisitions')
@@ -294,7 +314,7 @@ export class OperationsController {
 
   @Post('requisitions/:id/review')
   @HttpCode(200)
-  @Requires('requisitions:approve')
+  @Requires('requisitions:request')
   reviewRequisition(
     @Param('id') id: string,
     @Body(new ZodPipe(zReviewRequisitionInput)) body: z.infer<typeof zReviewRequisitionInput>,

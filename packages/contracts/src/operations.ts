@@ -485,6 +485,7 @@ export interface RequisitionDTO {
   totalEstimatedMinor: string;
   notes: string | null;
   rejectionReason: string | null;
+  requestedById?: string | null;
   requestedByName: string;
   managerApprovedBy: string | null;
   managerApprovedAt: string | null;
@@ -513,8 +514,9 @@ export const zCreateRequisitionInput = z.object({
 });
 
 export const zReviewRequisitionInput = z.object({
-  action: z.enum(['MANAGER_APPROVE', 'DIRECTOR_APPROVE', 'DISBURSE', 'REJECT']),
+  action: z.enum(['MANAGER_APPROVE', 'DIRECTOR_APPROVE', 'DISBURSE', 'REJECT', 'CANCEL']),
   rejectionReason: z.string().trim().max(300).optional(),
+  approvedQuantities: z.record(z.string(), z.number().int().min(0)).optional(),
 });
 
 export interface StaffAnnouncementDTO {
