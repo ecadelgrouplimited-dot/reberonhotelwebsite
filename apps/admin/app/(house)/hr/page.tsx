@@ -43,12 +43,13 @@ import type {
   StaffShiftDTO,
 } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { useCan, useMe } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { dateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { SelectInput, TextInput } from '@/components/ui/field';
 
 type HrTab = 'STAFF' | 'ROSTER' | 'LEAVE' | 'PAYROLL';
@@ -56,8 +57,11 @@ type HrTab = 'STAFF' | 'ROSTER' | 'LEAVE' | 'PAYROLL';
 export default function HrPage() {
   const qc = useQueryClient();
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
 
   const [activeTab, setActiveTab] = useState<HrTab>('STAFF');
+  const [terminatingStaff, setTerminatingStaff] = useState<StaffProfileDTO | null>(null);
 
   // Staff filters
   const [search, setSearch] = useState('');
@@ -162,6 +166,7 @@ export default function HrPage() {
       toast.success('Staff member marked as terminated');
       qc.invalidateQueries({ queryKey: ['hr-staff'] });
       qc.invalidateQueries({ queryKey: ['hr-overview'] });
+      setTerminatingStaff(null);
     },
     onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to terminate staff'),
   });
@@ -531,19 +536,17 @@ export default function HrPage() {
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                if (confirm(`Are you sure you want to terminate ${staff.fullName}?`)) {
-                                  deleteStaffMutation.mutate(staff.id);
-                                }
-                              }}
-                              className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50"
-                              title="Terminate"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {isOwner && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setTerminatingStaff(staff)}
+                                className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50"
+                                title="Terminate (Owner only)"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -919,6 +922,21 @@ export default function HrPage() {
           record={viewingPayslip}
           open={!!viewingPayslip}
           onClose={() => setViewingPayslip(null)}
+        />
+      )}
+
+      {/* Terminate Staff Confirmation Prompt */}
+      {terminatingStaff && (
+        <DeleteConfirmDialog
+          open={!!terminatingStaff}
+          onClose={() => setTerminatingStaff(null)}
+          onConfirm={() => deleteStaffMutation.mutate(terminatingStaff.id)}
+          title={`Terminate Staff Profile · ${terminatingStaff.fullName}?`}
+          itemName={`${terminatingStaff.fullName} (${terminatingStaff.employeeNumber})`}
+          itemType="Staff Member"
+          warning={`This will mark ${terminatingStaff.fullName} as TERMINATED, revoke any linked system sign-in accounts immediately, and preserve their shift & payroll records for audit history.`}
+          requireMatch="TERMINATE"
+          loading={deleteStaffMutation.isPending}
         />
       )}
     </div>

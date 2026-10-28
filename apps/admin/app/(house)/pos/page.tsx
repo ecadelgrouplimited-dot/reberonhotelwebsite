@@ -18,12 +18,14 @@ import type {
   PosPaymentMethod,
 } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
+import { useMe } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { ago, dateTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Section, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { SelectInput, TextInput } from '@/components/ui/field';
 import { printDocument } from '@/components/documents/documents-panel';
 
@@ -94,6 +96,8 @@ function printPosSlip(orderId: string, kind: 'KOT' | 'BILL') {
 
 export default function PosPage() {
   const qc = useQueryClient();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const [activeTab, setActiveTab] = useState<string>('KITCHEN');
   const [selectedCat, setSelectedCat] = useState<string>('ALL');
   const [search, setSearch] = useState('');
@@ -141,6 +145,8 @@ export default function PosPage() {
   const [catModalOpen, setCatModalOpen] = useState(false);
   const [catForm, setCatForm] = useState({ name: '', sortOrder: '10' });
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
+  const [deletingMenuItem, setDeletingMenuItem] = useState<PosItemDTO | null>(null);
+  const [deletingCat, setDeletingCat] = useState<{ id: string; name: string } | null>(null);
 
   // Queries
   const { data: outlets, isLoading } = useQuery({
@@ -446,9 +452,21 @@ export default function PosPage() {
       qc.invalidateQueries({ queryKey: ['pos', 'outlets'] });
       setMenuModalOpen(false);
       setEditingItem(null);
-      toast.success('Menu item removed');
+      setDeletingMenuItem(null);
+      toast.success('Menu item permanently removed');
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not remove item'),
+  });
+
+  const deletePosCatMut = useMutation({
+    mutationFn: (id: string) => del(`/pos/categories/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos', 'outlets'] });
+      setDeletingCat(null);
+      setSelectedCat('ALL');
+      toast.success('POS category removed');
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not remove category'),
   });
 
   const createCategoryMut = useMutation({
@@ -1796,13 +1814,12 @@ export default function PosPage() {
           </SelectInput>
 
           <div className="flex items-center justify-between pt-2">
-            {editingItem ? (
+            {editingItem && isOwner ? (
               <Button
                 type="button"
                 variant="danger"
                 size="sm"
-                loading={deleteMenuItem.isPending}
-                onClick={() => deleteMenuItem.mutate(editingItem.id)}
+                onClick={() => setDeletingMenuItem(editingItem)}
               >
                 Delete Item
               </Button>
@@ -1956,6 +1973,36 @@ export default function PosPage() {
           </div>
         </div>
       </Dialog>
+
+      {/* Delete Menu Item Confirmation Prompt */}
+      {deletingMenuItem && (
+        <DeleteConfirmDialog
+          open={!!deletingMenuItem}
+          onClose={() => setDeletingMenuItem(null)}
+          onConfirm={() => deleteMenuItem.mutate(deletingMenuItem.id)}
+          title={`Delete Menu Item · ${deletingMenuItem.name}?`}
+          itemName={`${deletingMenuItem.name} (${deletingMenuItem.sku})`}
+          itemType="POS Menu Product"
+          warning={`This item will be removed from POS terminals and waiter order tablets. If orders have previously sold this item, it will be safely disabled to preserve past revenue reports.`}
+          requireMatch="DELETE"
+          loading={deleteMenuItem.isPending}
+        />
+      )}
+
+      {/* Delete POS Category Confirmation Prompt */}
+      {deletingCat && (
+        <DeleteConfirmDialog
+          open={!!deletingCat}
+          onClose={() => setDeletingCat(null)}
+          onConfirm={() => deletePosCatMut.mutate(deletingCat.id)}
+          title={`Delete Category · ${deletingCat.name}?`}
+          itemName={deletingCat.name}
+          itemType="POS Outlet Category"
+          warning="This category will be permanently removed from this outlet's menu. Categories containing active items cannot be deleted."
+          requireMatch="DELETE"
+          loading={deletePosCatMut.isPending}
+        />
+      )}
     </div>
   );
 }

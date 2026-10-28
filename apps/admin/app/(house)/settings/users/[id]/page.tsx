@@ -1,17 +1,19 @@
 'use client';
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Copy, Eye, EyeOff, KeyRound, LogOut, Mail, MonitorSmartphone, Send, ShieldCheck, Sparkles } from 'lucide-react';
+import { Copy, Eye, EyeOff, KeyRound, LogOut, Mail, MonitorSmartphone, Send, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { ROLES, ROLE_DESCRIPTIONS, type Role, type SessionDTO, type UserDTO } from '@reberon/contracts';
-import { ApiError, get, patch, post } from '@/lib/api';
+import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useMe } from '@/lib/providers';
 import { ago, dateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Pill, Section, Skeleton } from '@/components/ui/bits';
 import { SelectInput, Switch, TextInput } from '@/components/ui/field';
 import { useConfirm } from '@/components/ui/confirm';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { AccessMatrix, ROLE_LABEL } from '@/components/people/access-matrix';
 
 type Form = {
@@ -53,8 +55,10 @@ function generateStrongPassword() {
 
 export default function PersonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const qc = useQueryClient();
   const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const confirm = useConfirm();
   const { data: u } = useQuery({ queryKey: ['user', id], queryFn: () => get<UserDTO>(`/users/${id}`) });
   const sessions = useQuery({ queryKey: ['user-sessions', id], queryFn: () => get<SessionDTO[]>(`/users/${id}/sessions`), enabled: !!u?.canSignIn });
@@ -62,9 +66,22 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
   const [newPassword, setNewPassword] = useState('');
   const [showPw, setShowPw] = useState(true);
   const [sendCredsEmail, setSendCredsEmail] = useState(true);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => { if (u) setF(toForm(u)); }, [u]);
   const self = id === me.id;
+
+  const deleteAccount = useMutation({
+    mutationFn: () => del(`/users/${id}`),
+    onSuccess: () => {
+      toast.success('Staff account permanently deleted');
+      qc.invalidateQueries({ queryKey: ['users'] });
+      router.replace('/settings/users');
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : 'Could not delete staff member');
+    },
+  });
 
   const save = useMutation({
     mutationFn: () => {
@@ -417,8 +434,47 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
               </Link>
             </div>
           )}
+
+          {/* Danger Zone: Only available to the Owner */}
+          {isOwner && !self && (
+            <div className="card rounded-2xl border border-red-200 dark:border-red-900/40 bg-red-50/20 p-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                  <Trash2 className="size-4" />
+                  <p className="text-xs font-bold uppercase tracking-wider">Danger Zone</p>
+                </div>
+                <p className="text-xs text-fg-muted leading-relaxed">
+                  Permanently delete this user account. This terminates access, invalidates all sessions, and soft-deletes the staff profile.
+                </p>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<Trash2 className="size-3.5" />}
+                  loading={deleteAccount.isPending}
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="w-full justify-center"
+                >
+                  Delete Account
+                </Button>
+              </div>
+            </div>
+          )}
         </aside>
       </div>
+
+      {u && (
+        <DeleteConfirmDialog
+          open={deleteConfirmOpen}
+          onClose={() => setDeleteConfirmOpen(false)}
+          onConfirm={() => deleteAccount.mutate()}
+          title={`Delete Staff Account · ${u.name}?`}
+          itemName={u.name}
+          itemType="Staff User Account"
+          warning={`This will immediately terminate all active sessions for ${u.name} (${u.email || 'No email'}), revoke their House permissions, and mark their staff record as terminated.`}
+          requireMatch="DELETE"
+          loading={deleteAccount.isPending}
+        />
+      )}
     </div>
   );
 }

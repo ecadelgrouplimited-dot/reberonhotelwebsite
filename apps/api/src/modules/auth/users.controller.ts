@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import argon2 from 'argon2';
 import { OWNER_ONLY, PERMISSIONS, zAdminSetPasswordInput, zInviteInput, zStaffCreateInput, zUserUpdateInput, type Permission, type SessionDTO, type UserDTO } from '@reberon/contracts';
@@ -10,7 +10,7 @@ import { AuditService } from '../../common/audit.service.js';
 import { CurrentUser, Requires, type AuthUser } from '../../common/auth.js';
 import { permissionsOf } from '../../common/access.js';
 import { ZodPipe } from '../../common/zod.pipe.js';
-import { badRequest, conflict, notFound } from '../../common/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../../common/errors.js';
 import { env } from '../../config.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { ARGON_OPTS } from './auth.service.js';
@@ -314,5 +314,49 @@ export class UsersController {
     const r = await this.prisma.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
     await this.audit.record({ actor: me, action: 'user.sign_out', entityType: 'User', entityId: id, summary: `Signed ${user.name} out everywhere (${r.count} session${r.count === 1 ? '' : 's'})`, req });
     return { ended: r.count };
+  }
+
+  /** Delete staff account. Only available to the owner. */
+  @Delete(':id')
+  @HttpCode(200)
+  @Requires('users:manage')
+  async deleteUser(@Param('id') id: string, @CurrentUser() me: AuthUser, @Req() req: Request) {
+    if (me.role !== 'OWNER') throw forbidden('Only the hotel owner can delete staff accounts');
+    if (me.id === id) throw forbidden('You cannot delete your own owner account');
+
+    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null } });
+    if (!user) throw notFound('User');
+
+    // Revoke all active sessions
+    await this.prisma.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+
+    // Soft delete user record & rename email tombstone to free up email address for future use
+    const tombstoneEmail = user.email ? `deleted_${Date.now()}_${user.email}` : null;
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        status: 'DISABLED',
+        canSignIn: false,
+        email: tombstoneEmail,
+      },
+    });
+
+    // Also terminate linked StaffProfile if one exists
+    await this.prisma.staffProfile.updateMany({
+      where: { userId: id },
+      data: { status: 'TERMINATED' },
+    });
+
+    await this.audit.record({
+      actor: me,
+      action: 'user.delete',
+      entityType: 'User',
+      entityId: id,
+      summary: `Permanently deleted user ${user.name} (${user.email || 'no email'})`,
+      req,
+    });
+
+    return { ok: true, deleted: true };
   }
 }

@@ -21,7 +21,7 @@ import {
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
 import { type AuthUser } from '../../common/auth.js';
-import { badRequest, notFound } from '../../common/errors.js';
+import { badRequest, forbidden, notFound } from '../../common/errors.js';
 
 @Injectable()
 export class HrService {
@@ -859,6 +859,7 @@ export class HrService {
   }
 
   async deleteStaff(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can terminate or delete staff profiles');
     const existing = await this.prisma.staffProfile.findUnique({ where: { id } });
     if (!existing) throw notFound('Staff Profile');
 

@@ -25,23 +25,27 @@ import {
 import Link from 'next/link';
 import type { HotelDepartmentDTO, StaffProfileDTO } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { useCan, useMe } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { dateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { SelectInput, TextInput } from '@/components/ui/field';
 
 export default function DepartmentsPage() {
   const qc = useQueryClient();
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editingDept, setEditingDept] = useState<HotelDepartmentDTO | null>(null);
+  const [deletingDept, setDeletingDept] = useState<HotelDepartmentDTO | null>(null);
 
   const { data: departments, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['departments'],
@@ -93,6 +97,7 @@ export default function DepartmentsPage() {
     onSuccess: () => {
       toast.success('Department removed or deactivated');
       qc.invalidateQueries({ queryKey: ['departments'] });
+      setDeletingDept(null);
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : 'Failed to remove department');
@@ -416,19 +421,17 @@ export default function DepartmentsPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm(`Are you sure you want to remove or deactivate ${dept.name}?`)) {
-                              deleteMutation.mutate(dept.id);
-                            }
-                          }}
-                          className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                          title="Deactivate / Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {isOwner && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeletingDept(dept)}
+                            className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                            title="Delete department (Owner only)"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -457,6 +460,21 @@ export default function DepartmentsPage() {
           onSubmit={(data) => updateMutation.mutate({ id: editingDept.id, data })}
           isPending={updateMutation.isPending}
           staffList={staffList || []}
+        />
+      )}
+
+      {/* Delete Department Confirmation Prompt */}
+      {deletingDept && (
+        <DeleteConfirmDialog
+          open={!!deletingDept}
+          onClose={() => setDeletingDept(null)}
+          onConfirm={() => deleteMutation.mutate(deletingDept.id)}
+          title={`Delete Department · ${deletingDept.name}?`}
+          itemName={deletingDept.name}
+          itemType="Operational Department"
+          warning={`Deleting this cost center will remove it from operational dropdowns and budget allocations. If items or staff are assigned to "${deletingDept.name}", it will be safely deactivated to protect audit history.`}
+          requireMatch="DELETE"
+          loading={deleteMutation.isPending}
         />
       )}
     </div>

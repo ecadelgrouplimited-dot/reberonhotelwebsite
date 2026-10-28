@@ -34,13 +34,14 @@ import type {
   StaffAnnouncementDTO,
   TerminalDeviceDTO,
 } from '@reberon/contracts';
-import { ApiError, get, post } from '@/lib/api';
+import { ApiError, del, get, post } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
 import { money, toMinorStr } from '@/lib/money';
 import { dateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { SelectInput, Switch, TextArea, TextInput } from '@/components/ui/field';
 
 const STATUS_TONE: Record<RequisitionStatus, 'amber' | 'blue' | 'green' | 'neutral' | 'red'> = {
@@ -91,6 +92,7 @@ export default function RequisitionsPage() {
   const [selectedReq, setSelectedReq] = useState<RequisitionDTO | null>(null);
   const [rejectingReq, setRejectingReq] = useState<RequisitionDTO | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [deletingReq, setDeletingReq] = useState<RequisitionDTO | null>(null);
 
   const { data: requisitions, isLoading: reqLoading } = useQuery({
     queryKey: ['requisitions'],
@@ -132,6 +134,17 @@ export default function RequisitionsPage() {
       toast.success(`${r.number} → ${r.status.replace(/_/g, ' ')}`);
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Action failed'),
+  });
+
+  const deleteReqMutation = useMutation({
+    mutationFn: (id: string) => del(`/requisitions/${id}`),
+    onSuccess: () => {
+      toast.success('Requisition permanently deleted');
+      qc.invalidateQueries({ queryKey: ['requisitions'] });
+      setDeletingReq(null);
+      setSelectedReq(null);
+    },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Could not delete requisition'),
   });
 
   const stats = useMemo(() => {
@@ -570,6 +583,18 @@ export default function RequisitionsPage() {
                                   Cancel
                                 </Button>
                               )}
+
+                              {/* Owner Delete Option */}
+                              {isOwner && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-danger hover:bg-danger/10"
+                                  icon={<Trash2 className="size-3" />}
+                                  title="Delete requisition (Owner only)"
+                                  onClick={() => setDeletingReq(r)}
+                                />
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -673,6 +698,7 @@ export default function RequisitionsPage() {
             actOnReq.mutate({ id: selectedReq.id, action, rejectionReason });
           }
         }}
+        onDelete={(r) => setDeletingReq(r)}
         isPending={actOnReq.isPending}
       />
 
@@ -742,6 +768,21 @@ export default function RequisitionsPage() {
           qc.invalidateQueries({ queryKey: ['announcements'] });
         }}
       />
+
+      {/* Delete Requisition Confirmation Prompt */}
+      {deletingReq && (
+        <DeleteConfirmDialog
+          open={!!deletingReq}
+          onClose={() => setDeletingReq(null)}
+          onConfirm={() => deleteReqMutation.mutate(deletingReq.id)}
+          title={`Delete Requisition · ${deletingReq.number}?`}
+          itemName={`${deletingReq.number} (${deletingReq.title})`}
+          itemType="Store Requisition Voucher"
+          warning={`This will permanently remove requisition ${deletingReq.number} and all its item lines from the operational records. Past stock movements from disbursed vouchers will remain in inventory history.`}
+          requireMatch="DELETE"
+          loading={deleteReqMutation.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -751,18 +792,21 @@ function RequisitionDetailDialog({
   req,
   onClose,
   onApprove,
+  onDelete,
   isPending,
 }: {
   req: RequisitionDTO | null;
   onClose: () => void;
   onApprove: (action: 'MANAGER_APPROVE' | 'DIRECTOR_APPROVE' | 'DISBURSE' | 'CANCEL' | 'REJECT', reason?: string) => void;
+  onDelete: (r: RequisitionDTO) => void;
   isPending: boolean;
 }) {
   const can = useCan();
   const me = useMe();
   if (!req) return null;
 
-  const isOwner = req.requestedById === me.id || req.requestedByName.toLowerCase().includes(me.name.toLowerCase());
+  const isHotelOwner = me.role === 'OWNER';
+  const isRequester = req.requestedById === me.id || req.requestedByName.toLowerCase().includes(me.name.toLowerCase());
   const canApprove = can('requisitions:approve');
 
   return (
@@ -796,11 +840,22 @@ function RequisitionDetailDialog({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            {isHotelOwner && (
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<Trash2 className="size-3.5" />}
+                onClick={() => onDelete(req)}
+              >
+                Delete
+              </Button>
+            )}
+
             <Button variant="ghost" onClick={onClose}>
               Close
             </Button>
 
-            {!canApprove && isOwner && req.status === 'PENDING' && (
+            {!canApprove && isRequester && req.status === 'PENDING' && (
               <Button
                 variant="secondary"
                 className="text-danger border-danger/30 hover:bg-danger/10"

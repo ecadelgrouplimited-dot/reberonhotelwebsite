@@ -22,11 +22,12 @@ import {
 import Link from 'next/link';
 import type { HotelDepartmentDTO, ItemCategoryDTO } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { useCan, useMe } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Skeleton } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { SelectInput, TextInput } from '@/components/ui/field';
 
 const TONE_CLASSES: Record<string, string> = {
@@ -44,6 +45,8 @@ const COMMON_UNITS = ['PIECE', 'KG', 'LITER', 'BOTTLE', 'PACK', 'BOX', 'CAN', 'R
 export default function ItemCategoriesPage() {
   const qc = useQueryClient();
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
 
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>('ALL');
@@ -51,6 +54,7 @@ export default function ItemCategoriesPage() {
 
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ItemCategoryDTO | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState<ItemCategoryDTO | null>(null);
 
   const { data: categories, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['item-categories'],
@@ -105,6 +109,7 @@ export default function ItemCategoriesPage() {
       toast.success('Category removed or deactivated');
       qc.invalidateQueries({ queryKey: ['item-categories'] });
       qc.invalidateQueries({ queryKey: ['inventory'] });
+      setDeletingCategory(null);
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : 'Failed to remove category');
@@ -413,19 +418,17 @@ export default function ItemCategoriesPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm(`Are you sure you want to remove or deactivate ${cat.name}?`)) {
-                              deleteMutation.mutate(cat.id);
-                            }
-                          }}
-                          className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                          title="Deactivate / Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {isOwner && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeletingCategory(cat)}
+                            className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                            title="Delete category (Owner only)"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -454,6 +457,21 @@ export default function ItemCategoriesPage() {
           departments={departments || []}
           onSubmit={(data) => updateMutation.mutate({ id: editingCategory.id, data })}
           isPending={updateMutation.isPending}
+        />
+      )}
+
+      {/* Delete Category Confirmation Prompt */}
+      {deletingCategory && (
+        <DeleteConfirmDialog
+          open={!!deletingCategory}
+          onClose={() => setDeletingCategory(null)}
+          onConfirm={() => deleteMutation.mutate(deletingCategory.id)}
+          title={`Delete Category · ${deletingCategory.name}?`}
+          itemName={deletingCategory.name}
+          itemType="Inventory Category"
+          warning={`Deleting this category will remove it from future requisition and stock forms. If any existing items belong to "${deletingCategory.name}", it will be safely deactivated to preserve historical auditing.`}
+          requireMatch="DELETE"
+          loading={deleteMutation.isPending}
         />
       )}
     </div>

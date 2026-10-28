@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 import { zConversationPatch, zMessageCreate, zManualConversationInput, zWaitlistPatch, t, type DashboardDTO } from '@reberon/contracts';
@@ -8,7 +8,7 @@ import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
 import { CurrentUser, Requires, has, type AuthUser } from '../../common/auth.js';
 import { ZodPipe } from '../../common/zod.pipe.js';
-import { notFound } from '../../common/errors.js';
+import { forbidden, notFound } from '../../common/errors.js';
 import { lt } from '../content/mappers.js';
 import { InboxService, toWaitlist } from './inbox.service.js';
 import { EmailIngestionService } from './email-ingestion.service.js';
@@ -134,6 +134,25 @@ export class WaitlistController {
     const bits = [body.status && `status → ${body.status}`, body.priority !== undefined && `priority → ${body.priority}`, body.staffNotes !== undefined && 'notes'].filter(Boolean);
     await this.audit.record({ actor: user, action: 'waitlist.update', entityType: 'WaitlistEntry', entityId: id, summary: `${w.reference}: ${bits.join(', ')}`, before: { status: before.status, priority: before.priority }, after: body, req });
     return toWaitlist(w);
+  }
+
+  @Delete(':id')
+  @HttpCode(200)
+  @Requires('waitlist:write')
+  async delete(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    if (user.role !== 'OWNER') throw forbidden('Only the hotel owner can delete waitlist entries');
+    const existing = await this.prisma.waitlistEntry.findUnique({ where: { id } });
+    if (!existing) throw notFound('Waitlist entry');
+    await this.prisma.waitlistEntry.delete({ where: { id } });
+    await this.audit.record({
+      actor: user,
+      action: 'waitlist.delete',
+      entityType: 'WaitlistEntry',
+      entityId: id,
+      summary: `Deleted waitlist entry ${existing.reference}`,
+      req,
+    });
+    return { ok: true, deleted: true };
   }
 }
 

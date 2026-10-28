@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { ArrowDown, ArrowUp, ChevronDown, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { t, type LRich, type LText } from '@reberon/contracts/text';
 import { ApiError, del, get, patch, post } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { useCan, useMe } from '@/lib/providers';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Pill, Section, Skeleton } from '@/components/ui/bits';
@@ -43,6 +43,8 @@ export default function FaqsPage() {
 
 function GroupCard({ group, onChange }: { group: Group; onChange: () => void }) {
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const confirm = useConfirm();
   const [open, setOpen] = useState<string | null>(null);
   const addItem = useMutation({ mutationFn: () => post<Item>('/faq-items', { groupId: group.id, question: { en: 'New question?' }, answer: { en: { type: 'doc', content: [{ type: 'paragraph' }] } } }), onSuccess: (i) => { onChange(); setOpen(i.id); } });
@@ -61,9 +63,11 @@ function GroupCard({ group, onChange }: { group: Group; onChange: () => void }) 
         can('content:write') && (
           <div className="flex gap-1">
             <Button size="sm" icon={<Plus className="size-3.5" />} loading={addItem.isPending} onClick={() => addItem.mutate()}>Question</Button>
-            <Button size="sm" variant="ghost" aria-label="Delete group" onClick={async () => (await confirm({ title: `Delete “${t(group.title)}”?`, body: 'All its questions go too. Pages using this group will show nothing there.', confirm: 'Delete group', danger: true })) && removeGroup.mutate()}>
-              <Trash2 className="size-3.5" />
-            </Button>
+            {isOwner && (
+              <Button size="sm" variant="ghost" aria-label="Delete group" onClick={async () => (await confirm({ title: `Delete “${t(group.title)}”?`, body: 'All its questions go too. Pages using this group will show nothing there.', confirm: 'Delete group', danger: true })) && removeGroup.mutate()}>
+                <Trash2 className="size-3.5" />
+              </Button>
+            )}
           </div>
         )
       }
@@ -94,6 +98,8 @@ function GroupCard({ group, onChange }: { group: Group; onChange: () => void }) 
 
 function ItemEditor({ item, onChange }: { item: Item; onChange: () => void }) {
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const confirm = useConfirm();
   const [q, setQ] = useState(item.question.en ?? '');
   const [a, setA] = useState<LRich>(item.answer);
@@ -106,7 +112,9 @@ function ItemEditor({ item, onChange }: { item: Item; onChange: () => void }) {
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="dark" loading={save.isPending} onClick={() => save.mutate({ question: { en: q }, answer: a })}>Save</Button>
         <Button size="sm" icon={item.isPublished ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />} onClick={() => save.mutate({ isPublished: !item.isPublished })}>{item.isPublished ? 'Hide' : 'Show'}</Button>
-        <Button size="sm" variant="ghost" className="ml-auto text-danger" onClick={async () => (await confirm({ title: 'Delete this question?', body: t(item.question), confirm: 'Delete', danger: true })) && remove.mutate()}>Delete</Button>
+        {isOwner && (
+          <Button size="sm" variant="ghost" className="ml-auto text-danger" onClick={async () => (await confirm({ title: 'Delete this question?', body: t(item.question), confirm: 'Delete', danger: true })) && remove.mutate()}>Delete</Button>
+        )}
       </div>
     </fieldset>
   );

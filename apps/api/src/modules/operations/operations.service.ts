@@ -717,6 +717,7 @@ export class OperationsService {
   }
 
   async deleteItem(id: string, actor: AuthUser) {
+    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete POS menu items');
     const item = await this.prisma.posItem.findUnique({
       where: { id },
       include: { _count: { select: { orderItems: true } } },
@@ -736,6 +737,27 @@ export class OperationsService {
       summary: `Deleted POS menu item ${item.name} (${item.sku})`,
     });
     return { deleted: true };
+  }
+
+  async deletePosCategory(id: string, actor: AuthUser) {
+    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete POS categories');
+    const cat = await this.prisma.posCategory.findUnique({
+      where: { id },
+      include: { _count: { select: { items: true } } },
+    });
+    if (!cat) throw notFound('POS Category');
+    if (cat._count.items > 0) {
+      throw badRequest(`Cannot delete category "${cat.name}" because it contains ${cat._count.items} menu items. Please remove or reassign the items first.`);
+    }
+    await this.prisma.posCategory.delete({ where: { id } });
+    await this.audit.record({
+      actor,
+      action: 'pos.category.delete',
+      entityType: 'PosCategory',
+      entityId: id,
+      summary: `Deleted POS category ${cat.name}`,
+    });
+    return { ok: true };
   }
 
   async renderPosOrderPrintHtml(id: string, kind: 'KOT' | 'BILL', autoprint: boolean) {
@@ -1532,6 +1554,7 @@ export class OperationsService {
   }
 
   async deleteInventoryItem(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete inventory items');
     const existing = await this.prisma.inventoryItem.findUnique({ where: { id } });
     if (!existing) throw notFound('Inventory Item');
 
@@ -1990,6 +2013,25 @@ export class OperationsService {
     }
 
     return this.mapRequisition(updated);
+  }
+
+  async deleteRequisition(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete requisitions');
+    const req = await this.prisma.requisition.findUnique({ where: { id } });
+    if (!req) throw notFound('Requisition');
+
+    await this.prisma.requisitionItem.deleteMany({ where: { requisitionId: id } });
+    await this.prisma.requisition.delete({ where: { id } });
+
+    await this.audit.record({
+      actor,
+      action: 'requisition.delete',
+      entityType: 'Requisition',
+      entityId: id,
+      summary: `Permanently deleted requisition ${req.number} (${req.title})`,
+    });
+
+    return { ok: true };
   }
 
   async renderRequisitionPrintHtml(id: string, paper: 'A4' | '80MM', autoprint: boolean) {
@@ -2659,6 +2701,7 @@ export class OperationsService {
   }
 
   async deleteDepartment(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete departments');
     const existing = await this.prisma.hotelDepartment.findUnique({ where: { id } });
     if (!existing) throw notFound('HotelDepartment');
 
@@ -2875,6 +2918,7 @@ export class OperationsService {
   }
 
   async deleteItemCategory(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete item categories');
     const existing = await this.prisma.itemCategory.findUnique({ where: { id } });
     if (!existing) throw notFound('ItemCategory');
 

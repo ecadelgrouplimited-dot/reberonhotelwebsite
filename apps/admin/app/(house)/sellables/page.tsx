@@ -2,17 +2,18 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { EXTRA_KINDS, EXTRA_UNITS } from '@reberon/contracts';
-import { ApiError, api, get } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { ApiError, api, del, get } from '@/lib/api';
+import { useCan, useMe } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Pill, Skeleton, Status, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { FieldRenderer, type AdminFieldDef } from '@/components/forms/field-renderer';
 
-type Row = Record<string, unknown> & { id: string; slug: string; name: { en?: string }; status: string };
+type Row = Record<string, unknown> & { id: string; slug: string; name: { en?: string }; status: string; isExperience?: boolean; priceUgx?: string; priceUsd?: string; nights?: number; kind?: string; unit?: string };
 const UNIT: Record<string, string> = { PER_STAY: 'per stay', PER_NIGHT: 'per night', PER_PERSON: 'per person', PER_TRIP: 'per trip' };
 
 const extraFields: AdminFieldDef[] = [
@@ -35,7 +36,10 @@ const packageFields: AdminFieldDef[] = [
 export default function SellablesPage() {
   const [tab, setTab] = useState<'extras' | 'packages'>('extras');
   const [editing, setEditing] = useState<Row | 'new' | null>(null);
+  const [deletingRow, setDeletingRow] = useState<Row | null>(null);
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['sellables', tab], queryFn: () => get<Row[]>(`/${tab}`) });
   const fields = tab === 'extras' ? extraFields : packageFields;
@@ -54,6 +58,18 @@ export default function SellablesPage() {
     onSuccess: () => { toast.success('Saved'); qc.invalidateQueries({ queryKey: ['sellables'] }); setEditing(null); },
     onError: (e) => { if (e instanceof ApiError) setErrors(e.fieldErrors()); toast.error(e instanceof ApiError ? e.message : 'Could not save'); },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => del(`/${tab}/${id}`),
+    onSuccess: () => {
+      toast.success(`${tab === 'extras' ? 'Extra' : 'Package'} deleted`);
+      qc.invalidateQueries({ queryKey: ['sellables'] });
+      setDeletingRow(null);
+      setEditing(null);
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not delete item'),
+  });
+
   return (
     <div className="fade-in">
       <PageHeader title="Extras & packages" description="They buy a reason to come, not a room code. Extras sit on the same folio as the room." actions={can('rates:write') && <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => open('new')}>New {tab === 'extras' ? 'extra' : 'package'}</Button>} />
@@ -62,7 +78,7 @@ export default function SellablesPage() {
         <div className="card overflow-hidden">
           <ul className="divide-y divide-line">
             {data?.map((r) => (
-              <li key={r.id}>
+              <li key={r.id} className="group relative flex items-center">
                 <button type="button" onClick={() => open(r)} className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left text-[13px] hover:bg-surface-2/50">
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium">{r.name.en}</span>
@@ -72,15 +88,65 @@ export default function SellablesPage() {
                   <span className="tabular">{r.priceUgx ? money(String(r.priceUgx), 'UGX') : '—'}{r.priceUsd ? ` · ${money(String(r.priceUsd), 'USD')}` : ''}</span>
                   <Status value={r.status} />
                 </button>
+                {isOwner && (
+                  <div className="pr-3">
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={<Trash2 className="size-3" />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingRow(r);
+                      }}
+                      title={`Delete ${tab === 'extras' ? 'extra' : 'package'}`}
+                    />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
         </div>
       )}
-      <Dialog open={!!editing} onClose={() => setEditing(null)} size="lg" title={editing === 'new' ? `New ${tab === 'extras' ? 'extra' : 'package'}` : String((editing as Row | null)?.name?.en ?? '')}
-        footer={<><Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>{can('rates:write') && <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>Save</Button>}</>}>
+      <Dialog
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        size="lg"
+        title={editing === 'new' ? `New ${tab === 'extras' ? 'extra' : 'package'}` : String((editing as Row | null)?.name?.en ?? '')}
+        footer={
+          <div className="flex w-full items-center justify-between">
+            {editing !== 'new' && isOwner ? (
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<Trash2 className="size-3.5" />}
+                onClick={() => setDeletingRow(editing as Row)}
+              >
+                Delete {tab === 'extras' ? 'Extra' : 'Package'}
+              </Button>
+            ) : <span />}
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+              {can('rates:write') && <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>Save</Button>}
+            </div>
+          </div>
+        }
+      >
         <fieldset disabled={!can('rates:write')}><FieldRenderer fields={fields} value={values} onChange={setValues} errors={errors} /></fieldset>
       </Dialog>
+
+      {deletingRow && (
+        <DeleteConfirmDialog
+          open={!!deletingRow}
+          onClose={() => setDeletingRow(null)}
+          onConfirm={() => deleteMutation.mutate(deletingRow.id)}
+          title={`Delete ${tab === 'extras' ? 'Extra' : 'Package'} · ${deletingRow.name?.en || deletingRow.slug}?`}
+          itemName={deletingRow.name?.en || deletingRow.slug}
+          itemType={tab === 'extras' ? 'Hotel Extra / Experience' : 'Package Deal'}
+          warning={`This will hide and soft-delete this ${tab === 'extras' ? 'extra' : 'package'}. It will immediately be removed from the online booking engine.`}
+          requireMatch="DELETE"
+          loading={deleteMutation.isPending}
+        />
+      )}
     </div>
   );
 }

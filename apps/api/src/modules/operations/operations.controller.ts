@@ -137,6 +137,12 @@ export class OperationsController {
     return this.ops.createCategory(body, user);
   }
 
+  @Delete('pos/categories/:id')
+  @Requires('pos:operate')
+  deletePosCategory(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ops.deletePosCategory(id, user);
+  }
+
   @Post('pos/items')
   @Requires('pos:operate')
   createItem(
@@ -425,6 +431,12 @@ export class OperationsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.ops.reviewRequisition(id, body, user);
+  }
+
+  @Delete('requisitions/:id')
+  @Requires('requisitions:request')
+  deleteRequisition(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ops.deleteRequisition(id, user);
   }
 
   @Get('announcements')

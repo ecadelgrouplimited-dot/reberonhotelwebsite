@@ -41,12 +41,13 @@ import type {
   StockMovementType,
 } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { useCan, useMe } from '@/lib/providers';
 import { money, toMinorStr } from '@/lib/money';
 import { dateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { SelectInput, TextInput } from '@/components/ui/field';
 
 const CATEGORY_SHORT: Record<InventoryCategory, string> = {
@@ -81,6 +82,8 @@ const DEPT_LABELS: Record<string, string> = {
 export default function InventoryPage() {
   const qc = useQueryClient();
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
 
   const [tab, setTab] = useState<'ALL' | InventoryCategory | 'MOVEMENTS'>('ALL');
   const [deptFilter, setDeptFilter] = useState<string>('ALL');
@@ -91,6 +94,7 @@ export default function InventoryPage() {
   const [editingItem, setEditingItem] = useState<InventoryItemDTO | null>(null);
   const [countingItem, setCountingItem] = useState<InventoryItemDTO | null>(null);
   const [moveItem, setMoveItem] = useState<InventoryItemDTO | null>(null);
+  const [deletingItem, setDeletingItem] = useState<InventoryItemDTO | null>(null);
   const [newSkuOpen, setNewSkuOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -114,7 +118,8 @@ export default function InventoryPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory'] });
       setSelectedItem(null);
-      toast.success('SKU removed');
+      setDeletingItem(null);
+      toast.success('SKU permanently removed');
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Delete failed'),
   });
@@ -625,6 +630,17 @@ export default function InventoryPage() {
                               onClick={() => setMoveItem(it)}
                               title="Record stock movement"
                             />
+
+                            {/* Owner Delete Action */}
+                            {isOwner && (
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                icon={<Trash2 className="size-3" />}
+                                onClick={() => setDeletingItem(it)}
+                                title="Delete SKU (Owner only)"
+                              />
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -653,9 +669,26 @@ export default function InventoryPage() {
           setSelectedItem(null);
           setMoveItem(it);
         }}
-        onDelete={(id) => deleteItemMut.mutate(id)}
-        isDeleting={deleteItemMut.isPending}
+        onRequestDelete={(it) => {
+          setSelectedItem(null);
+          setDeletingItem(it);
+        }}
+        isOwner={isOwner}
       />
+
+      {deletingItem && (
+        <DeleteConfirmDialog
+          open={!!deletingItem}
+          onClose={() => setDeletingItem(null)}
+          onConfirm={() => deleteItemMut.mutate(deletingItem.id)}
+          title={`Delete SKU · ${deletingItem.sku}?`}
+          itemName={`${deletingItem.sku} (${deletingItem.name})`}
+          itemType="Inventory SKU"
+          warning={`This will permanently remove ${deletingItem.sku} from inventory records and department allocations.`}
+          requireMatch="DELETE"
+          loading={deleteItemMut.isPending}
+        />
+      )}
 
       {/* Edit SKU Dialog */}
       {editingItem && (
@@ -717,16 +750,16 @@ function ItemDetailDialog({
   onEdit,
   onCount,
   onMove,
-  onDelete,
-  isDeleting,
+  onRequestDelete,
+  isOwner,
 }: {
   item: InventoryItemDTO | null;
   onClose: () => void;
   onEdit: (it: InventoryItemDTO) => void;
   onCount: (it: InventoryItemDTO) => void;
   onMove: (it: InventoryItemDTO) => void;
-  onDelete: (id: string) => void;
-  isDeleting: boolean;
+  onRequestDelete: (it: InventoryItemDTO) => void;
+  isOwner: boolean;
 }) {
   const can = useCan();
   const itemId = item?.id;
@@ -752,17 +785,11 @@ function ItemDetailDialog({
       description={`${CATEGORY_SHORT[item.category] ?? item.category} · ${DEPT_LABELS[item.department] ?? item.department}`}
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          {can('inventory:manage') ? (
+          {isOwner ? (
             <Button
-              variant="ghost"
-              className="text-danger hover:bg-danger/10"
+              variant="danger"
               icon={<Trash2 className="size-3.5" />}
-              loading={isDeleting}
-              onClick={() => {
-                if (confirm(`Are you sure you want to delete SKU ${item.sku} (${item.name})?`)) {
-                  onDelete(item.id);
-                }
-              }}
+              onClick={() => onRequestDelete(item)}
             >
               Delete SKU
             </Button>

@@ -5,11 +5,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ExternalLink, Save, Trash2 } from 'lucide-react';
 import { ApiError, api, del, get } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { useCan, useMe } from '@/lib/providers';
 import { ago } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Section, Skeleton } from '@/components/ui/bits';
 import { useConfirm } from '@/components/ui/confirm';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { FieldRenderer, type AdminFieldDef } from './field-renderer';
 
 type Values = Record<string, unknown>;
@@ -37,8 +38,11 @@ export function EntityEditor({ config, id }: { config: EntityConfig; id: string 
   const router = useRouter();
   const qc = useQueryClient();
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const confirm = useConfirm();
   const editable = can('content:write');
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const key = [config.endpoint, id];
   const { data: record, isLoading } = useQuery({ queryKey: key, queryFn: () => get<Values>(`${config.endpoint}/${id}`), enabled: !isNew });
   const initial = useMemo(() => (isNew ? config.empty : record ? (config.toForm?.(record) ?? record) : null), [isNew, record, config]);
@@ -145,20 +149,30 @@ export function EntityEditor({ config, id }: { config: EntityConfig; id: string 
             {record?.updatedAt ? <p className="text-center text-[11.5px] text-fg-subtle">Last saved {ago(String(record.updatedAt))}</p> : null}
           </div>
           {config.extraSide?.(record ?? null)}
-          {!isNew && editable && (
+          {!isNew && isOwner && (
             <Button
               variant="danger"
               icon={<Trash2 className="size-4" />}
               loading={remove.isPending}
-              onClick={async () => {
-                if (await confirm({ title: `Delete “${config.title(values)}”?`, body: config.deleteWarning ?? 'It disappears from the website. This is recorded in the audit log.', confirm: 'Delete', danger: true })) remove.mutate();
-              }}
+              onClick={() => setDeleteOpen(true)}
             >
               Delete {config.noun.toLowerCase()}
             </Button>
           )}
         </aside>
       </div>
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => remove.mutate()}
+        title={`Delete ${config.noun} · “${config.title(values)}”?`}
+        itemName={config.title(values)}
+        itemType={config.noun}
+        warning={config.deleteWarning ?? 'It disappears from the live website immediately. This action is permanently recorded in the executive audit log.'}
+        requireMatch="DELETE"
+        loading={remove.isPending}
+      />
     </form>
   );
 }

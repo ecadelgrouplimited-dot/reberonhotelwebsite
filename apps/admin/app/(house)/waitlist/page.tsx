@@ -4,17 +4,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Download, MessageSquareText, Phone, Search, Star } from 'lucide-react';
+import { Download, MessageSquareText, Phone, Search, Star, Trash2 } from 'lucide-react';
 import type { WaitlistEntryDTO } from '@reberon/contracts';
 import { t } from '@reberon/contracts/text';
 import { whatsappLink } from '@reberon/utils';
-import { get, patch } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { ApiError, del, get, patch } from '@/lib/api';
+import { useCan, useMe } from '@/lib/providers';
 import { ago, dateRange, dateTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Empty, PageHeader, Skeleton, Status, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { SelectInput, TextArea } from '@/components/ui/field';
 
 type List = { data: WaitlistEntryDTO[]; total: number; counts: Record<string, number> };
@@ -23,12 +24,28 @@ type Detail = WaitlistEntryDTO & { history: { id: string; summary: string; actor
 function WaitlistInner() {
   const params = useSearchParams();
   const router = useRouter();
+  const qc = useQueryClient();
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const [status, setStatus] = useState('');
   const [room, setRoom] = useState('');
   const [month, setMonth] = useState('');
   const [sort, setSort] = useState('priority');
   const [q, setQ] = useState('');
+  const [deletingItem, setDeletingItem] = useState<WaitlistEntryDTO | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => del(`/waitlist/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['waitlist'] });
+      qc.invalidateQueries({ queryKey: ['badge', 'waitlist'] });
+      toast.success('Waitlist entry deleted');
+      setDeletingItem(null);
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not delete waitlist entry'),
+  });
+
   const openId = params.get('open');
   const qs = new URLSearchParams({ ...(status ? { status } : {}), ...(room ? { roomTypeId: room } : {}), ...(month ? { month } : {}), ...(q ? { q } : {}), sort });
   const list = useQuery({ queryKey: ['waitlist', qs.toString()], queryFn: () => get<List>(`/waitlist?${qs}`) });
@@ -123,7 +140,23 @@ function WaitlistInner() {
                   </td>
                   <td className="px-4 py-3 tabular">{w.adults}{w.children ? ` + ${w.children}` : ''}</td>
                   <td className="px-4 py-3"><Status value={w.status} /></td>
-                  <td className="px-4 py-3 text-right text-fg-subtle">{ago(w.createdAt)}</td>
+                  <td className="px-4 py-3 text-right text-fg-subtle">
+                    <div className="flex items-center justify-end gap-2">
+                      <span>{ago(w.createdAt)}</span>
+                      {isOwner && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          icon={<Trash2 className="size-3" />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingItem(w);
+                          }}
+                          title="Delete entry (Owner only)"
+                        />
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -132,6 +165,20 @@ function WaitlistInner() {
         </div>
       </div>
       <EntryDrawer id={openId} onClose={() => router.push('/waitlist', { scroll: false })} />
+
+      {deletingItem && (
+        <DeleteConfirmDialog
+          open={!!deletingItem}
+          onClose={() => setDeletingItem(null)}
+          onConfirm={() => deleteMutation.mutate(deletingItem.id)}
+          title={`Delete Waitlist Entry · ${deletingItem.contact.name}?`}
+          itemName={`${deletingItem.contact.name} (${deletingItem.reference})`}
+          itemType="First-Stay Waitlist Entry"
+          warning="This will permanently delete this first-stay inquiry from the records."
+          requireMatch="DELETE"
+          loading={deleteMutation.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -139,8 +186,11 @@ function WaitlistInner() {
 function EntryDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
   const qc = useQueryClient();
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const { data: w } = useQuery({ queryKey: ['waitlist-entry', id], queryFn: () => get<Detail>(`/waitlist/${id}`), enabled: !!id });
   const [notes, setNotes] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
   useEffect(() => setNotes(w?.staffNotes ?? ''), [w?.id, w?.staffNotes]);
   const save = useMutation({
     mutationFn: (body: Record<string, unknown>) => patch(`/waitlist/${id}`, body),
@@ -151,8 +201,44 @@ function EntryDrawer({ id, onClose }: { id: string | null; onClose: () => void }
       toast.success('Saved');
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => del(`/waitlist/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['waitlist'] });
+      qc.invalidateQueries({ queryKey: ['badge', 'waitlist'] });
+      toast.success('Waitlist entry deleted');
+      setDeleteOpen(false);
+      onClose();
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not delete waitlist entry'),
+  });
   return (
-    <Dialog drawer open={!!id} onClose={onClose} title={w?.contact.name ?? 'Loading…'} description={w ? `${w.reference} · asked ${ago(w.createdAt)}` : undefined}>
+    <>
+      <Dialog
+        drawer
+        open={!!id}
+        onClose={onClose}
+        title={w?.contact.name ?? 'Loading…'}
+        description={w ? `${w.reference} · asked ${ago(w.createdAt)}` : undefined}
+        footer={
+          <div className="flex w-full items-center justify-between">
+            {isOwner && w ? (
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<Trash2 className="size-3.5" />}
+                onClick={() => setDeleteOpen(true)}
+              >
+                Delete Entry
+              </Button>
+            ) : <span />}
+            <Button variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        }
+      >
       {!w ? (
         <Skeleton className="h-64" />
       ) : (
@@ -242,7 +328,22 @@ function EntryDrawer({ id, onClose }: { id: string | null; onClose: () => void }
         </div>
       )}
     </Dialog>
-  );
+
+    {w && (
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        title={`Delete Waitlist Entry · ${w.contact.name}?`}
+        itemName={`${w.contact.name} (${w.reference})`}
+        itemType="First-Stay Waitlist Entry"
+        warning="This will permanently delete this first-stay inquiry from the records."
+        requireMatch="DELETE"
+        loading={deleteMutation.isPending}
+      />
+    )}
+  </>
+);
 }
 
 export default function WaitlistPage() {

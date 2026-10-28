@@ -4,14 +4,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Clock, Copy, Eye, EyeOff, KeyRound, Lock, Mail, Search, Sparkles, UserPlus, UserRound } from 'lucide-react';
+import { Clock, Copy, Eye, EyeOff, KeyRound, Lock, Mail, Search, Sparkles, Trash2, UserPlus, UserRound } from 'lucide-react';
 import { ROLES, ROLE_DESCRIPTIONS, ROLE_PERMISSIONS, type Role, type UserDTO } from '@reberon/contracts';
-import { ApiError, get, post } from '@/lib/api';
+import { ApiError, del, get, post } from '@/lib/api';
 import { ago } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useMe } from '@/lib/providers';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { SelectInput, Switch, TextInput } from '@/components/ui/field';
 import { ROLE_LABEL } from '@/components/people/access-matrix';
 
@@ -31,10 +33,26 @@ function generateStrongPassword() {
 
 export default function PeoplePage() {
   const router = useRouter();
+  const qc = useQueryClient();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const { data, isLoading } = useQuery({ queryKey: ['users'], queryFn: () => get<UserDTO[]>('/users') });
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<UserDTO | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => del(`/users/${id}`),
+    onSuccess: () => {
+      toast.success('Staff account permanently deleted');
+      qc.invalidateQueries({ queryKey: ['users'] });
+      setDeletingUser(null);
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : 'Could not delete staff member');
+    },
+  });
 
   const allUsers = data ?? [];
   const counts = {
@@ -183,9 +201,20 @@ export default function PeoplePage() {
                       {u.canSignIn ? (u.lastLoginAt ? ago(u.lastLoginAt) : 'Never') : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <Link href={`/settings/users/${u.id}`} className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11px] font-medium hover:bg-surface-2">
-                        Manage Access →
-                      </Link>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Link href={`/settings/users/${u.id}`} className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11px] font-medium hover:bg-surface-2">
+                          Manage Access →
+                        </Link>
+                        {isOwner && u.id !== me.id && (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            icon={<Trash2 className="size-3" />}
+                            onClick={() => setDeletingUser(u)}
+                            title="Delete staff account"
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -197,6 +226,20 @@ export default function PeoplePage() {
       </div>
 
       <AddDialog open={adding} onClose={() => setAdding(false)} />
+
+      {deletingUser && (
+        <DeleteConfirmDialog
+          open={!!deletingUser}
+          onClose={() => setDeletingUser(null)}
+          onConfirm={() => deleteMutation.mutate(deletingUser.id)}
+          title={`Delete Staff Account · ${deletingUser.name}?`}
+          itemName={deletingUser.name}
+          itemType="Staff User Account"
+          warning={`This will immediately terminate all active sessions for ${deletingUser.name} (${deletingUser.email || 'No email'}), revoke their House permissions, and mark their staff record as terminated.`}
+          requireMatch="DELETE"
+          loading={deleteMutation.isPending}
+        />
+      )}
     </div>
   );
 }
