@@ -20,9 +20,10 @@ import {
   ArrowUpRight,
   RefreshCw,
   FolderTree,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import type { HotelDepartmentDTO } from '@reberon/contracts';
+import type { HotelDepartmentDTO, StaffProfileDTO } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useCan } from '@/lib/providers';
 import { money } from '@/lib/money';
@@ -30,7 +31,7 @@ import { dateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
-import { TextInput } from '@/components/ui/field';
+import { SelectInput, TextInput } from '@/components/ui/field';
 
 export default function DepartmentsPage() {
   const qc = useQueryClient();
@@ -48,12 +49,18 @@ export default function DepartmentsPage() {
     refetchInterval: 30_000,
   });
 
+  const { data: staffList } = useQuery({
+    queryKey: ['hr-staff'],
+    queryFn: () => get<StaffProfileDTO[]>('/hr/staff?status=ACTIVE'),
+  });
+
   const createMutation = useMutation({
     mutationFn: (body: {
       code: string;
       name: string;
       description?: string;
       location?: string;
+      headStaffId?: string | null;
       headName?: string;
       monthlyBudgetMinor: string;
       isActive?: boolean;
@@ -293,6 +300,7 @@ export default function DepartmentsPage() {
                   <th className="px-6 py-3.5">Location</th>
                   <th className="px-6 py-3.5">Head of Department</th>
                   <th className="px-6 py-3.5">Monthly Budget</th>
+                  <th className="px-6 py-3.5 text-center">Team / Staff</th>
                   <th className="px-6 py-3.5 text-center">Inventory</th>
                   <th className="px-6 py-3.5 text-center">Requisitions</th>
                   <th className="px-6 py-3.5">Status</th>
@@ -334,10 +342,14 @@ export default function DepartmentsPage() {
 
                     <td className="px-6 py-4">
                       {dept.headName ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-800 dark:text-neutral-200">
+                        <Link
+                          href="/hr"
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-800 dark:text-neutral-200 hover:text-sky-600 transition"
+                          title="View in Staff Directory"
+                        >
                           <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                           {dept.headName}
-                        </span>
+                        </Link>
                       ) : (
                         <span className="text-xs text-neutral-400 italic">Unassigned</span>
                       )}
@@ -345,6 +357,16 @@ export default function DepartmentsPage() {
 
                     <td className="px-6 py-4 font-mono font-medium text-neutral-900 dark:text-neutral-100">
                       {money(dept.monthlyBudgetMinor, dept.currency)}
+                    </td>
+
+                    <td className="px-6 py-4 text-center">
+                      <Link
+                        href={`/hr?department=${dept.code}`}
+                        className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
+                      >
+                        <Users className="h-3 w-3 text-sky-600 dark:text-sky-400" />
+                        {dept.staffCount ?? 0} staff
+                      </Link>
                     </td>
 
                     <td className="px-6 py-4 text-center">
@@ -423,6 +445,7 @@ export default function DepartmentsPage() {
         onClose={() => setAddModalOpen(false)}
         onSubmit={(body) => createMutation.mutate(body)}
         isPending={createMutation.isPending}
+        staffList={staffList || []}
       />
 
       {/* Edit Department Modal */}
@@ -433,6 +456,7 @@ export default function DepartmentsPage() {
           onClose={() => setEditingDept(null)}
           onSubmit={(data) => updateMutation.mutate({ id: editingDept.id, data })}
           isPending={updateMutation.isPending}
+          staffList={staffList || []}
         />
       )}
     </div>
@@ -446,6 +470,7 @@ function CreateDepartmentModal({
   onClose,
   onSubmit,
   isPending,
+  staffList,
 }: {
   open: boolean;
   onClose: () => void;
@@ -454,16 +479,18 @@ function CreateDepartmentModal({
     name: string;
     description?: string;
     location?: string;
+    headStaffId?: string | null;
     headName?: string;
     monthlyBudgetMinor: string;
     isActive?: boolean;
   }) => void;
   isPending: boolean;
+  staffList: StaffProfileDTO[];
 }) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
-  const [headName, setHeadName] = useState('');
+  const [headStaffId, setHeadStaffId] = useState('');
   const [budgetStr, setBudgetStr] = useState('5000000');
   const [description, setDescription] = useState('');
 
@@ -478,11 +505,14 @@ function CreateDepartmentModal({
       .replace(/[^A-Z0-9]/g, '_')
       .replace(/_+/g, '_');
 
+    const selectedStaff = staffList.find((s) => s.id === headStaffId);
+
     onSubmit({
       code: cleanCode,
       name: name.trim(),
       location: location.trim() || undefined,
-      headName: headName.trim() || undefined,
+      headStaffId: headStaffId || null,
+      headName: selectedStaff ? `${selectedStaff.firstName} ${selectedStaff.lastName}` : undefined,
       monthlyBudgetMinor: budgetStr.replace(/[^0-9]/g, '') || '0',
       description: description.trim() || undefined,
       isActive: true,
@@ -548,13 +578,19 @@ function CreateDepartmentModal({
 
           <div>
             <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-              Head of Department
+              Head of Department (HRM Staff)
             </label>
-            <TextInput
-              value={headName}
-              onChange={(e) => setHeadName(e.target.value)}
-              placeholder="e.g. Grace Achieng"
-            />
+            <SelectInput
+              value={headStaffId}
+              onChange={(e) => setHeadStaffId(e.target.value)}
+            >
+              <option value="">-- Select Active Employee --</option>
+              {staffList.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.firstName} {st.lastName} ({st.employeeNumber} · {st.jobTitle})
+                </option>
+              ))}
+            </SelectInput>
           </div>
         </div>
 
@@ -590,16 +626,18 @@ function EditDepartmentModal({
   onClose,
   onSubmit,
   isPending,
+  staffList,
 }: {
   department: HotelDepartmentDTO;
   open: boolean;
   onClose: () => void;
   onSubmit: (data: Partial<HotelDepartmentDTO>) => void;
   isPending: boolean;
+  staffList: StaffProfileDTO[];
 }) {
   const [name, setName] = useState(department.name);
   const [location, setLocation] = useState(department.location || '');
-  const [headName, setHeadName] = useState(department.headName || '');
+  const [headStaffId, setHeadStaffId] = useState(department.headStaffId || '');
   const [budgetStr, setBudgetStr] = useState(department.monthlyBudgetMinor);
   const [description, setDescription] = useState(department.description || '');
   const [isActive, setIsActive] = useState(department.isActive);
@@ -610,10 +648,12 @@ function EditDepartmentModal({
       toast.error('Department name cannot be empty');
       return;
     }
+    const selectedStaff = staffList.find((s) => s.id === headStaffId);
     onSubmit({
       name: name.trim(),
       location: location.trim() || null,
-      headName: headName.trim() || null,
+      headStaffId: headStaffId || null,
+      headName: selectedStaff ? `${selectedStaff.firstName} ${selectedStaff.lastName}` : (headStaffId ? undefined : null),
       monthlyBudgetMinor: budgetStr.replace(/[^0-9]/g, '') || '0',
       description: description.trim() || null,
       isActive,
@@ -647,12 +687,19 @@ function EditDepartmentModal({
 
           <div>
             <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-              Head of Department
+              Head of Department (HRM Staff)
             </label>
-            <TextInput
-              value={headName}
-              onChange={(e) => setHeadName(e.target.value)}
-            />
+            <SelectInput
+              value={headStaffId}
+              onChange={(e) => setHeadStaffId(e.target.value)}
+            >
+              <option value="">-- Select Active Employee --</option>
+              {staffList.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.firstName} {st.lastName} ({st.employeeNumber} · {st.jobTitle})
+                </option>
+              ))}
+            </SelectInput>
           </div>
         </div>
 

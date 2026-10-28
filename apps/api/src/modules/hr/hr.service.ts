@@ -35,9 +35,381 @@ export class HrService {
     return `REB-EMP-${String(count + 1).padStart(3, '0')}`;
   }
 
+  async ensureDefaultStaff(): Promise<void> {
+    const count = await this.prisma.staffProfile.count();
+    if (count > 0) return;
+
+    const users = await this.prisma.user.findMany({
+      select: { id: true, email: true },
+    });
+    const userByEmail = new Map<string, string>();
+    for (const u of users) {
+      if (u.email) userByEmail.set(u.email.toLowerCase(), u.id);
+    }
+
+    const defaultStaff = [
+      {
+        employeeNumber: 'REB-EMP-001',
+        firstName: 'Denis',
+        lastName: 'Mayamba',
+        email: 'owner@reberonhotel.com',
+        phone: '+256700000101',
+        nationalIdNumber: 'CM8602910398KL',
+        departmentCode: 'ADMIN_GENERAL',
+        jobTitle: 'Managing Director & Owner',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 8500000n,
+        paymentMethod: 'BANK_TRANSFER',
+        bankName: 'Stanbic Bank Uganda',
+        bankAccountNumber: '9030018274619',
+        emergencyContactName: 'Wilson Ecaat',
+        emergencyContactPhone: '+256700000102',
+        emergencyContactRelation: 'CO_DIRECTOR',
+      },
+      {
+        employeeNumber: 'REB-EMP-002',
+        firstName: 'Grace',
+        lastName: 'Chemutai',
+        email: 'manager@reberonhotel.com',
+        phone: '+256700000103',
+        nationalIdNumber: 'CF9001827364MA',
+        departmentCode: 'ADMIN_GENERAL',
+        jobTitle: 'General Manager',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 6000000n,
+        paymentMethod: 'BANK_TRANSFER',
+        bankName: 'Standard Chartered Uganda',
+        bankAccountNumber: '0102847192800',
+        emergencyContactName: 'David Chemutai',
+        emergencyContactPhone: '+256772182930',
+        emergencyContactRelation: 'SPOUSE',
+      },
+      {
+        employeeNumber: 'REB-EMP-003',
+        firstName: 'Brian',
+        lastName: 'Cheptoek',
+        email: 'desk@reberonhotel.com',
+        phone: '+256700000104',
+        nationalIdNumber: 'CM9304819283KA',
+        departmentCode: 'FRONT_DESK',
+        jobTitle: 'Front Desk Supervisor',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 2400000n,
+        paymentMethod: 'MOBILE_MONEY',
+        mobileMoneyNumber: '+256700000104',
+        emergencyContactName: 'Betty Cheptoek',
+        emergencyContactPhone: '+256773829102',
+        emergencyContactRelation: 'SISTER',
+      },
+      {
+        employeeNumber: 'REB-EMP-004',
+        firstName: 'Joan',
+        lastName: 'Nekesa',
+        email: 'relief.desk@reberonhotel.com',
+        phone: '+256700000113',
+        nationalIdNumber: 'CF9502938471TR',
+        departmentCode: 'FRONT_DESK',
+        jobTitle: 'Guest Relations Officer',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 1800000n,
+        paymentMethod: 'MOBILE_MONEY',
+        mobileMoneyNumber: '+256700000113',
+        emergencyContactName: 'Peter Nekesa',
+        emergencyContactPhone: '+256782910394',
+        emergencyContactRelation: 'BROTHER',
+      },
+      {
+        employeeNumber: 'REB-EMP-005',
+        firstName: 'Chef Isaac',
+        lastName: 'Mangusho',
+        email: 'kitchen@reberonhotel.com',
+        phone: '+256700000106',
+        nationalIdNumber: 'CM8801928374MB',
+        departmentCode: 'KITCHEN',
+        jobTitle: 'Executive Head Chef',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 4500000n,
+        paymentMethod: 'BANK_TRANSFER',
+        bankName: 'Centenary Bank',
+        bankAccountNumber: '3100293847',
+        emergencyContactName: 'Amina Mangusho',
+        emergencyContactPhone: '+256774910293',
+        emergencyContactRelation: 'SPOUSE',
+      },
+      {
+        employeeNumber: 'REB-EMP-006',
+        firstName: 'Chef Michael',
+        lastName: 'Mukasa',
+        email: 'chef.michael@reberonhotel.com',
+        phone: '+256700000114',
+        nationalIdNumber: 'CM9103829102KL',
+        departmentCode: 'KITCHEN',
+        jobTitle: 'Sous Chef & Pastry Lead',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 2800000n,
+        paymentMethod: 'MOBILE_MONEY',
+        mobileMoneyNumber: '+256700000114',
+        emergencyContactName: 'Florence Mukasa',
+        emergencyContactPhone: '+256701928374',
+        emergencyContactRelation: 'MOTHER',
+      },
+      {
+        employeeNumber: 'REB-EMP-007',
+        firstName: 'Samuel',
+        lastName: 'Kiprop',
+        email: 'bar@reberonhotel.com',
+        phone: '+256700000105',
+        nationalIdNumber: 'CM9203948172KP',
+        departmentCode: 'BAR',
+        jobTitle: 'Head Mixologist & Beverage Manager',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 2600000n,
+        paymentMethod: 'MOBILE_MONEY',
+        mobileMoneyNumber: '+256700000105',
+        emergencyContactName: 'Stella Kiprop',
+        emergencyContactPhone: '+256782019283',
+        emergencyContactRelation: 'SPOUSE',
+      },
+      {
+        employeeNumber: 'REB-EMP-008',
+        firstName: 'Denis',
+        lastName: 'Kato',
+        email: 'denis.kato@reberonhotel.com',
+        phone: '+256700000115',
+        nationalIdNumber: 'CM9402918273KA',
+        departmentCode: 'BAR',
+        jobTitle: 'Lounge Barista & Sommelier',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 2000000n,
+        paymentMethod: 'MOBILE_MONEY',
+        mobileMoneyNumber: '+256700000115',
+        emergencyContactName: 'Paul Kato',
+        emergencyContactPhone: '+256752019283',
+        emergencyContactRelation: 'BROTHER',
+      },
+      {
+        employeeNumber: 'REB-EMP-009',
+        firstName: 'Coach Daniel',
+        lastName: 'Cherop',
+        email: 'gym@reberonhotel.com',
+        phone: '+256700000107',
+        nationalIdNumber: 'CM8902819203CH',
+        departmentCode: 'HEALTH_CLUB',
+        jobTitle: 'Health Club, Gym & Spa Director',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 3000000n,
+        paymentMethod: 'BANK_TRANSFER',
+        bankName: 'Absa Bank Uganda',
+        bankAccountNumber: '6002938471',
+        emergencyContactName: 'Gloria Cherop',
+        emergencyContactPhone: '+256773910293',
+        emergencyContactRelation: 'SPOUSE',
+      },
+      {
+        employeeNumber: 'REB-EMP-010',
+        firstName: 'Sarah',
+        lastName: 'Chelangat',
+        email: 'housekeeping@reberonhotel.com',
+        phone: '+256700000110',
+        nationalIdNumber: 'CF9102837461KP',
+        departmentCode: 'HOUSEKEEPING',
+        jobTitle: 'Executive Housekeeper',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 2800000n,
+        paymentMethod: 'BANK_TRANSFER',
+        bankName: 'Stanbic Bank Uganda',
+        bankAccountNumber: '9030029182741',
+        emergencyContactName: 'James Chelangat',
+        emergencyContactPhone: '+256701928301',
+        emergencyContactRelation: 'BROTHER',
+      },
+      {
+        employeeNumber: 'REB-EMP-011',
+        firstName: 'Esther',
+        lastName: 'Chebet',
+        phone: '+256700000111',
+        nationalIdNumber: 'CF9601928374KP',
+        departmentCode: 'HOUSEKEEPING',
+        jobTitle: 'Senior Linen & Room Attendant',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 1500000n,
+        paymentMethod: 'MOBILE_MONEY',
+        mobileMoneyNumber: '+256700000111',
+        emergencyContactName: 'Rose Chebet',
+        emergencyContactPhone: '+256772910293',
+        emergencyContactRelation: 'MOTHER',
+      },
+      {
+        employeeNumber: 'REB-EMP-012',
+        firstName: 'Patrick',
+        lastName: 'Ochieng',
+        email: 'events@reberonhotel.com',
+        phone: '+256700000116',
+        nationalIdNumber: 'CM8702918273JG',
+        departmentCode: 'CONFERENCE',
+        jobTitle: 'Events & Conference Manager',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 3500000n,
+        paymentMethod: 'BANK_TRANSFER',
+        bankName: 'dfcu Bank',
+        bankAccountNumber: '0182736451928',
+        emergencyContactName: 'Brenda Ochieng',
+        emergencyContactPhone: '+256782910394',
+        emergencyContactRelation: 'SPOUSE',
+      },
+      {
+        employeeNumber: 'REB-EMP-013',
+        firstName: 'Eng. David',
+        lastName: 'Ssemwogerere',
+        email: 'engineering@reberonhotel.com',
+        phone: '+256700000117',
+        nationalIdNumber: 'CM8501928374MK',
+        departmentCode: 'MAINTENANCE',
+        jobTitle: 'Chief Facilities Engineer',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 4200000n,
+        paymentMethod: 'BANK_TRANSFER',
+        bankName: 'Stanbic Bank Uganda',
+        bankAccountNumber: '9030038192837',
+        emergencyContactName: 'Ruth Ssemwogerere',
+        emergencyContactPhone: '+256772819203',
+        emergencyContactRelation: 'SPOUSE',
+      },
+      {
+        employeeNumber: 'REB-EMP-014',
+        firstName: 'Eng. Isaac',
+        lastName: 'Tumusiime',
+        email: 'utilities@reberonhotel.com',
+        phone: '+256700000118',
+        nationalIdNumber: 'CM8802918273MB',
+        departmentCode: 'ENERGY_UTILITIES',
+        jobTitle: 'Power & Utilities Lead',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 3800000n,
+        paymentMethod: 'BANK_TRANSFER',
+        bankName: 'Centenary Bank',
+        bankAccountNumber: '3100284719',
+        emergencyContactName: 'Hellen Tumusiime',
+        emergencyContactPhone: '+256701829384',
+        emergencyContactRelation: 'SPOUSE',
+      },
+      {
+        employeeNumber: 'REB-EMP-015',
+        firstName: 'Moses',
+        lastName: 'Kiprotich',
+        phone: '+256700000112',
+        nationalIdNumber: 'CM9401928374KP',
+        departmentCode: 'MAINTENANCE',
+        jobTitle: 'Security & Safety Lead',
+        employmentType: 'FULL_TIME',
+        baseSalaryMinor: 1600000n,
+        paymentMethod: 'MOBILE_MONEY',
+        mobileMoneyNumber: '+256700000112',
+        emergencyContactName: 'Jane Kiprotich',
+        emergencyContactPhone: '+256774819203',
+        emergencyContactRelation: 'SISTER',
+      },
+    ];
+
+    const staffMap = new Map<string, string>();
+    for (const s of defaultStaff) {
+      const uId = s.email ? userByEmail.get(s.email.toLowerCase()) : null;
+      const created = await this.prisma.staffProfile.upsert({
+        where: { employeeNumber: s.employeeNumber },
+        update: {},
+        create: {
+          employeeNumber: s.employeeNumber,
+          userId: uId || null,
+          firstName: s.firstName,
+          lastName: s.lastName,
+          phone: s.phone,
+          email: s.email || null,
+          nationalIdNumber: s.nationalIdNumber,
+          departmentCode: s.departmentCode,
+          jobTitle: s.jobTitle,
+          employmentType: s.employmentType,
+          dateJoined: new Date('2026-01-15'),
+          baseSalaryMinor: s.baseSalaryMinor,
+          currency: 'UGX',
+          paymentMethod: s.paymentMethod,
+          bankName: (s as any).bankName || null,
+          bankAccountNumber: (s as any).bankAccountNumber || null,
+          mobileMoneyNumber: (s as any).mobileMoneyNumber || null,
+          emergencyContactName: s.emergencyContactName,
+          emergencyContactPhone: s.emergencyContactPhone,
+          emergencyContactRelation: s.emergencyContactRelation,
+          status: 'ACTIVE',
+          isSeed: true,
+        },
+      });
+      staffMap.set(s.employeeNumber, created.id);
+    }
+
+    const deptHeadMapping: Record<string, string> = {
+      ADMIN_GENERAL: 'REB-EMP-002',
+      FRONT_DESK: 'REB-EMP-003',
+      KITCHEN: 'REB-EMP-005',
+      BAR: 'REB-EMP-007',
+      HEALTH_CLUB: 'REB-EMP-009',
+      HOUSEKEEPING: 'REB-EMP-010',
+      CONFERENCE: 'REB-EMP-012',
+      MAINTENANCE: 'REB-EMP-013',
+      ENERGY_UTILITIES: 'REB-EMP-014',
+    };
+
+    for (const [deptCode, empNo] of Object.entries(deptHeadMapping)) {
+      const staffId = staffMap.get(empNo);
+      if (staffId) {
+        const staff = await this.prisma.staffProfile.findUnique({ where: { id: staffId } });
+        if (staff) {
+          await this.prisma.hotelDepartment.updateMany({
+            where: { code: deptCode },
+            data: {
+              headStaffId: staff.id,
+              headName: `${staff.firstName} ${staff.lastName}`,
+            },
+          });
+        }
+      }
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const shiftData = [
+      { empNo: 'REB-EMP-003', dept: 'FRONT_DESK', shiftType: 'MORNING', start: '06:00', end: '14:00' },
+      { empNo: 'REB-EMP-004', dept: 'FRONT_DESK', shiftType: 'EVENING', start: '14:00', end: '22:00' },
+      { empNo: 'REB-EMP-005', dept: 'KITCHEN', shiftType: 'MORNING', start: '06:00', end: '15:00' },
+      { empNo: 'REB-EMP-006', dept: 'KITCHEN', shiftType: 'EVENING', start: '14:00', end: '22:30' },
+      { empNo: 'REB-EMP-007', dept: 'BAR', shiftType: 'EVENING', start: '16:00', end: '00:00' },
+      { empNo: 'REB-EMP-009', dept: 'HEALTH_CLUB', shiftType: 'FULL_DAY', start: '06:00', end: '18:00' },
+      { empNo: 'REB-EMP-010', dept: 'HOUSEKEEPING', shiftType: 'MORNING', start: '07:30', end: '16:00' },
+      { empNo: 'REB-EMP-011', dept: 'HOUSEKEEPING', shiftType: 'MORNING', start: '07:30', end: '16:00' },
+      { empNo: 'REB-EMP-015', dept: 'MAINTENANCE', shiftType: 'NIGHT', start: '22:00', end: '06:00' },
+    ];
+
+    for (const sh of shiftData) {
+      const sId = staffMap.get(sh.empNo);
+      if (sId) {
+        await this.prisma.staffShift.create({
+          data: {
+            staffId: sId,
+            departmentCode: sh.dept,
+            date: today,
+            shiftType: sh.shiftType,
+            scheduledStartTime: sh.start,
+            scheduledEndTime: sh.end,
+            attendanceStatus: 'SCHEDULED',
+          },
+        });
+      }
+    }
+  }
+
   /* ───────────────────────── 1. HR Overview & Metrics ───────────────────────── */
 
   async overview(): Promise<HrDashboardDTO> {
+    await this.ensureDefaultStaff();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -91,6 +463,7 @@ export class HrService {
     status?: string;
     employmentType?: string;
   }): Promise<StaffProfileDTO[]> {
+    await this.ensureDefaultStaff();
     const where: Record<string, unknown> = {};
 
     if (filters?.department && filters.department !== 'ALL') {

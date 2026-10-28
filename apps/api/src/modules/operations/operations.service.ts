@@ -2463,7 +2463,7 @@ export class OperationsService {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
 
-    const [itemsByDept, reqsByDept] = await Promise.all([
+    const [itemsByDept, reqsByDept, staffByDept, staffProfiles] = await Promise.all([
       this.prisma.inventoryItem.groupBy({
         by: ['department'],
         _count: { _all: true },
@@ -2472,6 +2472,14 @@ export class OperationsService {
         by: ['department'],
         where: { status: { in: ['PENDING', 'MANAGER_APPROVED'] } },
         _count: { _all: true },
+      }),
+      this.prisma.staffProfile.groupBy({
+        by: ['departmentCode'],
+        where: { status: 'ACTIVE' },
+        _count: { _all: true },
+      }),
+      this.prisma.staffProfile.findMany({
+        select: { id: true, firstName: true, lastName: true },
       }),
     ]);
 
@@ -2483,6 +2491,14 @@ export class OperationsService {
     for (const row of reqsByDept) {
       reqsCountMap.set(row.department, row._count._all);
     }
+    const staffCountMap = new Map<string, number>();
+    for (const row of staffByDept) {
+      staffCountMap.set(row.departmentCode, row._count._all);
+    }
+    const staffNameMap = new Map<string, string>();
+    for (const s of staffProfiles) {
+      staffNameMap.set(s.id, `${s.firstName} ${s.lastName}`);
+    }
 
     return departments.map((d) => ({
       id: d.id,
@@ -2491,13 +2507,15 @@ export class OperationsService {
       slug: d.slug,
       description: d.description,
       location: d.location,
-      headName: d.headName,
+      headStaffId: d.headStaffId,
+      headName: d.headStaffId ? (staffNameMap.get(d.headStaffId) ?? d.headName) : d.headName,
       headUserId: d.headUserId,
       monthlyBudgetMinor: (d.monthlyBudgetMinor ?? 0n).toString(),
       currency: d.currency as 'UGX' | 'USD',
       isActive: d.isActive,
       sortOrder: d.sortOrder,
       isSeed: d.isSeed,
+      staffCount: staffCountMap.get(d.code) ?? 0,
       inventoryCount: itemsCountMap.get(d.code) ?? 0,
       openRequisitionsCount: reqsCountMap.get(d.code) ?? 0,
       createdAt: d.createdAt.toISOString(),
@@ -2512,6 +2530,13 @@ export class OperationsService {
       throw badRequest(`A department with code "${code}" already exists.`);
     }
 
+    let headName = input.headName?.trim() || null;
+    let headStaffId = input.headStaffId || null;
+    if (headStaffId) {
+      const staff = await this.prisma.staffProfile.findUnique({ where: { id: headStaffId } });
+      if (staff) headName = `${staff.firstName} ${staff.lastName}`;
+    }
+
     const dept = await this.prisma.hotelDepartment.create({
       data: {
         code,
@@ -2519,7 +2544,8 @@ export class OperationsService {
         slug: code.toLowerCase().replace(/_/g, '-'),
         description: input.description?.trim() || null,
         location: input.location?.trim() || null,
-        headName: input.headName?.trim() || null,
+        headStaffId,
+        headName,
         headUserId: input.headUserId || null,
         monthlyBudgetMinor: input.monthlyBudgetMinor ? BigInt(input.monthlyBudgetMinor) : 0n,
         currency: (input.currency as 'UGX' | 'USD') || 'UGX',
@@ -2544,6 +2570,7 @@ export class OperationsService {
       slug: dept.slug,
       description: dept.description,
       location: dept.location,
+      headStaffId: dept.headStaffId,
       headName: dept.headName,
       headUserId: dept.headUserId,
       monthlyBudgetMinor: (dept.monthlyBudgetMinor ?? 0n).toString(),
@@ -2551,6 +2578,7 @@ export class OperationsService {
       isActive: dept.isActive,
       sortOrder: dept.sortOrder,
       isSeed: dept.isSeed,
+      staffCount: 0,
       inventoryCount: 0,
       openRequisitionsCount: 0,
       createdAt: dept.createdAt.toISOString(),
@@ -2566,13 +2594,23 @@ export class OperationsService {
     const existing = await this.prisma.hotelDepartment.findUnique({ where: { id } });
     if (!existing) throw notFound('HotelDepartment');
 
+    let headName = input.headName !== undefined ? input.headName?.trim() || null : undefined;
+    let headStaffId = input.headStaffId !== undefined ? input.headStaffId : undefined;
+    if (headStaffId) {
+      const staff = await this.prisma.staffProfile.findUnique({ where: { id: headStaffId } });
+      if (staff) headName = `${staff.firstName} ${staff.lastName}`;
+    } else if (headStaffId === null) {
+      headName = null;
+    }
+
     const updated = await this.prisma.hotelDepartment.update({
       where: { id },
       data: {
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
         ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
         ...(input.location !== undefined ? { location: input.location?.trim() || null } : {}),
-        ...(input.headName !== undefined ? { headName: input.headName?.trim() || null } : {}),
+        ...(headStaffId !== undefined ? { headStaffId } : {}),
+        ...(headName !== undefined ? { headName } : {}),
         ...(input.headUserId !== undefined ? { headUserId: input.headUserId || null } : {}),
         ...(input.monthlyBudgetMinor !== undefined ? { monthlyBudgetMinor: BigInt(input.monthlyBudgetMinor) } : {}),
         ...(input.currency !== undefined ? { currency: input.currency as 'UGX' | 'USD' } : {}),
@@ -2589,11 +2627,12 @@ export class OperationsService {
       summary: `Updated department ${updated.name} (${updated.code})`,
     });
 
-    const [inventoryCount, openRequisitionsCount] = await Promise.all([
+    const [inventoryCount, openRequisitionsCount, staffCount] = await Promise.all([
       this.prisma.inventoryItem.count({ where: { department: updated.code as any } }),
       this.prisma.requisition.count({
         where: { department: updated.code as any, status: { in: ['PENDING', 'MANAGER_APPROVED'] } },
       }),
+      this.prisma.staffProfile.count({ where: { departmentCode: updated.code, status: 'ACTIVE' } }),
     ]);
 
     return {
@@ -2603,6 +2642,7 @@ export class OperationsService {
       slug: updated.slug,
       description: updated.description,
       location: updated.location,
+      headStaffId: updated.headStaffId,
       headName: updated.headName,
       headUserId: updated.headUserId,
       monthlyBudgetMinor: (updated.monthlyBudgetMinor ?? 0n).toString(),
@@ -2610,6 +2650,7 @@ export class OperationsService {
       isActive: updated.isActive,
       sortOrder: updated.sortOrder,
       isSeed: updated.isSeed,
+      staffCount,
       inventoryCount,
       openRequisitionsCount,
       createdAt: updated.createdAt.toISOString(),

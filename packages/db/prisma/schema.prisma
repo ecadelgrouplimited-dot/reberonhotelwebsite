@@ -1950,6 +1950,7 @@ model HotelDepartment {
   description        String?
   location           String?
   headName           String?
+  headStaffId        String?   @db.Uuid
   headUserId         String?   @db.Uuid
   monthlyBudgetMinor BigInt?   @default(0)
   currency           Currency  @default(UGX)

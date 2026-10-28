@@ -614,6 +614,7 @@ export interface HotelDepartmentDTO {
   description: string | null;
   location: string | null;
   headName: string | null;
+  headStaffId: string | null;
   headUserId: string | null;
   monthlyBudgetMinor: string;
   currency: CurrencyCode;
@@ -633,6 +634,7 @@ export const zCreateDepartmentInput = z.object({
   description: z.string().trim().max(500).optional().nullable(),
   location: z.string().trim().max(120).optional().nullable(),
   headName: z.string().trim().max(120).optional().nullable(),
+  headStaffId: z.string().uuid().optional().nullable(),
   headUserId: z.string().uuid().optional().nullable(),
   monthlyBudgetMinor: z.string().regex(/^\d+$/).default('0'),
   currency: z.enum(['UGX', 'USD']).default('UGX'),
@@ -645,6 +647,7 @@ export const zUpdateDepartmentInput = z.object({
   description: z.string().trim().max(500).optional().nullable(),
   location: z.string().trim().max(120).optional().nullable(),
   headName: z.string().trim().max(120).optional().nullable(),
+  headStaffId: z.string().uuid().optional().nullable(),
   headUserId: z.string().uuid().optional().nullable(),
   monthlyBudgetMinor: z.string().regex(/^\d+$/).optional(),
   currency: z.enum(['UGX', 'USD']).optional(),
