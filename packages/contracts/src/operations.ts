@@ -25,7 +25,7 @@ export const EVENT_TYPES = ['WEDDING', 'CONFERENCE', 'MEETING', 'WORKSHOP', 'RET
 export type EventType = (typeof EVENT_TYPES)[number];
 
 export const INVENTORY_CATEGORIES = ['LINEN_GYM', 'LINEN_ROOM', 'CONSUMABLE', 'BEVERAGE', 'FOOD_KITCHEN', 'FIXED_ASSET'] as const;
-export type InventoryCategory = (typeof INVENTORY_CATEGORIES)[number];
+export type InventoryCategory = (typeof INVENTORY_CATEGORIES)[number] | (string & {});
 
 export const STOCK_MOVEMENT_TYPES = ['STOCK_IN', 'STOCK_OUT', 'LAUNDRY_SEND', 'LAUNDRY_RETURN', 'DAMAGED_LOST', 'ADJUSTMENT'] as const;
 export type StockMovementType = (typeof STOCK_MOVEMENT_TYPES)[number];
@@ -44,7 +44,7 @@ export const DEPARTMENTS = [
   'ENERGY_UTILITIES',
   'ADMIN_GENERAL',
 ] as const;
-export type Department = (typeof DEPARTMENTS)[number];
+export type Department = (typeof DEPARTMENTS)[number] | (string & {});
 
 export const EXPENSE_CATEGORIES = [
   'COGS_FOOD',
@@ -454,8 +454,8 @@ export const zRecordStockMovementInput = z.object({
 export const zCreateInventoryItemInput = z.object({
   sku: z.string().trim().min(2).max(40),
   name: z.string().trim().min(2).max(140),
-  category: z.enum(INVENTORY_CATEGORIES),
-  department: z.enum(DEPARTMENTS),
+  category: z.string().trim().min(2).max(60),
+  department: z.string().trim().min(2).max(60),
   unit: z.string().trim().max(24).default('PIECE'),
   onHand: z.number().int().min(0).default(0),
   parLevel: z.number().int().min(0).default(10),
@@ -465,8 +465,8 @@ export const zCreateInventoryItemInput = z.object({
 
 export const zUpdateInventoryItemInput = z.object({
   name: z.string().trim().min(2).max(140).optional(),
-  category: z.enum(INVENTORY_CATEGORIES).optional(),
-  department: z.enum(DEPARTMENTS).optional(),
+  category: z.string().trim().min(2).max(60).optional(),
+  department: z.string().trim().min(2).max(60).optional(),
   unit: z.string().trim().max(24).optional(),
   parLevel: z.number().int().min(0).optional(),
   unitCostMinor: z.string().regex(/^\d+$/).optional(),
@@ -516,7 +516,7 @@ export interface RequisitionDTO {
 }
 
 export const zCreateRequisitionInput = z.object({
-  department: z.enum(DEPARTMENTS),
+  department: z.string().trim().min(2).max(60),
   title: z.string().trim().min(3).max(160),
   priority: z.enum(['LOW', 'NORMAL', 'URGENT']).default('NORMAL'),
   notes: z.string().trim().max(500).optional(),
@@ -592,8 +592,8 @@ export interface ExpenseDTO {
 
 export const zCreateExpenseInput = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
-  department: z.enum(DEPARTMENTS),
-  category: z.enum(EXPENSE_CATEGORIES),
+  department: z.string().trim().min(2).max(60),
+  category: z.string().trim().min(2).max(60),
   title: z.string().trim().min(2).max(180),
   description: z.string().trim().max(1000).optional().nullable(),
   vendor: z.string().trim().max(120).optional().nullable(),
@@ -602,5 +602,98 @@ export const zCreateExpenseInput = z.object({
   paymentMethod: z.enum(EXPENSE_PAYMENT_METHODS).default('CASH'),
   referenceNumber: z.string().trim().max(80).optional().nullable(),
   receiptUrl: z.string().url().optional().nullable(),
+});
+
+// ───────────────────────── Hotel Departments ─────────────────────────
+
+export interface HotelDepartmentDTO {
+  id: string;
+  code: string;
+  name: string;
+  slug: string | null;
+  description: string | null;
+  location: string | null;
+  headName: string | null;
+  headUserId: string | null;
+  monthlyBudgetMinor: string;
+  currency: CurrencyCode;
+  isActive: boolean;
+  sortOrder: number;
+  isSeed: boolean;
+  staffCount?: number;
+  inventoryCount?: number;
+  openRequisitionsCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const zCreateDepartmentInput = z.object({
+  code: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/, 'Code can only contain letters, numbers, hyphens, and underscores'),
+  name: z.string().trim().min(2).max(120),
+  description: z.string().trim().max(500).optional().nullable(),
+  location: z.string().trim().max(120).optional().nullable(),
+  headName: z.string().trim().max(120).optional().nullable(),
+  headUserId: z.string().uuid().optional().nullable(),
+  monthlyBudgetMinor: z.string().regex(/^\d+$/).default('0'),
+  currency: z.enum(['UGX', 'USD']).default('UGX'),
+  isActive: z.boolean().default(true),
+  sortOrder: z.number().int().default(0),
+});
+
+export const zUpdateDepartmentInput = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  description: z.string().trim().max(500).optional().nullable(),
+  location: z.string().trim().max(120).optional().nullable(),
+  headName: z.string().trim().max(120).optional().nullable(),
+  headUserId: z.string().uuid().optional().nullable(),
+  monthlyBudgetMinor: z.string().regex(/^\d+$/).optional(),
+  currency: z.enum(['UGX', 'USD']).optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+});
+
+// ───────────────────────── Inventory Categories ─────────────────────────
+
+export interface ItemCategoryDTO {
+  id: string;
+  code: string;
+  name: string;
+  slug: string | null;
+  description: string | null;
+  defaultUnit: string;
+  defaultParLevel: number;
+  departmentCode: string | null;
+  departmentName?: string | null;
+  tone: string;
+  isActive: boolean;
+  sortOrder: number;
+  isSeed: boolean;
+  itemCount?: number;
+  totalValueMinor?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const zCreateCategoryInput = z.object({
+  code: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/, 'Code can only contain letters, numbers, hyphens, and underscores'),
+  name: z.string().trim().min(2).max(120),
+  description: z.string().trim().max(500).optional().nullable(),
+  defaultUnit: z.string().trim().max(24).default('PIECE'),
+  defaultParLevel: z.number().int().min(0).default(10),
+  departmentCode: z.string().trim().max(60).optional().nullable(),
+  tone: z.string().trim().max(30).default('neutral'),
+  isActive: z.boolean().default(true),
+  sortOrder: z.number().int().default(0),
+});
+
+export const zUpdateCategoryInput = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  description: z.string().trim().max(500).optional().nullable(),
+  defaultUnit: z.string().trim().max(24).optional(),
+  defaultParLevel: z.number().int().min(0).optional(),
+  departmentCode: z.string().trim().max(60).optional().nullable(),
+  tone: z.string().trim().max(30).optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
 });
 

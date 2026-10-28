@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   BedDouble,
   Boxes,
+  Building2,
   Calendar,
   Check,
   ClipboardCheck,
@@ -16,6 +17,7 @@ import {
   Dumbbell,
   Edit,
   Eye,
+  FolderTree,
   History,
   MapPin,
   PackagePlus,
@@ -29,6 +31,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import type {
   Department,
   InventoryCategory,
@@ -188,7 +191,21 @@ export default function InventoryPage() {
         title="Inventory, Linen & Assets"
         description="Central warehouse, departmental stock, laundry par tracking, and physical stock takes"
         actions={
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Link
+              href="/inventory/categories"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2.5 py-1.5 text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+            >
+              <FolderTree className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              Categories
+            </Link>
+            <Link
+              href="/departments"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2.5 py-1.5 text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+            >
+              <Building2 className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+              Departments
+            </Link>
             <Button size="sm" variant="ghost" icon={<Download className="size-3.5" />} onClick={exportCsv}>
               CSV Export
             </Button>

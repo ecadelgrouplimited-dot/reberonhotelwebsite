@@ -1941,3 +1941,42 @@ model Expense {
   @@index([department, date])
   @@index([category, date])
 }
+
+model HotelDepartment {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  code               String    @unique
+  name               String
+  slug               String?   @unique
+  description        String?
+  location           String?
+  headName           String?
+  headUserId         String?   @db.Uuid
+  monthlyBudgetMinor BigInt?   @default(0)
+  currency           Currency  @default(UGX)
+  isActive           Boolean   @default(true)
+  sortOrder          Int       @default(0)
+  isSeed             Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+model ItemCategory {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  code            String    @unique
+  name            String
+  slug            String?   @unique
+  description     String?
+  defaultUnit     String    @default("PIECE")
+  defaultParLevel Int       @default(10)
+  departmentCode  String?
+  tone            String    @default("neutral")
+  isActive        Boolean   @default(true)
+  sortOrder       Int       @default(0)
+  isSeed          Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([isActive, sortOrder])
+}

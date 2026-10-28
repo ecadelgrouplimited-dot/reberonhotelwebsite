@@ -43,6 +43,7 @@ export const NAV: NavGroup[] = [
       { label: 'Front desk', href: '/desk', icon: ConciergeBell, perm: 'desk:operate' },
       { label: 'Room rack', href: '/rack', icon: LayoutGrid, perm: 'rooms:status' },
       { label: 'Housekeeping', href: '/housekeeping', icon: SprayCan, perm: 'rooms:status' },
+      { label: 'Departments', href: '/departments', icon: Building2, perm: 'inventory:manage' },
       { label: 'Guests', href: '/guests', icon: Contact, perm: 'guests:read' },
       { label: 'Feedback', href: '/feedback', icon: MessageCircleHeart, perm: 'guests:read' },
       { label: 'Reports', href: '/reports', icon: ChartColumnBig, perm: 'reports:read' },

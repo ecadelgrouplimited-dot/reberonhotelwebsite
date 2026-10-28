@@ -8,6 +8,8 @@ import {
   zCheckOutHealthClubInput,
   zConvertQuotationToInvoiceInput,
   zCreateAnnouncementInput,
+  zCreateCategoryInput,
+  zCreateDepartmentInput,
   zCreateExpenseInput,
   zCreateInventoryItemInput,
   zCreateMembershipInput,
@@ -20,6 +22,8 @@ import {
   zReviewRequisitionInput,
   zSettlePosOrderInput,
   zTogglePosItemInput,
+  zUpdateCategoryInput,
+  zUpdateDepartmentInput,
   zUpdateInventoryItemInput,
   zUpdatePosOrderStatusInput,
   zUpdateQuotationStatusInput,
@@ -307,6 +311,72 @@ export class OperationsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.ops.recordStockMovement(body, user);
+  }
+
+  /* ───── Inventory Categories ───── */
+
+  @Get('inventory/categories')
+  @Requires('inventory:manage')
+  listItemCategories() {
+    return this.ops.listItemCategories();
+  }
+
+  @Post('inventory/categories')
+  @Requires('inventory:manage')
+  createItemCategory(
+    @Body(new ZodPipe(zCreateCategoryInput)) body: z.infer<typeof zCreateCategoryInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.createItemCategory(body, user);
+  }
+
+  @Patch('inventory/categories/:id')
+  @Requires('inventory:manage')
+  updateItemCategory(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zUpdateCategoryInput)) body: z.infer<typeof zUpdateCategoryInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.updateItemCategory(id, body, user);
+  }
+
+  @Delete('inventory/categories/:id')
+  @Requires('inventory:manage')
+  deleteItemCategory(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ops.deleteItemCategory(id, user);
+  }
+
+  /* ───── Hotel Departments & Cost Centers ───── */
+
+  @Get('departments')
+  @Requires('inventory:manage')
+  listDepartments() {
+    return this.ops.listDepartments();
+  }
+
+  @Post('departments')
+  @Requires('inventory:manage')
+  createDepartment(
+    @Body(new ZodPipe(zCreateDepartmentInput)) body: z.infer<typeof zCreateDepartmentInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.createDepartment(body, user);
+  }
+
+  @Patch('departments/:id')
+  @Requires('inventory:manage')
+  updateDepartment(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zUpdateDepartmentInput)) body: z.infer<typeof zUpdateDepartmentInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.updateDepartment(id, body, user);
+  }
+
+  @Delete('departments/:id')
+  @Requires('inventory:manage')
+  deleteDepartment(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ops.deleteDepartment(id, user);
   }
 
   /* ───── Requisitions, Internal Comms & Devices ───── */

@@ -7,8 +7,10 @@ import type {
   HealthClubAccessLogDTO,
   HealthClubDashboardDTO,
   HealthClubMembershipDTO,
+  HotelDepartmentDTO,
   InventoryDashboardDTO,
   InventoryItemDTO,
+  ItemCategoryDTO,
   PosInHouseGuestDTO,
   PosOrderDTO,
   PosOutletDTO,
@@ -25,6 +27,8 @@ import {
   zCheckInHealthClubInput,
   zConvertQuotationToInvoiceInput,
   zCreateAnnouncementInput,
+  zCreateCategoryInput,
+  zCreateDepartmentInput,
   zCreateExpenseInput,
   zCreateInventoryItemInput,
   zCreateMembershipInput,
@@ -37,6 +41,8 @@ import {
   zReviewRequisitionInput,
   zSettlePosOrderInput,
   zTogglePosItemInput,
+  zUpdateCategoryInput,
+  zUpdateDepartmentInput,
   zUpdateInventoryItemInput,
 } from '@reberon/contracts';
 import { PrismaService } from '../../common/prisma.service.js';
@@ -1445,8 +1451,8 @@ export class OperationsService {
       data: {
         sku: input.sku.toUpperCase(),
         name: input.name,
-        category: input.category,
-        department: input.department,
+        category: input.category as any,
+        department: input.department as any,
         unit: input.unit,
         onHand: input.onHand,
         parLevel: input.parLevel,
@@ -1793,7 +1799,7 @@ export class OperationsService {
     const created = await this.prisma.requisition.create({
       data: {
         number,
-        department: input.department,
+        department: input.department as any,
         title: input.title,
         priority: input.priority,
         status: 'PENDING',
@@ -2273,7 +2279,7 @@ export class OperationsService {
   async createAnnouncement(input: z.infer<typeof zCreateAnnouncementInput>, actor: AuthUser): Promise<StaffAnnouncementDTO> {
     const a = await this.prisma.staffAnnouncement.create({
       data: {
-        department: (input.department as Department) ?? null,
+        department: (input.department as any) ?? null,
         title: input.title,
         body: input.body,
         priority: input.priority,
@@ -2409,6 +2415,451 @@ export class OperationsService {
       entityType: 'Expense',
       entityId: id,
       summary: `Deleted expense ${exp.number} · ${exp.title}`,
+    });
+    return { ok: true };
+  }
+
+  /* ───────────────────────── Hotel Departments & Cost Centers ───────────────────────── */
+
+  private async ensureDefaultDepartments(): Promise<void> {
+    const count = await this.prisma.hotelDepartment.count();
+    if (count > 0) return;
+
+    const defaults = [
+      { code: 'FRONT_DESK', name: 'Front Desk & Reception', location: 'Ground Floor, Main Lobby', headName: 'Sarah Namatovu', sortOrder: 1 },
+      { code: 'KITCHEN', name: 'Kitchen & Main Restaurant', location: 'Main Building Kitchen', headName: 'Chef Michael Mukasa', sortOrder: 2 },
+      { code: 'BAR', name: 'Bar & Lounge Terrace', location: 'Ground Floor & Pool Deck', headName: 'Denis Kato', sortOrder: 3 },
+      { code: 'HEALTH_CLUB', name: 'Health Club, Gym & Spa', location: 'Wellness Wing', headName: 'Grace Achieng', sortOrder: 4 },
+      { code: 'HOUSEKEEPING', name: 'Housekeeping & Laundry', location: 'Service Area Level 1', headName: 'Agnes Nabirye', sortOrder: 5 },
+      { code: 'CONFERENCE', name: 'Conferences & Events', location: 'Conference Center Wing', headName: 'Patrick Ochieng', sortOrder: 6 },
+      { code: 'MAINTENANCE', name: 'Maintenance & Facilities', location: 'Engineering Workshop', headName: 'Eng. David Ssemwogerere', sortOrder: 7 },
+      { code: 'ENERGY_UTILITIES', name: 'Energy & Utilities', location: 'Substation & Power Plant', headName: 'Eng. Isaac Tumusiime', sortOrder: 8 },
+      { code: 'ADMIN_GENERAL', name: 'Administration & Operations', location: 'Executive Offices', headName: 'General Manager', sortOrder: 9 },
+    ];
+
+    for (const d of defaults) {
+      await this.prisma.hotelDepartment.upsert({
+        where: { code: d.code },
+        update: {},
+        create: {
+          code: d.code,
+          name: d.name,
+          slug: d.code.toLowerCase().replace(/_/g, '-'),
+          location: d.location,
+          headName: d.headName,
+          sortOrder: d.sortOrder,
+          monthlyBudgetMinor: 5000000n,
+          currency: 'UGX',
+          isSeed: true,
+          isActive: true,
+        },
+      });
+    }
+  }
+
+  async listDepartments(): Promise<HotelDepartmentDTO[]> {
+    await this.ensureDefaultDepartments();
+    const departments = await this.prisma.hotelDepartment.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+
+    const [itemsByDept, reqsByDept] = await Promise.all([
+      this.prisma.inventoryItem.groupBy({
+        by: ['department'],
+        _count: { _all: true },
+      }),
+      this.prisma.requisition.groupBy({
+        by: ['department'],
+        where: { status: { in: ['PENDING', 'MANAGER_APPROVED'] } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const itemsCountMap = new Map<string, number>();
+    for (const row of itemsByDept) {
+      itemsCountMap.set(row.department, row._count._all);
+    }
+    const reqsCountMap = new Map<string, number>();
+    for (const row of reqsByDept) {
+      reqsCountMap.set(row.department, row._count._all);
+    }
+
+    return departments.map((d) => ({
+      id: d.id,
+      code: d.code,
+      name: d.name,
+      slug: d.slug,
+      description: d.description,
+      location: d.location,
+      headName: d.headName,
+      headUserId: d.headUserId,
+      monthlyBudgetMinor: (d.monthlyBudgetMinor ?? 0n).toString(),
+      currency: d.currency as 'UGX' | 'USD',
+      isActive: d.isActive,
+      sortOrder: d.sortOrder,
+      isSeed: d.isSeed,
+      inventoryCount: itemsCountMap.get(d.code) ?? 0,
+      openRequisitionsCount: reqsCountMap.get(d.code) ?? 0,
+      createdAt: d.createdAt.toISOString(),
+      updatedAt: d.updatedAt.toISOString(),
+    }));
+  }
+
+  async createDepartment(input: z.infer<typeof zCreateDepartmentInput>, actor: AuthUser): Promise<HotelDepartmentDTO> {
+    const code = input.code.trim().toUpperCase().replace(/\s+/g, '_');
+    const existing = await this.prisma.hotelDepartment.findUnique({ where: { code } });
+    if (existing) {
+      throw badRequest(`A department with code "${code}" already exists.`);
+    }
+
+    const dept = await this.prisma.hotelDepartment.create({
+      data: {
+        code,
+        name: input.name.trim(),
+        slug: code.toLowerCase().replace(/_/g, '-'),
+        description: input.description?.trim() || null,
+        location: input.location?.trim() || null,
+        headName: input.headName?.trim() || null,
+        headUserId: input.headUserId || null,
+        monthlyBudgetMinor: input.monthlyBudgetMinor ? BigInt(input.monthlyBudgetMinor) : 0n,
+        currency: (input.currency as 'UGX' | 'USD') || 'UGX',
+        isActive: input.isActive ?? true,
+        sortOrder: input.sortOrder ?? 0,
+        isSeed: false,
+      },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'department.create',
+      entityType: 'HotelDepartment',
+      entityId: dept.id,
+      summary: `Created hotel department ${dept.name} (${dept.code})`,
+    });
+
+    return {
+      id: dept.id,
+      code: dept.code,
+      name: dept.name,
+      slug: dept.slug,
+      description: dept.description,
+      location: dept.location,
+      headName: dept.headName,
+      headUserId: dept.headUserId,
+      monthlyBudgetMinor: (dept.monthlyBudgetMinor ?? 0n).toString(),
+      currency: dept.currency as 'UGX' | 'USD',
+      isActive: dept.isActive,
+      sortOrder: dept.sortOrder,
+      isSeed: dept.isSeed,
+      inventoryCount: 0,
+      openRequisitionsCount: 0,
+      createdAt: dept.createdAt.toISOString(),
+      updatedAt: dept.updatedAt.toISOString(),
+    };
+  }
+
+  async updateDepartment(
+    id: string,
+    input: z.infer<typeof zUpdateDepartmentInput>,
+    actor: AuthUser,
+  ): Promise<HotelDepartmentDTO> {
+    const existing = await this.prisma.hotelDepartment.findUnique({ where: { id } });
+    if (!existing) throw notFound('HotelDepartment');
+
+    const updated = await this.prisma.hotelDepartment.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
+        ...(input.location !== undefined ? { location: input.location?.trim() || null } : {}),
+        ...(input.headName !== undefined ? { headName: input.headName?.trim() || null } : {}),
+        ...(input.headUserId !== undefined ? { headUserId: input.headUserId || null } : {}),
+        ...(input.monthlyBudgetMinor !== undefined ? { monthlyBudgetMinor: BigInt(input.monthlyBudgetMinor) } : {}),
+        ...(input.currency !== undefined ? { currency: input.currency as 'UGX' | 'USD' } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+      },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'department.update',
+      entityType: 'HotelDepartment',
+      entityId: updated.id,
+      summary: `Updated department ${updated.name} (${updated.code})`,
+    });
+
+    const [inventoryCount, openRequisitionsCount] = await Promise.all([
+      this.prisma.inventoryItem.count({ where: { department: updated.code as any } }),
+      this.prisma.requisition.count({
+        where: { department: updated.code as any, status: { in: ['PENDING', 'MANAGER_APPROVED'] } },
+      }),
+    ]);
+
+    return {
+      id: updated.id,
+      code: updated.code,
+      name: updated.name,
+      slug: updated.slug,
+      description: updated.description,
+      location: updated.location,
+      headName: updated.headName,
+      headUserId: updated.headUserId,
+      monthlyBudgetMinor: (updated.monthlyBudgetMinor ?? 0n).toString(),
+      currency: updated.currency as 'UGX' | 'USD',
+      isActive: updated.isActive,
+      sortOrder: updated.sortOrder,
+      isSeed: updated.isSeed,
+      inventoryCount,
+      openRequisitionsCount,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  async deleteDepartment(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    const existing = await this.prisma.hotelDepartment.findUnique({ where: { id } });
+    if (!existing) throw notFound('HotelDepartment');
+
+    const itemsCount = await this.prisma.inventoryItem.count({ where: { department: existing.code as any } });
+    if (itemsCount > 0) {
+      await this.prisma.hotelDepartment.update({
+        where: { id },
+        data: { isActive: false },
+      });
+      await this.audit.record({
+        actor,
+        action: 'department.deactivate',
+        entityType: 'HotelDepartment',
+        entityId: id,
+        summary: `Deactivated department ${existing.name} because it has ${itemsCount} inventory items attached`,
+      });
+      return { ok: true };
+    }
+
+    await this.prisma.hotelDepartment.delete({ where: { id } });
+    await this.audit.record({
+      actor,
+      action: 'department.delete',
+      entityType: 'HotelDepartment',
+      entityId: id,
+      summary: `Deleted department ${existing.name} (${existing.code})`,
+    });
+    return { ok: true };
+  }
+
+  /* ───────────────────────── Item Categories ───────────────────────── */
+
+  private async ensureDefaultItemCategories(): Promise<void> {
+    const count = await this.prisma.itemCategory.count();
+    if (count > 0) return;
+
+    const defaults = [
+      { code: 'LINEN_GYM', name: 'Gym & Spa Towels', defaultUnit: 'PIECE', defaultParLevel: 50, departmentCode: 'HEALTH_CLUB', tone: 'sky', sortOrder: 1 },
+      { code: 'LINEN_ROOM', name: 'Room Linen & Bath Towels', defaultUnit: 'PIECE', defaultParLevel: 80, departmentCode: 'HOUSEKEEPING', tone: 'indigo', sortOrder: 2 },
+      { code: 'CONSUMABLE', name: 'Guest & Cleaning Consumables', defaultUnit: 'BOX', defaultParLevel: 25, departmentCode: 'HOUSEKEEPING', tone: 'amber', sortOrder: 3 },
+      { code: 'BEVERAGE', name: 'Beverages, Wines & Spirits', defaultUnit: 'BOTTLE', defaultParLevel: 30, departmentCode: 'BAR', tone: 'rose', sortOrder: 4 },
+      { code: 'FOOD_KITCHEN', name: 'Kitchen Foodstuffs & Perishables', defaultUnit: 'KG', defaultParLevel: 40, departmentCode: 'KITCHEN', tone: 'emerald', sortOrder: 5 },
+      { code: 'FIXED_ASSET', name: 'Fixed Assets, Furniture & Fixtures', defaultUnit: 'UNIT', defaultParLevel: 5, departmentCode: 'MAINTENANCE', tone: 'violet', sortOrder: 6 },
+    ];
+
+    for (const c of defaults) {
+      await this.prisma.itemCategory.upsert({
+        where: { code: c.code },
+        update: {},
+        create: {
+          code: c.code,
+          name: c.name,
+          slug: c.code.toLowerCase().replace(/_/g, '-'),
+          defaultUnit: c.defaultUnit,
+          defaultParLevel: c.defaultParLevel,
+          departmentCode: c.departmentCode,
+          tone: c.tone,
+          sortOrder: c.sortOrder,
+          isSeed: true,
+          isActive: true,
+        },
+      });
+    }
+  }
+
+  async listItemCategories(): Promise<ItemCategoryDTO[]> {
+    await this.ensureDefaultItemCategories();
+    const categories = await this.prisma.itemCategory.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+
+    const items = await this.prisma.inventoryItem.findMany({
+      select: { category: true, onHand: true, unitCostMinor: true },
+    });
+
+    const countMap = new Map<string, number>();
+    const valueMap = new Map<string, bigint>();
+
+    for (const item of items) {
+      countMap.set(item.category, (countMap.get(item.category) ?? 0) + 1);
+      const val = BigInt(item.onHand) * BigInt(item.unitCostMinor);
+      valueMap.set(item.category, (valueMap.get(item.category) ?? 0n) + val);
+    }
+
+    const departments = await this.prisma.hotelDepartment.findMany({ select: { code: true, name: true } });
+    const deptNameMap = new Map<string, string>(departments.map((d) => [d.code, d.name]));
+
+    return categories.map((c) => ({
+      id: c.id,
+      code: c.code,
+      name: c.name,
+      slug: c.slug,
+      description: c.description,
+      defaultUnit: c.defaultUnit,
+      defaultParLevel: c.defaultParLevel,
+      departmentCode: c.departmentCode,
+      departmentName: c.departmentCode ? (deptNameMap.get(c.departmentCode) ?? c.departmentCode) : null,
+      tone: c.tone,
+      isActive: c.isActive,
+      sortOrder: c.sortOrder,
+      isSeed: c.isSeed,
+      itemCount: countMap.get(c.code) ?? 0,
+      totalValueMinor: (valueMap.get(c.code) ?? 0n).toString(),
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    }));
+  }
+
+  async createItemCategory(input: z.infer<typeof zCreateCategoryInput>, actor: AuthUser): Promise<ItemCategoryDTO> {
+    const code = input.code.trim().toUpperCase().replace(/\s+/g, '_');
+    const existing = await this.prisma.itemCategory.findUnique({ where: { code } });
+    if (existing) {
+      throw badRequest(`An item category with code "${code}" already exists.`);
+    }
+
+    const cat = await this.prisma.itemCategory.create({
+      data: {
+        code,
+        name: input.name.trim(),
+        slug: code.toLowerCase().replace(/_/g, '-'),
+        description: input.description?.trim() || null,
+        defaultUnit: input.defaultUnit?.trim() || 'PIECE',
+        defaultParLevel: input.defaultParLevel ?? 10,
+        departmentCode: input.departmentCode?.trim() || null,
+        tone: input.tone?.trim() || 'neutral',
+        isActive: input.isActive ?? true,
+        sortOrder: input.sortOrder ?? 0,
+        isSeed: false,
+      },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'category.create',
+      entityType: 'ItemCategory',
+      entityId: cat.id,
+      summary: `Created item category ${cat.name} (${cat.code})`,
+    });
+
+    return {
+      id: cat.id,
+      code: cat.code,
+      name: cat.name,
+      slug: cat.slug,
+      description: cat.description,
+      defaultUnit: cat.defaultUnit,
+      defaultParLevel: cat.defaultParLevel,
+      departmentCode: cat.departmentCode,
+      tone: cat.tone,
+      isActive: cat.isActive,
+      sortOrder: cat.sortOrder,
+      isSeed: cat.isSeed,
+      itemCount: 0,
+      totalValueMinor: '0',
+      createdAt: cat.createdAt.toISOString(),
+      updatedAt: cat.updatedAt.toISOString(),
+    };
+  }
+
+  async updateItemCategory(
+    id: string,
+    input: z.infer<typeof zUpdateCategoryInput>,
+    actor: AuthUser,
+  ): Promise<ItemCategoryDTO> {
+    const existing = await this.prisma.itemCategory.findUnique({ where: { id } });
+    if (!existing) throw notFound('ItemCategory');
+
+    const updated = await this.prisma.itemCategory.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
+        ...(input.defaultUnit !== undefined ? { defaultUnit: input.defaultUnit.trim() } : {}),
+        ...(input.defaultParLevel !== undefined ? { defaultParLevel: input.defaultParLevel } : {}),
+        ...(input.departmentCode !== undefined ? { departmentCode: input.departmentCode?.trim() || null } : {}),
+        ...(input.tone !== undefined ? { tone: input.tone.trim() } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+      },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'category.update',
+      entityType: 'ItemCategory',
+      entityId: updated.id,
+      summary: `Updated item category ${updated.name} (${updated.code})`,
+    });
+
+    const items = await this.prisma.inventoryItem.findMany({
+      where: { category: updated.code as any },
+      select: { onHand: true, unitCostMinor: true },
+    });
+    const totalVal = items.reduce((sum, i) => sum + BigInt(i.onHand) * BigInt(i.unitCostMinor), 0n);
+
+    return {
+      id: updated.id,
+      code: updated.code,
+      name: updated.name,
+      slug: updated.slug,
+      description: updated.description,
+      defaultUnit: updated.defaultUnit,
+      defaultParLevel: updated.defaultParLevel,
+      departmentCode: updated.departmentCode,
+      tone: updated.tone,
+      isActive: updated.isActive,
+      sortOrder: updated.sortOrder,
+      isSeed: updated.isSeed,
+      itemCount: items.length,
+      totalValueMinor: totalVal.toString(),
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  async deleteItemCategory(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    const existing = await this.prisma.itemCategory.findUnique({ where: { id } });
+    if (!existing) throw notFound('ItemCategory');
+
+    const count = await this.prisma.inventoryItem.count({ where: { category: existing.code as any } });
+    if (count > 0) {
+      await this.prisma.itemCategory.update({
+        where: { id },
+        data: { isActive: false },
+      });
+      await this.audit.record({
+        actor,
+        action: 'category.deactivate',
+        entityType: 'ItemCategory',
+        entityId: id,
+        summary: `Deactivated item category ${existing.name} because it has ${count} items attached`,
+      });
+      return { ok: true };
+    }
+
+    await this.prisma.itemCategory.delete({ where: { id } });
+    await this.audit.record({
+      actor,
+      action: 'category.delete',
+      entityType: 'ItemCategory',
+      entityId: id,
+      summary: `Deleted category ${existing.name} (${existing.code})`,
     });
     return { ok: true };
   }
