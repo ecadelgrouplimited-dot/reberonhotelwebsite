@@ -587,14 +587,14 @@ export default function PosPage() {
         description="Fast order terminal, open table tabs, room folio posting, thermal KOT & 80mm receipt printing."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<BarChart3 className="size-3.5" />}
               onClick={() => setShiftModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-400"
             >
-              <BarChart3 className="size-3.5" />
               Shift Sales: {money(todaySalesMinor.toString(), 'UGX')}
-            </button>
+            </Button>
 
             <Button
               variant={activeTab === 'KDS' && kdsFilter === 'OPEN_TABS' ? 'primary' : 'secondary'}
@@ -696,7 +696,7 @@ export default function PosPage() {
                     className={cn(
                       'rounded-md px-3 py-1.5 text-xs font-semibold transition',
                       kdsFilter === 'OPEN_TABS'
-                        ? 'bg-amber-500 text-white'
+                        ? 'bg-fg text-bg'
                         : 'bg-surface-2 text-fg-muted hover:text-fg',
                     )}
                   >
@@ -1238,12 +1238,12 @@ export default function PosPage() {
                 >
                   {/* Open Tab Selector Banner */}
                   {openTabs.length > 0 && !targetOpenOrder && (
-                    <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2">
-                      <label className="block text-[10.5px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    <div className="mb-3 rounded-lg border border-line-strong bg-surface-2 p-2.5">
+                      <label className="block text-[11px] font-semibold text-fg">
                         Attach to Running Open Tab (Optional)
                       </label>
                       <select
-                        className="mt-1 w-full rounded bg-surface px-2 py-1 text-xs font-medium outline-none"
+                        className="input mt-1 !min-h-8 !py-1 text-xs"
                         value=""
                         onChange={(e) => {
                           const found = openTabs.find((o) => o.id === e.target.value);
@@ -1266,9 +1266,9 @@ export default function PosPage() {
                   )}
 
                   {targetOpenOrder && (
-                    <div className="mb-3 flex items-center justify-between rounded-lg border border-amber-500/40 bg-amber-500/15 px-2.5 py-2 text-xs">
+                    <div className="mb-3 flex items-center justify-between rounded-lg border border-line-strong bg-surface-2 px-3 py-2 text-xs">
                       <div>
-                        <p className="font-bold text-amber-600 dark:text-amber-300">
+                        <p className="font-bold text-fg">
                           Appending to {targetOpenOrder.orderNumber}
                         </p>
                         <p className="text-[11px] text-fg-muted">
@@ -1594,7 +1594,7 @@ export default function PosPage() {
                             variant="secondary"
                             size="md"
                             className="w-full"
-                            icon={<Flame className="size-3.5 text-amber-500" />}
+                            icon={<Flame className="size-3.5" />}
                             loading={placeOrder.isPending}
                             disabled={cart.length === 0}
                             onClick={() => placeOrder.mutate(false)}

@@ -133,13 +133,7 @@ export default function Today() {
                 href={a.href}
                 className="group flex items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-2.5 transition-all hover:border-line-strong hover:bg-surface-2/50"
               >
-                <span
-                  className={
-                    a.primary
-                      ? 'grid size-8 shrink-0 place-items-center rounded-lg bg-accent/12 text-accent'
-                      : 'grid size-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg'
-                  }
-                >
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg">
                   <a.icon className="size-4" strokeWidth={1.8} />
                 </span>
                 <span className="min-w-0 flex-1">

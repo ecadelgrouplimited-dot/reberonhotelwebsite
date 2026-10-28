@@ -65,10 +65,10 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         aria-current={active ? 'page' : undefined}
                         className={cn('relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[12.5px] font-medium transition-colors', active ? 'bg-[var(--sidebar-active)] text-white font-semibold' : 'hover:bg-white/5 hover:text-white')}
                       >
-                        {active && <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-gold-400" />}
+                        {active && <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-white" />}
                         <i.icon className="size-3.5" strokeWidth={1.7} />
                         <span className="flex-1 truncate">{i.label}</span>
-                        {count > 0 && <span className="min-w-4.5 rounded bg-accent px-1 text-center text-[10.5px] font-semibold tabular text-white">{count}</span>}
+                        {count > 0 && <span className="min-w-4.5 rounded bg-white/15 px-1.5 text-center text-[10.5px] font-semibold tabular text-white">{count}</span>}
                       </Link>
                     </li>
                   );
@@ -94,49 +94,61 @@ function AccountMenu() {
   useEffect(() => setDark(document.documentElement.getAttribute('data-theme') === 'dark'), []);
   if (!me) return <Skeleton className="size-9 rounded-full" />;
   const initials = me.name.split(' ').map((p) => p[0]).slice(0, 2).join('');
+  const toggleTheme = () => {
+    const next = dark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('rb-admin-theme', next);
+    setDark(!dark);
+  };
   return (
-    <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 hover:bg-surface-2" aria-expanded={open}>
-        <span className="grid size-8 place-items-center rounded-full bg-moss-700 text-[12px] font-semibold text-mist-50">{initials}</span>
-        <span className="hidden text-left leading-tight sm:block">
-          <span className="block text-[13px] font-semibold">{me.name}</span>
-          <span className="block text-[11px] capitalize text-fg-subtle">{me.role.toLowerCase()}</span>
-        </span>
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 text-[12px] font-semibold text-fg hover:bg-surface-2"
+        title={dark ? 'Switch to Light theme' : 'Switch to Dark theme'}
+      >
+        {dark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+        <span className="hidden sm:inline">{dark ? 'Light' : 'Dark'}</span>
       </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="fade-in absolute right-0 top-12 z-50 w-60 rounded-2xl border border-line bg-surface p-1.5 shadow-[var(--shadow-lift)]">
-            <p className="truncate px-3 py-2 text-[12px] text-fg-subtle">{me.email}</p>
-            <Link href="/account" onClick={() => setOpen(false)} className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] hover:bg-surface-2">
-              <UserRound className="size-4" /> Your account
-            </Link>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] hover:bg-surface-2"
-              onClick={() => {
-                const next = dark ? 'light' : 'dark';
-                document.documentElement.setAttribute('data-theme', next);
-                localStorage.setItem('rb-admin-theme', next);
-                setDark(!dark);
-              }}
-            >
-              {dark ? <Sun className="size-4" /> : <Moon className="size-4" />} {dark ? 'Light mode' : 'Dark mode'}
-            </button>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-danger hover:bg-danger/5"
-              onClick={async () => {
-                await post('/auth/logout').catch(() => undefined);
-                qc.clear();
-                router.replace('/login');
-              }}
-            >
-              <LogOut className="size-4" /> Sign out
-            </button>
-          </div>
-        </>
-      )}
+      <div className="relative">
+        <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 hover:bg-surface-2" aria-expanded={open}>
+          <span className="grid size-8 place-items-center rounded-full bg-fg text-[12px] font-semibold text-bg">{initials}</span>
+          <span className="hidden text-left leading-tight sm:block">
+            <span className="block text-[13px] font-semibold">{me.name}</span>
+            <span className="block text-[11px] capitalize text-fg-subtle">{me.role.toLowerCase()}</span>
+          </span>
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="fade-in absolute right-0 top-12 z-50 w-60 rounded-xl border border-line bg-surface p-1.5 shadow-[var(--shadow-lift)]">
+              <p className="truncate px-3 py-2 text-[12px] text-fg-subtle">{me.email}</p>
+              <Link href="/account" onClick={() => setOpen(false)} className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium hover:bg-surface-2">
+                <UserRound className="size-4" /> Your account
+              </Link>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium hover:bg-surface-2"
+                onClick={toggleTheme}
+              >
+                {dark ? <Sun className="size-4" /> : <Moon className="size-4" />} {dark ? 'Light mode' : 'Dark mode'}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-danger hover:bg-danger/10"
+                onClick={async () => {
+                  await post('/auth/logout').catch(() => undefined);
+                  qc.clear();
+                  router.replace('/login');
+                }}
+              >
+                <LogOut className="size-4" /> Sign out
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

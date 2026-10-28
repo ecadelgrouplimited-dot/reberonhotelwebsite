@@ -24,13 +24,13 @@ export const metadata: Metadata = {
   title: { default: 'The House · Reberon Suite', template: '%s · The House' },
   robots: { index: false, follow: false },
 };
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#17221c' };
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#0f172a' };
 
-const themeScript = `try{var t=localStorage.getItem('rb-admin-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem('rb-admin-theme');document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light')}catch(e){document.documentElement.setAttribute('data-theme','light')}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${inter.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="light" className={`${jakarta.variable} ${inter.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
