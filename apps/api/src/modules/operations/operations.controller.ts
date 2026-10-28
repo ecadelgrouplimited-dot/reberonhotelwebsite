@@ -1,18 +1,22 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
 import {
+  zAppendPosOrderItemsInput,
   zCheckInHealthClubInput,
   zCheckOutHealthClubInput,
   zConvertQuotationToInvoiceInput,
   zCreateAnnouncementInput,
   zCreateInventoryItemInput,
   zCreateMembershipInput,
+  zCreatePosCategoryInput,
+  zCreatePosItemInput,
   zCreatePosOrderInput,
   zCreateQuotationInput,
   zCreateRequisitionInput,
   zRecordStockMovementInput,
   zReviewRequisitionInput,
+  zSettlePosOrderInput,
   zTogglePosItemInput,
   zUpdatePosOrderStatusInput,
   zUpdateQuotationStatusInput,
@@ -39,6 +43,18 @@ export class OperationsController {
     return this.ops.outlets();
   }
 
+  @Get('pos/in-house-guests')
+  @Requires('pos:operate')
+  inHouseGuests() {
+    return this.ops.inHouseGuests();
+  }
+
+  @Get('pos/stock-items')
+  @Requires('pos:operate')
+  posStockItems() {
+    return this.ops.posStockItems();
+  }
+
   @Get('pos/orders')
   @Requires('pos:operate')
   orders(@Query('outletId') outletId?: string, @Query('status') status?: string) {
@@ -54,6 +70,47 @@ export class OperationsController {
     return this.ops.createOrder(body, user);
   }
 
+  @Post('pos/orders/:id/items')
+  @HttpCode(200)
+  @Requires('pos:operate')
+  appendOrderItems(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zAppendPosOrderItemsInput)) body: z.infer<typeof zAppendPosOrderItemsInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.appendOrderItems(id, body, user);
+  }
+
+  @Post('pos/orders/:id/settle')
+  @HttpCode(200)
+  @Requires('pos:operate')
+  settleOrder(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zSettlePosOrderInput)) body: z.infer<typeof zSettlePosOrderInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.settleOrder(id, body, user);
+  }
+
+  @Get('pos/orders/:id/print')
+  @Requires('pos:operate')
+  async printPosOrder(
+    @Param('id') id: string,
+    @Query('kind') kind: string | undefined,
+    @Query('autoprint') autoprint: string | undefined,
+    @Res() res: Response,
+  ) {
+    const k = kind?.toUpperCase() === 'BILL' ? 'BILL' : 'KOT';
+    const out = await this.ops.renderPosOrderPrintHtml(id, k, autoprint === '1');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader(
+      'Content-Security-Policy',
+      `default-src 'none'; style-src 'nonce-${out.nonce}'; script-src 'nonce-${out.nonce}'; img-src data: https:; base-uri 'none'; form-action 'none'; frame-ancestors 'self' ${env.WEB_URL} ${env.ADMIN_URL}`,
+    );
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(out.html);
+  }
+
   @Patch('pos/orders/:id/status')
   @Requires('pos:operate')
   updateOrderStatus(
@@ -64,6 +121,24 @@ export class OperationsController {
     return this.ops.updateOrderStatus(id, body.status, user);
   }
 
+  @Post('pos/categories')
+  @Requires('pos:operate')
+  createCategory(
+    @Body(new ZodPipe(zCreatePosCategoryInput)) body: z.infer<typeof zCreatePosCategoryInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.createCategory(body, user);
+  }
+
+  @Post('pos/items')
+  @Requires('pos:operate')
+  createItem(
+    @Body(new ZodPipe(zCreatePosItemInput)) body: z.infer<typeof zCreatePosItemInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.createItem(body, user);
+  }
+
   @Patch('pos/items/:id')
   @Requires('pos:operate')
   toggleItem(
@@ -72,6 +147,12 @@ export class OperationsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.ops.toggleItem(id, body, user);
+  }
+
+  @Delete('pos/items/:id')
+  @Requires('pos:operate')
+  deleteItem(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ops.deleteItem(id, user);
   }
 
   /* ───── Health Club & Spa (Gym, Steam, Sauna) ───── */

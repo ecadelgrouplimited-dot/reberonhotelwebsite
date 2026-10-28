@@ -88,7 +88,9 @@ export interface PosOrderDTO {
   outletName: string;
   outletType: PosOutletType;
   reservationId: string | null;
+  folioLineId: string | null;
   documentId: string | null;
+  isSettled: boolean;
   tableOrRoom: string | null;
   customerName: string | null;
   customerPhone: string | null;
@@ -104,6 +106,16 @@ export interface PosOrderDTO {
   createdAt: string;
 }
 
+export interface PosInHouseGuestDTO {
+  reservationId: string;
+  code: string;
+  status: string;
+  guestName: string;
+  guestPhone: string | null;
+  roomNumber: string | null;
+  roomTypeName: string | null;
+}
+
 export const zCreatePosOrderInput = z.object({
   outletId: z.string().uuid(),
   reservationId: z.string().uuid().optional().nullable(),
@@ -115,6 +127,7 @@ export const zCreatePosOrderInput = z.object({
   discountMinor: z.string().regex(/^\d+$/).default('0'),
   notes: z.string().trim().max(500).optional(),
   status: z.enum(POS_ORDER_STATUSES).optional(),
+  settleNow: z.boolean().default(true),
   items: z.array(
     z.object({
       itemId: z.string().uuid(),
@@ -124,14 +137,57 @@ export const zCreatePosOrderInput = z.object({
   ).min(1),
 });
 
+export const zAppendPosOrderItemsInput = z.object({
+  notes: z.string().trim().max(500).optional(),
+  items: z.array(
+    z.object({
+      itemId: z.string().uuid(),
+      quantity: z.number().int().min(1).max(500),
+      notes: z.string().trim().max(200).optional(),
+    }),
+  ).min(1),
+});
+
+export const zSettlePosOrderInput = z.object({
+  paymentMethod: z.enum(POS_PAYMENT_METHODS),
+  reservationId: z.string().uuid().optional().nullable(),
+  discountMinor: z.string().regex(/^\d+$/).optional(),
+  customerName: z.string().trim().max(120).optional(),
+  customerPhone: z.string().trim().max(40).optional(),
+});
+
 export const zUpdatePosOrderStatusInput = z.object({
   status: z.enum(POS_ORDER_STATUSES),
 });
 
+export const zCreatePosCategoryInput = z.object({
+  outletId: z.string().uuid(),
+  name: z.string().trim().min(2).max(80),
+  sortOrder: z.number().int().min(0).max(999).default(10),
+});
+
+export const zCreatePosItemInput = z.object({
+  categoryId: z.string().uuid(),
+  sku: z.string().trim().min(2).max(40),
+  name: z.string().trim().min(2).max(140),
+  description: z.string().trim().max(300).optional().nullable(),
+  priceMinorUGX: z.string().regex(/^\d+$/),
+  priceMinorUSD: z.string().regex(/^\d+$/).optional().nullable(),
+  prepMinutes: z.number().int().min(0).max(240).optional().nullable(),
+  inventoryItemId: z.string().uuid().optional().nullable(),
+  isAvailable: z.boolean().default(true),
+});
+
 export const zTogglePosItemInput = z.object({
-  isAvailable: z.boolean(),
+  isAvailable: z.boolean().optional(),
+  name: z.string().trim().min(2).max(140).optional(),
+  sku: z.string().trim().min(2).max(40).optional(),
+  categoryId: z.string().uuid().optional(),
+  description: z.string().trim().max(300).optional().nullable(),
   priceMinorUGX: z.string().regex(/^\d+$/).optional(),
   priceMinorUSD: z.string().regex(/^\d+$/).optional().nullable(),
+  prepMinutes: z.number().int().min(0).max(240).optional().nullable(),
+  inventoryItemId: z.string().uuid().optional().nullable(),
 });
 
 // ───────────────────────── Health Club & Spa ─────────────────────────
