@@ -2,15 +2,16 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowRight, Boxes, CalendarDays, ClipboardCheck, ConciergeBell, Dumbbell, FileSpreadsheet,
+  ArrowRight, Boxes, Building2, CalendarDays, ClipboardCheck, ConciergeBell, Dumbbell, FileSpreadsheet,
   FileText, Hammer, Image as ImageIcon, LayoutGrid, Plus, ReceiptText, SprayCan,
   Sunset, Users, UtensilsCrossed, type LucideIcon,
 } from 'lucide-react';
-import type { DashboardDTO } from '@reberon/contracts';
+import type { DashboardDTO, HrDashboardDTO } from '@reberon/contracts';
 import { t } from '@reberon/contracts/text';
 import { get } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
 import { ago, dateRange } from '@/lib/format';
+import { money } from '@/lib/money';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Section, Skeleton, Status } from '@/components/ui/bits';
 import { BarList, ColumnChart, StatTile } from '@/components/charts/charts';
@@ -41,6 +42,13 @@ export default function Today() {
     enabled: canDashboard && (canInbox || canWaitlist || canContent),
   });
 
+  const { data: hrOverview } = useQuery({
+    queryKey: ['hr-overview'],
+    queryFn: () => get<HrDashboardDTO>('/hr/overview'),
+    refetchInterval: 60_000,
+    enabled: can('inventory:manage') || can('users:manage'),
+  });
+
   const today = new Intl.DateTimeFormat('en-GB', {
     weekday: 'short',
     day: 'numeric',
@@ -63,14 +71,14 @@ export default function Today() {
     ...(can('pos:operate')
       ? [{ label: 'POS Terminal', sub: 'Kitchen, Bar & Tabs', href: '/pos', icon: UtensilsCrossed, primary: true }]
       : []),
+    ...(can('inventory:manage')
+      ? [{ label: 'Human Resources', sub: 'Staff & Rosters', href: '/hr', icon: Users, primary: true }]
+      : []),
+    ...(can('inventory:manage')
+      ? [{ label: 'Departments', sub: 'Cost Centers & Teams', href: '/departments', icon: Building2 }]
+      : []),
     ...(can('rooms:status')
       ? [{ label: 'Room Rack', sub: 'Live room status', href: '/rack', icon: LayoutGrid }]
-      : []),
-    ...(can('rooms:status') && !can('desk:operate')
-      ? [{ label: 'Housekeeping', sub: 'Cleaning queue', href: '/housekeeping', icon: SprayCan, primary: true }]
-      : []),
-    ...(can('quotations:manage')
-      ? [{ label: 'Event Quotation', sub: 'Conferences & groups', href: '/quotations', icon: FileSpreadsheet }]
       : []),
     ...(can('receipts:read')
       ? [{ label: 'Receipts & Billing', sub: 'Issue & print 80mm', href: '/receipts', icon: ReceiptText }]
@@ -114,18 +122,15 @@ export default function Today() {
                 POS
               </Button>
             )}
-            {can('content:write') && (
-              <>
-                <Button size="sm" href="/website/rising/new" icon={<Hammer className="size-3.5" />}>
-                  Post Update
-                </Button>
-                <Button size="sm" href="/media?upload=1" icon={<ImageIcon className="size-3.5" />}>
-                  Media
-                </Button>
-                <Button size="sm" href="/website/pages" variant="dark" icon={<FileText className="size-3.5" />}>
-                  CMS
-                </Button>
-              </>
+            {can('inventory:manage') && (
+              <Button size="sm" href="/hr" icon={<Users className="size-3.5" />}>
+                Staff & HR
+              </Button>
+            )}
+            {can('receipts:read') && (
+              <Button size="sm" href="/receipts" icon={<ReceiptText className="size-3.5" />}>
+                Receipts
+              </Button>
             )}
           </>
         }
@@ -188,22 +193,18 @@ export default function Today() {
                       href="/waitlist"
                     />
                   )}
-                  {canContent && (
-                    <>
-                      <StatTile
-                        label="Build Progress"
-                        value={data.progress.percent !== null ? `${data.progress.percent}%` : '—'}
-                        note={data.progress.lastUpdate ? `Updated ${ago(data.progress.lastUpdate)}` : 'No updates'}
-                        href="/website/rising"
-                      />
-                      <StatTile
-                        label="Draft CMS Pages"
-                        value={data.counts.draftPages}
-                        note={`${data.counts.mediaCount} media assets`}
-                        href="/website/pages"
-                      />
-                    </>
-                  )}
+                  <StatTile
+                    label="Active Staff"
+                    value={hrOverview?.activeStaff ?? '—'}
+                    note={`${hrOverview?.scheduledShiftsToday ?? 0} shifts scheduled today`}
+                    href="/hr"
+                  />
+                  <StatTile
+                    label="Hotel Departments"
+                    value={`${Object.keys(hrOverview?.departmentHeadcounts ?? {}).length || 9} cost centers`}
+                    note={`${hrOverview?.onLeaveToday ?? 0} on leave · ${money(hrOverview?.totalMonthlyPayrollMinor || '0', 'UGX')} payroll`}
+                    href="/departments"
+                  />
                 </div>
 
                 {(canInbox || canWaitlist) && (

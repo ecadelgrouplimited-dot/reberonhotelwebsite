@@ -2,7 +2,7 @@ import type { Permission } from '@reberon/contracts';
 import {
   BedDouble, BookOpenText, CalendarRange, CircleHelp, ConciergeBell, FileText, Hammer, Home, Image, Inbox, KeyRound, ListChecks, Map, Navigation, ScrollText,
   Settings, Shuffle, SprayCan, Building2, Users, Rocket, Gift, Sunset, LayoutGrid, Contact, MessageCircleHeart, ChartColumnBig, Send, PlugZap, MessagesSquare, Rotate3d, ReceiptText,
-  UtensilsCrossed, Dumbbell, FileSpreadsheet, Boxes, ClipboardCheck, type LucideIcon,
+  UtensilsCrossed, Dumbbell, FileSpreadsheet, Boxes, ClipboardCheck, Clock, CalendarDays, DollarSign, type LucideIcon,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -43,7 +43,6 @@ export const NAV: NavGroup[] = [
       { label: 'Front desk', href: '/desk', icon: ConciergeBell, perm: 'desk:operate' },
       { label: 'Room rack', href: '/rack', icon: LayoutGrid, perm: 'rooms:status' },
       { label: 'Housekeeping', href: '/housekeeping', icon: SprayCan, perm: 'rooms:status' },
-      { label: 'Departments', href: '/departments', icon: Building2, perm: 'inventory:manage' },
       { label: 'Guests', href: '/guests', icon: Contact, perm: 'guests:read' },
       { label: 'Feedback', href: '/feedback', icon: MessageCircleHeart, perm: 'guests:read' },
       { label: 'Reports', href: '/reports', icon: ChartColumnBig, perm: 'reports:read' },
@@ -57,7 +56,16 @@ export const NAV: NavGroup[] = [
       { label: 'Quotations & Events', href: '/quotations', icon: FileSpreadsheet, perm: 'quotations:manage' },
       { label: 'Inventory & Linen', href: '/inventory', icon: Boxes, perm: 'inventory:manage' },
       { label: 'Requisitions & Comms', href: '/requisitions', icon: ClipboardCheck, perm: 'requisitions:request' },
-      { label: 'Human Resources', href: '/hr', icon: Users, perm: 'inventory:manage' },
+    ],
+  },
+  {
+    label: 'Human Resources (HRM)',
+    items: [
+      { label: 'Staff directory', href: '/hr', icon: Users, perm: 'inventory:manage' },
+      { label: 'Departments', href: '/departments', icon: Building2, perm: 'inventory:manage' },
+      { label: 'Shift rosters', href: '/hr?tab=ROSTER', icon: Clock, perm: 'inventory:manage' },
+      { label: 'Leave requests', href: '/hr?tab=LEAVE', icon: CalendarDays, perm: 'inventory:manage' },
+      { label: 'Payroll & taxes', href: '/hr?tab=PAYROLL', icon: DollarSign, perm: 'inventory:manage' },
     ],
   },
   {
