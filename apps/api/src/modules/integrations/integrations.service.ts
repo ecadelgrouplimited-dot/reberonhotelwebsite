@@ -73,7 +73,30 @@ export class IntegrationsService {
     if (row?.enabled) {
       const secrets = row.secretsEnc ? (JSON.parse(open(row.secretsEnc) ?? '{}') as Record<string, string>) : {};
       value = { kind, source: 'VAULT', mode: row.mode, values: { ...(row.config as Record<string, string>), ...secrets } };
-    } else value = this.fromEnv(kind);
+    } else if (kind === 'IMAP') {
+      // Intelligently inherit user & pass from active SMTP mailbox if not explicitly configured
+      const smtpRow = await this.prisma.integration.findUnique({ where: { kind: 'SMTP' } });
+      if (smtpRow?.enabled && smtpRow.secretsEnc) {
+        const smtpSecrets = JSON.parse(open(smtpRow.secretsEnc) ?? '{}') as Record<string, string>;
+        const smtpConfig = (smtpRow.config as Record<string, string>) ?? {};
+        value = {
+          kind: 'IMAP',
+          source: 'VAULT',
+          mode: smtpRow.mode,
+          values: {
+            host: 'imap.hostinger.com',
+            port: '993',
+            user: smtpConfig.user || 'alerts@reberonhotel.com',
+            pass: smtpSecrets.pass || '',
+            mailbox: 'INBOX',
+          },
+        };
+      } else {
+        value = this.fromEnv(kind);
+      }
+    } else {
+      value = this.fromEnv(kind);
+    }
     this.cache.set(kind, { at: Date.now(), value });
     return value;
   }
@@ -180,10 +203,21 @@ export class IntegrationsService {
         return `The mail server at ${host}:${port} accepted the connection (From: ${v.from || env.MAIL_FROM}).`;
       }
       case 'IMAP': {
+        let user = v.user;
+        let pass = v.pass;
+        if (!user || !pass) {
+          const smtpRow = await this.prisma.integration.findUnique({ where: { kind: 'SMTP' } });
+          if (smtpRow?.secretsEnc) {
+            const smtpSecrets = JSON.parse(open(smtpRow.secretsEnc) ?? '{}') as Record<string, string>;
+            const smtpConfig = (smtpRow.config as Record<string, string>) ?? {};
+            user = user || smtpConfig.user || 'alerts@reberonhotel.com';
+            pass = pass || smtpSecrets.pass || '';
+          }
+        }
         const host = v.host || 'imap.hostinger.com';
         const port = Number(v.port || 993);
-        const user = v.user || env.SMTP_USER || 'alerts@reberonhotel.com';
-        const pass = v.pass || env.SMTP_PASS || '';
+        user = user || env.SMTP_USER || 'alerts@reberonhotel.com';
+        pass = pass || env.SMTP_PASS || '';
         if (!user || !pass) throw new Error('Mailbox email and password are required');
         const client = new ImapFlow({
           host,
