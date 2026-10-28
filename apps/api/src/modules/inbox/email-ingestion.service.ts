@@ -144,11 +144,16 @@ export class EmailIngestionService implements OnModuleInit, OnModuleDestroy {
           const fromAddress = (parsed.from?.value[0]?.address ?? '').toLowerCase().trim();
           const fromName = parsed.from?.value[0]?.name ?? fromAddress.split('@')[0] ?? 'Guest';
 
-          // Skip outbound emails sent from ourselves
+          // Skip outbound emails sent from ourselves or system delivery daemons
           if (
             fromAddress === user.toLowerCase() ||
             fromAddress === 'alerts@reberonhotel.com' ||
-            fromAddress === (env.SMTP_USER ?? '').toLowerCase()
+            fromAddress === (env.SMTP_USER ?? '').toLowerCase() ||
+            fromAddress.includes('mailer-daemon') ||
+            fromAddress.includes('noreply') ||
+            fromAddress.includes('no-reply') ||
+            fromAddress.includes('hostinger.com') ||
+            fromAddress.includes('mailchannels')
           ) {
             continue;
           }
