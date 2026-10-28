@@ -22,7 +22,6 @@ export const NAV: NavGroup[] = [
   {
     items: [
       { label: 'Today', href: '/', icon: Home },
-      { label: 'Account & password', href: '/account', icon: KeyRound },
       { label: 'Inbox', href: '/inbox', icon: Inbox, perm: 'inbox:read', badge: 'inbox' },
       { label: 'First-stay list', href: '/waitlist', icon: ListChecks, perm: 'waitlist:read', badge: 'waitlist' },
       { label: 'Sent messages', href: '/messages', icon: Send, perm: 'messages:read' },
