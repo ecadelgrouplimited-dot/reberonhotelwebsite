@@ -28,22 +28,6 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'Website',
-    items: [
-      { label: 'Publishing', href: '/website/publishing', icon: Rocket, perm: 'content:read', badge: 'publishing' },
-      { label: 'Pages', href: '/website/pages', icon: FileText, perm: 'content:read' },
-      { label: 'Rooms', href: '/website/rooms', icon: BedDouble, perm: 'content:read' },
-      { label: 'Facilities', href: '/website/facilities', icon: Building2, perm: 'content:read' },
-      { label: 'Virtual tours', href: '/website/tours', icon: Rotate3d, perm: 'content:read' },
-      { label: 'Kapchorwa', href: '/website/destinations', icon: Map, perm: 'content:read' },
-      { label: 'Hotel rising', href: '/website/rising', icon: Hammer, perm: 'content:read' },
-      { label: 'Questions', href: '/website/faqs', icon: CircleHelp, perm: 'content:read' },
-      { label: 'Navigation', href: '/website/navigation', icon: Navigation, perm: 'content:read' },
-      { label: 'Redirects', href: '/website/redirects', icon: Shuffle, perm: 'content:read' },
-      { label: 'Media', href: '/media', icon: Image, perm: 'media:read' },
-    ],
-  },
-  {
     label: 'Bookings',
     items: [
       { label: 'Reservations', href: '/reservations', icon: BookOpenText, perm: 'bookings:read' },
@@ -72,6 +56,22 @@ export const NAV: NavGroup[] = [
       { label: 'Quotations & Events', href: '/quotations', icon: FileSpreadsheet, perm: 'quotations:manage' },
       { label: 'Inventory & Linen', href: '/inventory', icon: Boxes, perm: 'inventory:manage' },
       { label: 'Requisitions & Comms', href: '/requisitions', icon: ClipboardCheck, perm: 'requisitions:request' },
+    ],
+  },
+  {
+    label: 'Website CMS',
+    items: [
+      { label: 'Publishing', href: '/website/publishing', icon: Rocket, perm: 'content:read', badge: 'publishing' },
+      { label: 'Pages', href: '/website/pages', icon: FileText, perm: 'content:read' },
+      { label: 'Rooms', href: '/website/rooms', icon: BedDouble, perm: 'content:read' },
+      { label: 'Facilities', href: '/website/facilities', icon: Building2, perm: 'content:read' },
+      { label: 'Virtual tours', href: '/website/tours', icon: Rotate3d, perm: 'content:read' },
+      { label: 'Kapchorwa', href: '/website/destinations', icon: Map, perm: 'content:read' },
+      { label: 'Hotel rising', href: '/website/rising', icon: Hammer, perm: 'content:read' },
+      { label: 'Questions', href: '/website/faqs', icon: CircleHelp, perm: 'content:read' },
+      { label: 'Navigation', href: '/website/navigation', icon: Navigation, perm: 'content:read' },
+      { label: 'Redirects', href: '/website/redirects', icon: Shuffle, perm: 'content:read' },
+      { label: 'Media', href: '/media', icon: Image, perm: 'media:read' },
     ],
   },
   {
