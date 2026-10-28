@@ -262,6 +262,8 @@ export class RatesAdminController {
         id: rt.id,
         name: lt(rt.name),
         rooms: rt._count.rooms,
+        fromPriceUgx: rt.fromPriceUgx?.toString() ?? null,
+        fromPriceUsd: rt.fromPriceUsd?.toString() ?? null,
         days: dates.map((d) => {
           const row = inv.find((x) => x.roomTypeId === rt.id && iso(x.date) === d);
           return {
@@ -359,6 +361,22 @@ export class RatesAdminController {
     await this.audit.record({ actor: user, action: 'rate_plan.update', entityType: 'RatePlan', entityId: id, summary: `Updated rate plan ${p.code}`, after: b, req });
     return p;
   }
+
+  @Delete('rate-plans/:id')
+  @Requires('rates:write')
+  async deletePlan(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    const plan = await this.prisma.ratePlan.findUnique({ where: { id }, include: { _count: { select: { reservations: true } } } });
+    if (!plan) throw notFound('Rate plan');
+    if (plan._count.reservations > 0) {
+      await this.prisma.ratePlan.update({ where: { id }, data: { isActive: false, isPublic: false } });
+      await this.audit.record({ actor: user, action: 'rate_plan.archive', entityType: 'RatePlan', entityId: id, summary: `Archived rate plan ${plan.code}`, req });
+      return { archived: true };
+    }
+    await this.prisma.rate.deleteMany({ where: { ratePlanId: id } });
+    await this.prisma.ratePlan.delete({ where: { id } });
+    await this.audit.record({ actor: user, action: 'rate_plan.delete', entityType: 'RatePlan', entityId: id, summary: `Deleted rate plan ${plan.code}`, req });
+    return { deleted: true };
+  }
 }
 
 @Controller('v1/admin')
@@ -418,5 +436,13 @@ export class SellablesAdminController {
     const p = await this.prisma.package.update({ where: { id }, data: { ...b, inclusions: b.inclusions as object[] | undefined, body: b.body === null ? undefined : b.body } });
     await this.audit.record({ actor: user, action: 'package.update', entityType: 'Package', entityId: id, summary: `Updated package ${p.slug}`, req });
     return p;
+  }
+
+  @Delete('packages/:id')
+  @HttpCode(204)
+  @Requires('rates:write')
+  async deletePackage(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    const p = await this.prisma.package.update({ where: { id }, data: { deletedAt: new Date(), status: 'HIDDEN', slug: `deleted-${Date.now()}` } });
+    await this.audit.record({ actor: user, action: 'package.delete', entityType: 'Package', entityId: id, summary: `Deleted package`, after: { id: p.id }, req });
   }
 }
