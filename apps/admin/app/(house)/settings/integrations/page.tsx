@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CircleAlert, CircleCheck, KeyRound, PlugZap, Send, ShieldCheck } from 'lucide-react';
+import { CircleAlert, CircleCheck, KeyRound, PlugZap, RefreshCw, Send, ShieldCheck } from 'lucide-react';
 import { INTEGRATIONS, type IntegrationDef, type IntegrationDTO } from '@reberon/contracts';
 import { ApiError, get, post, put } from '@/lib/api';
 import { ago } from '@/lib/format';
@@ -56,6 +56,11 @@ function Card({ def, row }: { def: IntegrationDef; row: IntegrationDTO }) {
     onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['integrations'] }); (r.ok ? toast.success : toast.error)(r.message, { duration: 8000 }); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to send test email'),
   });
+  const syncImap = useMutation({
+    mutationFn: () => post<{ ok: boolean; syncedCount: number; message: string }>('/conversations/sync-email'),
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['integrations'] }); (r.ok ? toast.success : toast.error)(r.message, { duration: 8000 }); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed to sync incoming emails'),
+  });
   const connected = row.source !== 'NONE';
 
   return (
@@ -102,6 +107,15 @@ function Card({ def, row }: { def: IntegrationDef; row: IntegrationDTO }) {
           />
           <Button size="sm" variant="secondary" loading={sendTestEmail.isPending} disabled={dirty || !testEmailTo.trim()} onClick={() => sendTestEmail.mutate()}>
             <Send className="size-3.5" /> Send test email
+          </Button>
+        </div>
+      )}
+
+      {def.kind === 'IMAP' && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+          <p className="text-[12px] text-fg-muted">Polls alerts@reberonhotel.com and links incoming replies to conversations.</p>
+          <Button size="sm" variant="secondary" loading={syncImap.isPending} disabled={!connected || dirty} onClick={() => syncImap.mutate()}>
+            <RefreshCw className={cn('size-3.5', syncImap.isPending && 'animate-spin')} /> Fetch & Thread Replies Now
           </Button>
         </div>
       )}

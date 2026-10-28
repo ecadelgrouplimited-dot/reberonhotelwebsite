@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import nodemailer from 'nodemailer';
+import { ImapFlow } from 'imapflow';
 import { INTEGRATIONS, type IntegrationDTO, type IntegrationKind } from '@reberon/contracts';
 import type { Prisma } from '@reberon/db';
 import { PrismaService } from '../../common/prisma.service.js';
@@ -45,6 +46,19 @@ export class IntegrationsService {
           : null;
       case 'SMTP':
         return { kind, source: 'ENVIRONMENT', mode: 'LIVE', values: { host: env.SMTP_HOST, port: String(env.SMTP_PORT), user: env.SMTP_USER ?? '', pass: env.SMTP_PASS ?? '', from: env.MAIL_FROM } };
+      case 'IMAP':
+        return {
+          kind,
+          source: 'ENVIRONMENT',
+          mode: 'LIVE',
+          values: {
+            host: process.env.IMAP_HOST || 'imap.hostinger.com',
+            port: String(process.env.IMAP_PORT || '993'),
+            user: process.env.IMAP_USER || env.SMTP_USER || 'alerts@reberonhotel.com',
+            pass: process.env.IMAP_PASS || env.SMTP_PASS || '',
+            mailbox: 'INBOX',
+          },
+        };
       default:
         return null;
     }
@@ -164,6 +178,30 @@ export class IntegrationsService {
         });
         await tr.verify();
         return `The mail server at ${host}:${port} accepted the connection (From: ${v.from || env.MAIL_FROM}).`;
+      }
+      case 'IMAP': {
+        const host = v.host || 'imap.hostinger.com';
+        const port = Number(v.port || 993);
+        const user = v.user || env.SMTP_USER || 'alerts@reberonhotel.com';
+        const pass = v.pass || env.SMTP_PASS || '';
+        if (!user || !pass) throw new Error('Mailbox email and password are required');
+        const client = new ImapFlow({
+          host,
+          port,
+          secure: port === 993,
+          auth: { user, pass },
+          logger: false,
+          clientInfo: { name: 'ReberonHotelSuite', version: '1.0.0' },
+        });
+        await client.connect();
+        const mailbox = v.mailbox || 'INBOX';
+        const lock = await client.getMailboxLock(mailbox);
+        const status = await client.status(mailbox, { messages: true, unseen: true });
+        lock.release();
+        await client.logout();
+        const msgCount = status ? (status.messages ?? 0) : 0;
+        const unseenCount = status ? (status.unseen ?? 0) : 0;
+        return `Connected to ${host}:${port}. Mailbox ${mailbox} contains ${msgCount} messages (${unseenCount} unread).`;
       }
     }
   }

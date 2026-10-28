@@ -58,7 +58,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           const c = job.data as EmailContent;
           const { html, text } = renderEmail(c);
           const m = await this.mailer();
-          await m.t.sendMail({ from: m.from, to: c.to, replyTo: c.replyTo, subject: c.subject, html, text });
+          await m.t.sendMail({ from: m.from, to: c.to, replyTo: c.replyTo || m.from, subject: c.subject, html, text });
           this.log.log(`email sent: "${c.subject}" → ${c.to}`);
         }
       },

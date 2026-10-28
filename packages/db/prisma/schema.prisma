@@ -1213,6 +1213,7 @@ enum IntegrationKind {
   SMS_AFRICASTALKING
   WHATSAPP_CLOUD
   SMTP
+  IMAP
 }
 
 enum IntegrationMode {

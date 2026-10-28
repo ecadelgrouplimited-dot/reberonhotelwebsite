@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 import { zConversationPatch, zMessageCreate, zManualConversationInput, zWaitlistPatch, t, type DashboardDTO } from '@reberon/contracts';
@@ -11,10 +11,21 @@ import { ZodPipe } from '../../common/zod.pipe.js';
 import { notFound } from '../../common/errors.js';
 import { lt } from '../content/mappers.js';
 import { InboxService, toWaitlist } from './inbox.service.js';
+import { EmailIngestionService } from './email-ingestion.service.js';
 
 @Controller('v1/admin/conversations')
 export class ConversationsController {
-  constructor(private readonly inbox: InboxService) {}
+  constructor(
+    private readonly inbox: InboxService,
+    private readonly ingestion: EmailIngestionService,
+  ) {}
+
+  @Post('sync-email')
+  @HttpCode(200)
+  @Requires('inbox:write')
+  syncEmail(@CurrentUser() user: AuthUser) {
+    return this.ingestion.syncEmails(user);
+  }
 
   @Get()
   @Requires('inbox:read')

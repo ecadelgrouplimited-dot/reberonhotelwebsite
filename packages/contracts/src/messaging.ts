@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /* Integrations vault (M22) and guest messaging (M09, M10). */
 
-export const INTEGRATION_KINDS = ['PESAPAL', 'SMS_AFRICASTALKING', 'WHATSAPP_CLOUD', 'SMTP'] as const;
+export const INTEGRATION_KINDS = ['PESAPAL', 'SMS_AFRICASTALKING', 'WHATSAPP_CLOUD', 'SMTP', 'IMAP'] as const;
 export type IntegrationKind = (typeof INTEGRATION_KINDS)[number];
 export const MESSAGE_CHANNELS = ['EMAIL', 'SMS', 'WHATSAPP'] as const;
 export type MessageChannel = (typeof MESSAGE_CHANNELS)[number];
@@ -83,6 +83,21 @@ export const INTEGRATIONS: IntegrationDef[] = [
       { name: 'user', label: 'Username' },
       { name: 'pass', label: 'Password', secret: true },
       { name: 'from', label: 'From', placeholder: 'Reberon Hotel <alerts@reberonhotel.com>' },
+    ],
+  },
+  {
+    kind: 'IMAP',
+    label: 'Incoming Email (IMAP)',
+    purpose: 'Receives guest email replies to alerts@reberonhotel.com and automatically threads them into conversations in the inbox.',
+    getKeys: 'From Hostinger webmail settings: host (imap.hostinger.com), port 993, alerts@reberonhotel.com and password.',
+    testLabel: 'Test & Sync',
+    liveLabel: 'Live Ingestion',
+    fields: [
+      { name: 'host', label: 'IMAP Host', required: true, placeholder: 'imap.hostinger.com' },
+      { name: 'port', label: 'Port', required: true, placeholder: '993' },
+      { name: 'user', label: 'Mailbox Email', required: true, placeholder: 'alerts@reberonhotel.com' },
+      { name: 'pass', label: 'Mailbox Password', secret: true, required: true },
+      { name: 'mailbox', label: 'Mailbox Folder', placeholder: 'INBOX' },
     ],
   },
 ];

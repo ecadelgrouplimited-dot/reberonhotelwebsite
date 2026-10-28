@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "IntegrationKind" ADD VALUE IF NOT EXISTS 'IMAP';

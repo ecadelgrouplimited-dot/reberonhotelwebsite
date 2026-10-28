@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, BedDouble, CalendarDays, CheckCheck, Globe, ListPlus, Mail, MessageSquareText, Phone, Plus, Search, Send, StickyNote, UserRound, Users,
+  ArrowLeft, BedDouble, CalendarDays, CheckCheck, Globe, ListPlus, Mail, MessageSquareText, Phone, Plus, RefreshCw, Search, Send, StickyNote, UserRound, Users,
 } from 'lucide-react';
 import type { ConversationDetailDTO, ConversationSummaryDTO, Paginated, UserDTO } from '@reberon/contracts';
 import { whatsappLink } from '@reberon/utils';
@@ -41,6 +41,31 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
   const [creating, setCreating] = useState(false);
   const router = useRouter();
   const can = useCan();
+  const qc = useQueryClient();
+
+  const syncEmailsMut = useMutation({
+    mutationFn: () => post<{ ok: boolean; syncedCount: number; message: string }>('/conversations/sync-email'),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      if (selectedId) qc.invalidateQueries({ queryKey: ['conversation', selectedId] });
+      if (res.syncedCount > 0) {
+        toast.success(res.message);
+      } else {
+        toast.info(res.message);
+      }
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : 'Could not sync emails');
+    },
+  });
+
+  useEffect(() => {
+    // Background auto-sync when the inbox is open
+    const timer = setInterval(() => {
+      syncEmailsMut.mutate();
+    }, 90_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const id = setTimeout(() => setDebounced(q), 250);
@@ -71,11 +96,23 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
         <div className="border-b border-line p-4">
           <div className="mb-3 flex items-center justify-between">
             <h1 className="display text-[1.5rem]">Inbox</h1>
-            {can('inbox:write') && (
-              <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setCreating(true)}>
-                Log a chat
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={syncEmailsMut.isPending}
+                icon={<RefreshCw className={cn('size-3.5', syncEmailsMut.isPending && 'animate-spin')} />}
+                title="Sync incoming email replies from alerts@reberonhotel.com"
+                onClick={() => syncEmailsMut.mutate()}
+              >
+                Sync Email
               </Button>
-            )}
+              {can('inbox:write') && (
+                <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => setCreating(true)}>
+                  Log a chat
+                </Button>
+              )}
+            </div>
           </div>
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" />
