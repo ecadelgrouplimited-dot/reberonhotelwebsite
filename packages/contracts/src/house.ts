@@ -212,6 +212,31 @@ export interface FeedbackDTO {
   guest: { id: string; name: string; country: string | null };
 }
 
+export interface DepartmentTrafficDTO {
+  department: string;
+  label: string;
+  revenue: MoneyByCurrency;
+  ordersCount: number;
+  secondaryMetric?: string;
+  sharePercent: number;
+}
+
+export interface ExpenseSummaryDTO {
+  category: string;
+  label: string;
+  department: string;
+  isDirectCost: boolean;
+  amount: MoneyByCurrency;
+  count: number;
+}
+
+export interface PaymentSettlementDTO {
+  method: string;
+  label: string;
+  amount: MoneyByCurrency;
+  count: number;
+}
+
 export interface HouseReportDTO {
   from: string;
   to: string;
@@ -232,6 +257,26 @@ export interface HouseReportDTO {
     noShows: number;
     returningGuests: number;
   };
+  /** Entire hotel financial P&L summary across all outlets and expenses */
+  financialSummary?: {
+    totalGrossRevenue: MoneyByCurrency;
+    costOfSales: MoneyByCurrency;
+    grossProfit: MoneyByCurrency;
+    operatingExpenses: MoneyByCurrency;
+    grossOperatingProfit: MoneyByCurrency;
+    trevpar: MoneyByCurrency;
+    goppar: MoneyByCurrency;
+  };
+  /** Cross-departmental revenue and traffic breakdown */
+  departments?: DepartmentTrafficDTO[];
+  /** Breakdown of expenses and cost drivers */
+  expenses?: {
+    total: MoneyByCurrency;
+    byCategory: ExpenseSummaryDTO[];
+    byDepartment: { department: string; label: string; amount: MoneyByCurrency; count: number }[];
+  };
+  /** Inflow settlement reconciliation by payment rail */
+  paymentReconciliation?: PaymentSettlementDTO[];
   sourceMix: { source: string; bookings: number; roomNights: number }[];
   roomTypes: { id: string; name: string; roomNightsSold: number; occupancy: number }[];
   leadTime: { bucket: string; bookings: number }[];

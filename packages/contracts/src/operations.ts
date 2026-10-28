@@ -33,8 +33,42 @@ export type StockMovementType = (typeof STOCK_MOVEMENT_TYPES)[number];
 export const REQUISITION_STATUSES = ['PENDING', 'MANAGER_APPROVED', 'DIRECTOR_APPROVED', 'DISBURSED', 'REJECTED'] as const;
 export type RequisitionStatus = (typeof REQUISITION_STATUSES)[number];
 
-export const DEPARTMENTS = ['KITCHEN', 'BAR', 'HEALTH_CLUB', 'HOUSEKEEPING', 'FRONT_DESK', 'CONFERENCE', 'MAINTENANCE'] as const;
+export const DEPARTMENTS = [
+  'KITCHEN',
+  'BAR',
+  'HEALTH_CLUB',
+  'HOUSEKEEPING',
+  'FRONT_DESK',
+  'CONFERENCE',
+  'MAINTENANCE',
+  'ENERGY_UTILITIES',
+  'ADMIN_GENERAL',
+] as const;
 export type Department = (typeof DEPARTMENTS)[number];
+
+export const EXPENSE_CATEGORIES = [
+  'COGS_FOOD',
+  'COGS_BEVERAGE',
+  'UTILITIES_ELECTRICITY',
+  'UTILITIES_DIESEL_FUEL',
+  'UTILITIES_WATER_GAS',
+  'MAINTENANCE_REPAIRS',
+  'HOUSEKEEPING_AMENITIES',
+  'STAFF_PAYROLL_WELFARE',
+  'MARKETING_COMMISSIONS',
+  'ADMIN_GENERAL',
+] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export const EXPENSE_PAYMENT_METHODS = [
+  'CASH',
+  'MOMO_MTN',
+  'MOMO_AIRTEL',
+  'BANK_TRANSFER',
+  'CHEQUE',
+  'CARD',
+] as const;
+export type ExpensePaymentMethod = (typeof EXPENSE_PAYMENT_METHODS)[number];
 
 // ───────────────────────── POS & Outlets ─────────────────────────
 
@@ -514,3 +548,39 @@ export interface TerminalDeviceDTO {
   status: string;
   lastSeenAt: string;
 }
+
+// ───────────────────────── Expenses & Cost Drivers ─────────────────────────
+
+export interface ExpenseDTO {
+  id: string;
+  number: string;
+  date: string;
+  department: Department;
+  category: ExpenseCategory;
+  title: string;
+  description: string | null;
+  vendor: string | null;
+  amountMinor: string;
+  currency: CurrencyCode;
+  paymentMethod: ExpensePaymentMethod;
+  referenceNumber: string | null;
+  receiptUrl: string | null;
+  recordedByName: string;
+  status: string;
+  createdAt: string;
+}
+
+export const zCreateExpenseInput = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+  department: z.enum(DEPARTMENTS),
+  category: z.enum(EXPENSE_CATEGORIES),
+  title: z.string().trim().min(2).max(180),
+  description: z.string().trim().max(1000).optional().nullable(),
+  vendor: z.string().trim().max(120).optional().nullable(),
+  amountMinor: z.string().regex(/^\d+$/),
+  currency: z.enum(['UGX', 'USD']).default('UGX'),
+  paymentMethod: z.enum(EXPENSE_PAYMENT_METHODS).default('CASH'),
+  referenceNumber: z.string().trim().max(80).optional().nullable(),
+  receiptUrl: z.string().url().optional().nullable(),
+});
+

@@ -7,6 +7,7 @@ import {
   zCheckOutHealthClubInput,
   zConvertQuotationToInvoiceInput,
   zCreateAnnouncementInput,
+  zCreateExpenseInput,
   zCreateInventoryItemInput,
   zCreateMembershipInput,
   zCreatePosCategoryInput,
@@ -321,5 +322,28 @@ export class OperationsController {
   @Requires('dashboard:view')
   devices() {
     return this.ops.devices();
+  }
+
+  /* ───── Expenses & Cost Drivers ───── */
+
+  @Get('expenses')
+  @Requires('reports:read')
+  expenses(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.ops.expenses(from, to);
+  }
+
+  @Post('expenses')
+  @Requires('expenses:manage')
+  createExpense(
+    @Body(new ZodPipe(zCreateExpenseInput)) body: z.infer<typeof zCreateExpenseInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.createExpense(body, user);
+  }
+
+  @Delete('expenses/:id')
+  @Requires('expenses:manage')
+  deleteExpense(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ops.deleteExpense(id, user);
   }
 }

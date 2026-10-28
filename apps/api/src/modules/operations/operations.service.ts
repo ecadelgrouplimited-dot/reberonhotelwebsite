@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   CurrencyCode,
   Department,
+  ExpenseDTO,
   HealthClubAccessLogDTO,
   HealthClubDashboardDTO,
   HealthClubMembershipDTO,
@@ -23,6 +24,7 @@ import {
   zCheckInHealthClubInput,
   zConvertQuotationToInvoiceInput,
   zCreateAnnouncementInput,
+  zCreateExpenseInput,
   zCreateInventoryItemInput,
   zCreateMembershipInput,
   zCreatePosCategoryInput,
@@ -1765,5 +1767,107 @@ export class OperationsService {
       status: d.status,
       lastSeenAt: d.lastSeenAt.toISOString(),
     }));
+  }
+
+  /* ───── Expenses & Cost Drivers ───── */
+
+  async expenses(from?: string, to?: string): Promise<ExpenseDTO[]> {
+    const where: any = {};
+    if (from || to) {
+      where.date = {};
+      if (from) where.date.gte = new Date(`${from}T00:00:00.000Z`);
+      if (to) where.date.lt = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 86_400_000);
+    }
+    const rows = await this.prisma.expense.findMany({
+      where,
+      orderBy: { date: 'desc' },
+      take: 200,
+    });
+    return rows.map((e) => ({
+      id: e.id,
+      number: e.number,
+      date: e.date.toISOString().slice(0, 10),
+      department: e.department,
+      category: e.category,
+      title: e.title,
+      description: e.description,
+      vendor: e.vendor,
+      amountMinor: e.amountMinor.toString(),
+      currency: e.currency as 'UGX' | 'USD',
+      paymentMethod: e.paymentMethod,
+      referenceNumber: e.referenceNumber,
+      receiptUrl: e.receiptUrl,
+      recordedByName: e.recordedByName,
+      status: e.status,
+      createdAt: e.createdAt.toISOString(),
+    }));
+  }
+
+  async createExpense(
+    input: z.infer<typeof zCreateExpenseInput>,
+    actor: AuthUser,
+  ): Promise<ExpenseDTO> {
+    const count = await this.prisma.expense.count();
+    const dateObj = input.date ? new Date(`${input.date}T12:00:00.000Z`) : new Date();
+    const num = `EXP-${dateObj.getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const exp = await this.prisma.expense.create({
+      data: {
+        number: num,
+        date: dateObj,
+        department: input.department as any,
+        category: input.category as any,
+        title: input.title,
+        description: input.description ?? null,
+        vendor: input.vendor ?? null,
+        amountMinor: BigInt(input.amountMinor),
+        currency: input.currency as any,
+        paymentMethod: input.paymentMethod as any,
+        referenceNumber: input.referenceNumber ?? null,
+        receiptUrl: input.receiptUrl ?? null,
+        recordedById: actor.id,
+        recordedByName: actor.name,
+      },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'expense.create',
+      entityType: 'Expense',
+      entityId: exp.id,
+      summary: `Recorded expense ${exp.number} · ${exp.title} (${exp.amountMinor.toString()} ${exp.currency})`,
+    });
+
+    return {
+      id: exp.id,
+      number: exp.number,
+      date: exp.date.toISOString().slice(0, 10),
+      department: exp.department,
+      category: exp.category,
+      title: exp.title,
+      description: exp.description,
+      vendor: exp.vendor,
+      amountMinor: exp.amountMinor.toString(),
+      currency: exp.currency as 'UGX' | 'USD',
+      paymentMethod: exp.paymentMethod,
+      referenceNumber: exp.referenceNumber,
+      receiptUrl: exp.receiptUrl,
+      recordedByName: exp.recordedByName,
+      status: exp.status,
+      createdAt: exp.createdAt.toISOString(),
+    };
+  }
+
+  async deleteExpense(id: string, actor: AuthUser) {
+    const exp = await this.prisma.expense.findUnique({ where: { id } });
+    if (!exp) throw notFound('Expense');
+    await this.prisma.expense.delete({ where: { id } });
+    await this.audit.record({
+      actor,
+      action: 'expense.delete',
+      entityType: 'Expense',
+      entityId: id,
+      summary: `Deleted expense ${exp.number} · ${exp.title}`,
+    });
+    return { ok: true };
   }
 }

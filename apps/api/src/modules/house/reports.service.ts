@@ -28,7 +28,25 @@ export class ReportsService {
     const start = day(from);
     const endExcl = new Date(day(to).getTime() + 86_400_000);
 
-    const [rooms, blocks, stays, created, cancelled, noShows, lines, payments, refunds, feedback, names] = await Promise.all([
+    const [
+      rooms,
+      blocks,
+      stays,
+      created,
+      cancelled,
+      noShows,
+      lines,
+      payments,
+      refunds,
+      feedback,
+      names,
+      posOrders,
+      memberships,
+      gymVisits,
+      acceptedQuotes,
+      expensesList,
+      disbursedReqs,
+    ] = await Promise.all([
       this.prisma.room.findMany({ where: { isActive: true }, select: { id: true, roomTypeId: true } }),
       this.prisma.roomBlock.findMany({ where: { fromDate: { lt: endExcl }, toDate: { gt: start } }, include: { room: { select: { roomTypeId: true } } } }),
       this.prisma.reservation.findMany({ where: { status: { in: [...SOLD] }, arrival: { lt: endExcl }, departure: { gt: start } }, include: { rooms: true } }),
@@ -36,10 +54,29 @@ export class ReportsService {
       this.prisma.reservation.count({ where: { cancelledAt: { gte: start, lt: endExcl } } }),
       this.prisma.reservation.count({ where: { status: 'NO_SHOW', arrival: { gte: start, lt: endExcl } } }),
       this.prisma.folioLine.findMany({ where: { kind: { in: ['EXTRA', 'PACKAGE', 'FNB'] }, date: { gte: start, lt: endExcl }, folio: { reservation: { status: { in: [...SOLD] } } } }, include: { folio: { select: { currency: true } } } }),
-      this.prisma.paymentIntent.findMany({ where: { status: 'SUCCEEDED', paidAt: { gte: start, lt: endExcl } }, select: { amountMinor: true, currency: true } }),
+      this.prisma.paymentIntent.findMany({ where: { status: 'SUCCEEDED', paidAt: { gte: start, lt: endExcl } }, select: { amountMinor: true, currency: true, method: true } }),
       this.prisma.folioLine.findMany({ where: { kind: 'REFUND', date: { gte: start, lt: endExcl } }, include: { folio: { select: { currency: true } } } }),
       this.prisma.feedback.groupBy({ by: ['score'], where: { createdAt: { gte: start, lt: endExcl } }, _count: true }),
       this.booking.roomTypeNames(),
+      this.prisma.posOrder.findMany({
+        where: { createdAt: { gte: start, lt: endExcl }, status: { in: ['COMPLETED', 'READY', 'PREPARING'] } },
+        include: { outlet: true },
+      }),
+      this.prisma.healthClubMembership.findMany({
+        where: { createdAt: { gte: start, lt: endExcl } },
+      }),
+      this.prisma.healthClubAccessLog.findMany({
+        where: { checkedInAt: { gte: start, lt: endExcl } },
+      }),
+      this.prisma.quotation.findMany({
+        where: { status: { in: ['ACCEPTED', 'CONVERTED'] }, updatedAt: { gte: start, lt: endExcl } },
+      }),
+      this.prisma.expense.findMany({
+        where: { date: { gte: start, lt: endExcl } },
+      }),
+      this.prisma.requisition.findMany({
+        where: { status: 'DISBURSED', updatedAt: { gte: start, lt: endExcl } },
+      }),
     ]);
 
     const inRange = new Set(dates);
@@ -126,6 +163,241 @@ export class ReportsService {
 
     const fb = Object.fromEntries((['GOOD', 'OK', 'BAD'] as FeedbackScore[]).map((s) => [s, feedback.find((f) => f.score === s)?._count ?? 0])) as Record<FeedbackScore, number>;
 
+    /* ───── Multi-Department Aggregation ───── */
+    const kitchenOrders = posOrders.filter((o) => o.outlet.type === 'KITCHEN');
+    const kitchenRev = zero();
+    for (const o of kitchenOrders) kitchenRev.UGX += o.totalMinor;
+
+    const barOrders = posOrders.filter((o) => o.outlet.type === 'BAR');
+    const barRev = zero();
+    for (const o of barOrders) barRev.UGX += o.totalMinor;
+
+    const gymRev = zero();
+    for (const m of memberships) gymRev.UGX += m.amountMinor;
+    for (const log of gymVisits) gymRev.UGX += log.amountPaidMinor;
+
+    const eventsRev = zero();
+    for (const q of acceptedQuotes) eventsRev.UGX += q.totalMinor;
+
+    const extrasRev = zero();
+    for (const l of lines) {
+      if (l.kind === 'EXTRA' || l.kind === 'PACKAGE') {
+        extrasRev[l.folio.currency as Cur] += l.amountMinor;
+      }
+    }
+
+    const totalHotelGross = zero();
+    for (const c of ['UGX', 'USD'] as Cur[]) {
+      totalHotelGross[c] =
+        revenue[c] +
+        kitchenRev[c] +
+        barRev[c] +
+        gymRev[c] +
+        eventsRev[c] +
+        extrasRev[c];
+    }
+
+    const depList = [
+      {
+        department: 'ROOMS',
+        label: 'Rooms & Accommodation',
+        revenue: out(revenue),
+        ordersCount: staysArriving || stays.length,
+        secondaryMetric: `${roomNightsSold} room nights · ${pct(roomNightsSold, roomNightsAvailable)}% occ`,
+        sharePercent: totalHotelGross.UGX ? pct(Number(revenue.UGX), Number(totalHotelGross.UGX)) : 0,
+      },
+      {
+        department: 'KITCHEN',
+        label: 'Restaurant & Kitchen Dining',
+        revenue: out(kitchenRev),
+        ordersCount: kitchenOrders.length,
+        secondaryMetric: `${kitchenOrders.length} meal orders served`,
+        sharePercent: totalHotelGross.UGX ? pct(Number(kitchenRev.UGX), Number(totalHotelGross.UGX)) : 0,
+      },
+      {
+        department: 'BAR',
+        label: 'Bar & Lounge Beverages',
+        revenue: out(barRev),
+        ordersCount: barOrders.length,
+        secondaryMetric: `${barOrders.length} drink tabs & orders`,
+        sharePercent: totalHotelGross.UGX ? pct(Number(barRev.UGX), Number(totalHotelGross.UGX)) : 0,
+      },
+      {
+        department: 'HEALTH_CLUB',
+        label: 'Health Club, Gym & Spa',
+        revenue: out(gymRev),
+        ordersCount: memberships.length,
+        secondaryMetric: `${memberships.length} memberships · ${gymVisits.length} visits logged`,
+        sharePercent: totalHotelGross.UGX ? pct(Number(gymRev.UGX), Number(totalHotelGross.UGX)) : 0,
+      },
+      {
+        department: 'CONFERENCE',
+        label: 'Conferences, Events & Banqueting',
+        revenue: out(eventsRev),
+        ordersCount: acceptedQuotes.length,
+        secondaryMetric: `${acceptedQuotes.length} event quotations accepted`,
+        sharePercent: totalHotelGross.UGX ? pct(Number(eventsRev.UGX), Number(totalHotelGross.UGX)) : 0,
+      },
+      {
+        department: 'EXTRAS_TOURS',
+        label: 'Tours, Transport & Extras',
+        revenue: out(extrasRev),
+        ordersCount: lines.length,
+        secondaryMetric: `${lines.length} excursions, laundry & extras`,
+        sharePercent: totalHotelGross.UGX ? pct(Number(extrasRev.UGX), Number(totalHotelGross.UGX)) : 0,
+      },
+    ];
+
+    /* ───── Expense Management & Cost Drivers ───── */
+    const CATEGORY_NAMES: Record<string, { label: string; isDirectCost: boolean }> = {
+      COGS_FOOD: { label: 'Kitchen Food Supplies & Produce (COGS)', isDirectCost: true },
+      COGS_BEVERAGE: { label: 'Bar Beverage Stock & Bottles (COGS)', isDirectCost: true },
+      UTILITIES_ELECTRICITY: { label: 'Electricity Bills (Umeme)', isDirectCost: false },
+      UTILITIES_DIESEL_FUEL: { label: 'Diesel Fuel (Backup Generator)', isDirectCost: false },
+      UTILITIES_WATER_GAS: { label: 'Water & Gas Cylinders', isDirectCost: false },
+      MAINTENANCE_REPAIRS: { label: 'Property Repairs & Maintenance', isDirectCost: false },
+      HOUSEKEEPING_AMENITIES: { label: 'Linen, Cleaning & Room Amenities', isDirectCost: false },
+      STAFF_PAYROLL_WELFARE: { label: 'Staff Payroll, Wages & Welfare', isDirectCost: false },
+      MARKETING_COMMISSIONS: { label: 'Marketing, Advertising & OTA Fees', isDirectCost: false },
+      ADMIN_GENERAL: { label: 'General Administration & IT Licensing', isDirectCost: false },
+    };
+
+    const expMap = new Map<string, { amount: Record<Cur, bigint>; count: number; department: string }>();
+    const totalExpenses = zero();
+    const cogsTotal = zero();
+    const opexTotal = zero();
+
+    for (const e of expensesList) {
+      const cur = (e.currency ?? 'UGX') as Cur;
+      totalExpenses[cur] += e.amountMinor;
+      const meta = CATEGORY_NAMES[e.category] ?? { label: e.category, isDirectCost: false };
+      if (meta.isDirectCost) {
+        cogsTotal[cur] += e.amountMinor;
+      } else {
+        opexTotal[cur] += e.amountMinor;
+      }
+      const existing = expMap.get(e.category) ?? { amount: zero(), count: 0, department: e.department };
+      existing.amount[cur] += e.amountMinor;
+      existing.count += 1;
+      expMap.set(e.category, existing);
+    }
+
+    // Include disbursed requisitions in OPEX
+    for (const r of disbursedReqs) {
+      const cur = (r.currency ?? 'UGX') as Cur;
+      totalExpenses[cur] += r.totalEstimatedMinor;
+      opexTotal[cur] += r.totalEstimatedMinor;
+    }
+
+    const expensesByCategory = Object.entries(CATEGORY_NAMES).map(([cat, meta]) => {
+      const data = expMap.get(cat) ?? { amount: zero(), count: 0, department: 'GENERAL_ADMIN' };
+      return {
+        category: cat,
+        label: meta.label,
+        department: data.department,
+        isDirectCost: meta.isDirectCost,
+        amount: out(data.amount),
+        count: data.count,
+      };
+    });
+
+    const DEPT_NAMES: Record<string, string> = {
+      KITCHEN: 'Kitchen & Restaurant',
+      BAR: 'Bar & Lounge',
+      HEALTH_CLUB: 'Health Club & Spa',
+      HOUSEKEEPING: 'Housekeeping & Laundry',
+      FRONT_DESK: 'Front Desk & Guest Services',
+      CONFERENCE: 'Conferences & Banqueting',
+      MAINTENANCE: 'Maintenance & Repairs',
+      ENERGY_UTILITIES: 'Energy & Utilities',
+      ADMIN_GENERAL: 'General & Administrative',
+    };
+
+    const deptExpMap = new Map<string, { amount: Record<Cur, bigint>; count: number }>();
+    for (const e of expensesList) {
+      const cur = (e.currency ?? 'UGX') as Cur;
+      const d = deptExpMap.get(e.department) ?? { amount: zero(), count: 0 };
+      d.amount[cur] += e.amountMinor;
+      d.count += 1;
+      deptExpMap.set(e.department, d);
+    }
+    for (const r of disbursedReqs) {
+      const cur = (r.currency ?? 'UGX') as Cur;
+      const d = deptExpMap.get(r.department) ?? { amount: zero(), count: 0 };
+      d.amount[cur] += r.totalEstimatedMinor;
+      d.count += 1;
+      deptExpMap.set(r.department, d);
+    }
+
+    const expensesByDepartment = Object.entries(DEPT_NAMES).map(([deptKey, label]) => {
+      const d = deptExpMap.get(deptKey) ?? { amount: zero(), count: 0 };
+      return {
+        department: deptKey,
+        label,
+        amount: out(d.amount),
+        count: d.count,
+      };
+    });
+
+    /* ───── Financial P&L Summary ───── */
+    const grossProfit = zero();
+    const gop = zero();
+    const trevpar = zero();
+    const goppar = zero();
+
+    for (const c of ['UGX', 'USD'] as Cur[]) {
+      grossProfit[c] = totalHotelGross[c] - cogsTotal[c];
+      gop[c] = grossProfit[c] - opexTotal[c];
+      trevpar[c] = roomNightsAvailable ? totalHotelGross[c] / BigInt(roomNightsAvailable) : 0n;
+      goppar[c] = roomNightsAvailable ? gop[c] / BigInt(roomNightsAvailable) : 0n;
+    }
+
+    /* ───── Payment Rail Reconciliation ───── */
+    const railMap = new Map<string, { amount: Record<Cur, bigint>; count: number }>();
+    for (const p of payments) {
+      const cur = p.currency as Cur;
+      const method = (p as any).method ?? 'MOBILE_MONEY';
+      const r = railMap.get(method) ?? { amount: zero(), count: 0 };
+      r.amount[cur] += p.amountMinor;
+      r.count += 1;
+      railMap.set(method, r);
+    }
+    for (const o of posOrders) {
+      const cur = 'UGX' as Cur;
+      const m = o.paymentMethod ?? 'CASH';
+      const r = railMap.get(m) ?? { amount: zero(), count: 0 };
+      r.amount[cur] += o.totalMinor;
+      r.count += 1;
+      railMap.set(m, r);
+    }
+
+    const RAIL_LABELS: Record<string, string> = {
+      CASH: 'Cash at Premises (Front Desk & POS)',
+      MOBILE_MONEY: 'Mobile Money (MTN & Airtel)',
+      BANK: 'Bank Transfer / Direct EFT',
+      BANK_TRANSFER: 'Bank Transfer / Direct EFT',
+      CARD: 'Credit / Debit Card (Visa & Mastercard)',
+      ROOM_FOLIO: 'Charged to Resident Room Folio',
+      UNKNOWN: 'Other / Pending Clearing',
+    };
+
+    const paymentReconciliation = Object.entries(RAIL_LABELS)
+      .filter(([k]) => k !== 'BANK_TRANSFER')
+      .map(([method, label]) => {
+        const r1 = railMap.get(method) ?? { amount: zero(), count: 0 };
+        const r2 = method === 'BANK' ? (railMap.get('BANK_TRANSFER') ?? { amount: zero(), count: 0 }) : { amount: zero(), count: 0 };
+        const combined = zero();
+        for (const c of ['UGX', 'USD'] as Cur[]) {
+          combined[c] = r1.amount[c] + r2.amount[c];
+        }
+        return {
+          method,
+          label,
+          amount: out(combined),
+          count: r1.count + r2.count,
+        };
+      });
+
     return {
       from,
       to,
@@ -145,6 +417,22 @@ export class ReportsService {
         noShows,
         returningGuests,
       },
+      financialSummary: {
+        totalGrossRevenue: out(totalHotelGross),
+        costOfSales: out(cogsTotal),
+        grossProfit: out(grossProfit),
+        operatingExpenses: out(opexTotal),
+        grossOperatingProfit: out(gop),
+        trevpar: out(trevpar),
+        goppar: out(goppar),
+      },
+      departments: depList,
+      expenses: {
+        total: out(totalExpenses),
+        byCategory: expensesByCategory,
+        byDepartment: expensesByDepartment,
+      },
+      paymentReconciliation,
       sourceMix: [...source.entries()].map(([s, v]) => ({ source: s, ...v })).sort((a, b) => b.roomNights - a.roomNights),
       roomTypes: [...typeRooms.entries()].map(([id, count]) => {
         const avail = dates.reduce((a, d) => a + count - blockedOn(d, id), 0);
