@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /* Integrations vault (M22) and guest messaging (M09, M10). */
 
-export const INTEGRATION_KINDS = ['PESAPAL', 'SMS_AFRICASTALKING', 'WHATSAPP_CLOUD', 'SMTP', 'IMAP'] as const;
+export const INTEGRATION_KINDS = ['PESAPAL', 'SMS_AFRICASTALKING', 'WHATSAPP_CLOUD', 'SMTP', 'IMAP', 'DEEPSEEK'] as const;
 export type IntegrationKind = (typeof INTEGRATION_KINDS)[number];
 export const MESSAGE_CHANNELS = ['EMAIL', 'SMS', 'WHATSAPP'] as const;
 export type MessageChannel = (typeof MESSAGE_CHANNELS)[number];
@@ -98,6 +98,21 @@ export const INTEGRATIONS: IntegrationDef[] = [
       { name: 'user', label: 'Mailbox Email', required: true, placeholder: 'alerts@reberonhotel.com' },
       { name: 'pass', label: 'Mailbox Password', secret: true, required: true },
       { name: 'mailbox', label: 'Mailbox Folder', placeholder: 'INBOX' },
+    ],
+  },
+  {
+    kind: 'DEEPSEEK',
+    label: 'DeepSeek AI (Sipi Concierge)',
+    purpose: 'Powers Sipi Concierge AI — autonomous guest assistance, room checks, rates, bookings, and mountain guidance.',
+    getKeys: 'From platform.deepseek.com → API Keys. Copy your secret API key (starts with sk-).',
+    testLabel: 'Standard (api.deepseek.com)',
+    liveLabel: 'Production',
+    fields: [
+      { name: 'apiKey', label: 'DeepSeek API Key', secret: true, required: true, placeholder: 'sk-...' },
+      { name: 'baseUrl', label: 'API Base URL', placeholder: 'https://api.deepseek.com', help: 'Leave empty for official https://api.deepseek.com' },
+      { name: 'model', label: 'Model Name', placeholder: 'deepseek-chat', help: 'deepseek-chat (DeepSeek-V3 fast agent) or deepseek-reasoner (R1)' },
+      { name: 'temperature', label: 'Temperature (0.0 to 1.0)', placeholder: '0.3', help: 'Recommended 0.2 - 0.4 for accurate booking calculations' },
+      { name: 'systemPromptExtra', label: 'Custom Concierge Instructions', help: 'Optional seasonal notes, special offers, or custom host instructions.' },
     ],
   },
 ];

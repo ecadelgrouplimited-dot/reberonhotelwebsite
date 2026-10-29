@@ -17,6 +17,7 @@ import { HouseModule } from './modules/house/house.module.js';
 import { IntegrationsModule } from './modules/integrations/integrations.module.js';
 import { OperationsModule } from './modules/operations/operations.module.js';
 import { HrModule } from './modules/hr/hr.module.js';
+import { ConciergeModule } from './modules/concierge/concierge.module.js';
 import { HealthController } from './modules/health.controller.js';
 
 @Module({
@@ -35,6 +36,7 @@ import { HealthController } from './modules/health.controller.js';
     HouseModule,
     OperationsModule,
     HrModule,
+    ConciergeModule,
   ],
   controllers: [HealthController],
   providers: [

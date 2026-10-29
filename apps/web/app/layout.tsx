@@ -13,6 +13,7 @@ import { SmoothScroll } from '@/components/site/smooth-scroll';
 import { RevealFallback } from '@/components/site/reveal-fallback';
 import { PreviewBanner } from '@/components/site/preview-banner';
 import { ComingSoonGate, StaffPreviewBar } from '@/components/site/coming-soon-gate';
+import { SipiConciergeWidget } from '@/components/concierge/sipi-concierge-widget';
 import { t } from '@reberon/contracts';
 import './globals.css';
 
@@ -69,6 +70,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           ) : (
             <ComingSoonGate site={site} rooms={rooms} />
           )}
+          <SipiConciergeWidget />
         </SiteProvider>
       </body>
     </html>

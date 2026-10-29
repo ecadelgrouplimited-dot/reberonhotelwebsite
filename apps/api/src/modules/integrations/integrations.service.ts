@@ -59,6 +59,21 @@ export class IntegrationsService {
             mailbox: 'INBOX',
           },
         };
+      case 'DEEPSEEK':
+        return process.env.DEEPSEEK_API_KEY
+          ? {
+              kind,
+              source: 'ENVIRONMENT',
+              mode: 'LIVE',
+              values: {
+                apiKey: process.env.DEEPSEEK_API_KEY,
+                baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
+                model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+                temperature: process.env.DEEPSEEK_TEMPERATURE || '0.3',
+                systemPromptExtra: process.env.DEEPSEEK_SYSTEM_PROMPT_EXTRA || '',
+              },
+            }
+          : null;
       default:
         return null;
     }
@@ -236,6 +251,22 @@ export class IntegrationsService {
         const msgCount = status ? (status.messages ?? 0) : 0;
         const unseenCount = status ? (status.unseen ?? 0) : 0;
         return `Connected to ${host}:${port}. Mailbox ${mailbox} contains ${msgCount} messages (${unseenCount} unread).`;
+      }
+      case 'DEEPSEEK': {
+        const apiKey = v.apiKey;
+        if (!apiKey) throw new Error('DeepSeek API key is required');
+        const baseUrl = (v.baseUrl || 'https://api.deepseek.com').replace(/\/+$/, '');
+        const r = await fetch(`${baseUrl}/models`, {
+          headers: { authorization: `Bearer ${apiKey}` },
+          signal: t,
+        });
+        if (!r.ok) {
+          const errText = await r.text().catch(() => '');
+          throw new Error(`DeepSeek API answered ${r.status}${r.status === 401 ? ' — invalid API key' : `: ${errText}`}`);
+        }
+        const data = (await r.json().catch(() => ({}))) as { data?: { id: string }[] };
+        const models = data.data?.map((m) => m.id).join(', ') || v.model || 'deepseek-chat';
+        return `Connected to DeepSeek API at ${baseUrl}. Available models: ${models}.`;
       }
     }
   }
