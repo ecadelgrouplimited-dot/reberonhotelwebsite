@@ -172,9 +172,10 @@ export const BLOCKS: BlockDefinition[] = [
     description: 'A set of photos or drawings.',
     icon: 'images',
     variants: [
-      { value: 'masonry', label: 'Masonry' },
-      { value: 'filmstrip', label: 'Filmstrip (horizontal scroll)' },
+      { value: 'book', label: 'Book flip slider' },
       { value: 'mosaic', label: 'Mosaic' },
+      { value: 'filmstrip', label: 'Filmstrip (horizontal scroll)' },
+      { value: 'masonry', label: 'Masonry' },
     ],
     fields: [eyebrow, heading(), { kind: 'mediaList', name: 'media', label: 'Images', min: 1 }],
   },

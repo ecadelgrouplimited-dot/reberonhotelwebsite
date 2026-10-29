@@ -266,7 +266,7 @@ export async function seedPages(refs: Refs, ownerId: string) {
           heading: en('Spaces designed for light, stone, and horizon'),
           media: aboutGallery,
         },
-        { variant: 'mosaic' },
+        { variant: 'book' },
       ),
       block(
         'ctaBand',

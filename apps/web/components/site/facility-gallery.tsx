@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { Camera, Expand, Images } from 'lucide-react';
 import type { MediaRef } from '@reberon/contracts';
 import { t } from '@reberon/contracts/text';
+import { cleanMediaCaption } from '@/lib/media-clean';
 import { Lightbox } from '@/components/blocks/lightbox';
 
 export function FacilityGallery({
@@ -26,7 +27,7 @@ export function FacilityGallery({
             >
               <Image
                 src={photos[0].url}
-                alt={t(photos[0].alt) || facilityName}
+                alt={cleanMediaCaption(null, t(photos[0].alt)) || `${facilityName} — Reberon Hotel`}
                 fill
                 priority
                 sizes="(min-width: 1024px) 1100px, 100vw"
@@ -51,7 +52,7 @@ export function FacilityGallery({
                 >
                   <Image
                     src={photo.url}
-                    alt={t(photo.alt) || `${facilityName} photo ${idx + 1}`}
+                    alt={cleanMediaCaption(null, t(photo.alt)) || `${facilityName} photo ${idx + 1}`}
                     fill
                     sizes="(min-width: 1024px) 550px, 100vw"
                     priority={idx === 0}
@@ -77,7 +78,7 @@ export function FacilityGallery({
               >
                 <Image
                   src={photos[0].url}
-                  alt={t(photos[0].alt) || facilityName}
+                  alt={cleanMediaCaption(null, t(photos[0].alt)) || `${facilityName} — Reberon Hotel`}
                   fill
                   priority
                   sizes="(min-width: 1024px) 750px, 100vw"
@@ -105,7 +106,7 @@ export function FacilityGallery({
                     >
                       <Image
                         src={photo.url}
-                        alt={t(photo.alt) || `${facilityName} detail ${actualIdx}`}
+                        alt={cleanMediaCaption(null, t(photo.alt)) || `${facilityName} detail ${actualIdx}`}
                         fill
                         sizes="(min-width: 1024px) 380px, 50vw"
                         className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"

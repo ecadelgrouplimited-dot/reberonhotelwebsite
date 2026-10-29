@@ -5,6 +5,7 @@ import { Grid2x2, X } from 'lucide-react';
 import type { MediaRef } from '@reberon/contracts';
 import { t } from '@reberon/contracts/text';
 import { cn } from '@/lib/cn';
+import { cleanMediaCaption } from '@/lib/media-clean';
 import { Lightbox } from '@/components/blocks/lightbox';
 
 function Photo({ m, sizes, priority, className, onClick, label }: { m: MediaRef; sizes: string; priority?: boolean; className?: string; onClick: () => void; label: string }) {
@@ -112,7 +113,12 @@ export function RoomGallery({ slug, photos, roomName }: { slug: string; photos: 
                     <button type="button" onClick={() => open(i)} className="block w-full overflow-hidden rounded-[var(--r-md)]" style={{ backgroundColor: m.dominantColor ?? undefined }}>
                       <Image src={m.url} alt={t(m.alt)} width={m.width ?? 1600} height={m.height ?? 1067} sizes="(min-width: 640px) 50vw, 100vw" className="h-auto w-full" placeholder={m.lqip ? 'blur' : 'empty'} blurDataURL={m.lqip ?? undefined} />
                     </button>
-                    {(t(m.caption) || t(m.alt)) && <figcaption className="mt-1.5 text-sm text-fg-subtle">{t(m.caption) || t(m.alt)}{m.isRendering && ' · drawing'}</figcaption>}
+                    {cleanMediaCaption(t(m.caption), t(m.alt)) && (
+                      <figcaption className="mt-1.5 text-sm text-fg-subtle">
+                        {cleanMediaCaption(t(m.caption), t(m.alt))}
+                        {m.isRendering && ' · drawing'}
+                      </figcaption>
+                    )}
                   </figure>
                 ))}
               </div>

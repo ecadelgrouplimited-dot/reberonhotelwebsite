@@ -134,7 +134,7 @@ export async function run() {
         heading: en('Spaces designed for light, stone, and horizon'),
         media: galleryMedia,
       },
-      { variant: 'mosaic' },
+      { variant: 'book' },
     ),
     block(
       'ctaBand',

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { MediaRef } from '@reberon/contracts';
 import { t } from '@reberon/contracts/text';
+import { cleanMediaCaption } from '@/lib/media-clean';
 
 /** Accessible lightbox: keyboard arrows, swipe, Escape; triggers are the gallery tiles. */
 export function Lightbox({ items, children }: { items: MediaRef[]; children: (open: (i: number) => void) => ReactNode }) {
@@ -64,10 +65,19 @@ export function Lightbox({ items, children }: { items: MediaRef[]; children: (op
               <ChevronRight />
             </button>
           </div>
-          <p className="min-h-14 p-4 text-center text-sm opacity-80">
-            {m && (t(m.caption) || t(m.alt))}
-            {m?.isRendering && <span className="ml-2 opacity-60">· Drawing, not a photo</span>}
-          </p>
+          {(() => {
+            const cleanText = m ? cleanMediaCaption(t(m.caption), t(m.alt)) : null;
+            return (
+              <div className="min-h-14 p-4 text-center text-sm opacity-85">
+                {cleanText ? (
+                  <p className="font-medium">{cleanText}</p>
+                ) : (
+                  <p className="text-xs uppercase tracking-[0.16em] opacity-60">Reberon Highland Sanctuary · Kapchorwa</p>
+                )}
+                {m?.isRendering && <span className="mt-1 inline-block text-xs opacity-60">Architectural Drawing · Mount Elgon</span>}
+              </div>
+            );
+          })()}
         </div>
       </dialog>
     </>
