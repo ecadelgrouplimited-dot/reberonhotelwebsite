@@ -67,7 +67,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <RevealFallback />
             </>
           ) : (
-            <ComingSoonGate site={site} />
+            <ComingSoonGate site={site} rooms={rooms} />
           )}
         </SiteProvider>
       </body>
