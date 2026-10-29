@@ -28,6 +28,8 @@ import {
   Copy,
   ChevronLeft,
   Info,
+  Printer,
+  CreditCard,
 } from 'lucide-react';
 import type { ConciergeChatResponseDTO, ConciergeMessageDTO, ConciergeCardDTO } from '@reberon/contracts';
 import { cn } from '@/lib/cn';
@@ -975,12 +977,12 @@ function ConciergeCardView({
           <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2.5">
             <div>
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="size-3.5" /> 48-Hour Hold Active
+                <CheckCircle2 className="size-3.5" /> Reservation Secured in PMS
               </span>
               <h4 className="font-mono text-base font-bold tracking-tight text-fg">{card.code}</h4>
             </div>
             <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-              HELD
+              {card.status || 'CONFIRMED'}
             </span>
           </div>
 
@@ -999,15 +1001,26 @@ function ConciergeCardView({
             </div>
           </div>
 
-          {card.paymentUrl && (
-            <Link
-              href={card.paymentUrl}
-              target="_blank"
-              className="block w-full rounded-lg bg-emerald-600 text-white py-2 text-xs font-semibold text-center hover:bg-emerald-700 transition-colors shadow-xs"
-            >
-              Complete Online Deposit · Guarantee Suite
-            </Link>
-          )}
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            {(card.stayUrl || card.receiptUrl || card.actionUrl) && (
+              <Link
+                href={card.stayUrl || card.receiptUrl || card.actionUrl!}
+                target="_blank"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-fg py-2 px-3 text-xs font-semibold hover:opacity-90 transition-opacity shadow-xs text-center"
+              >
+                <Printer className="size-3.5" /> View & Print Receipt
+              </Link>
+            )}
+            {(card.paymentUrl || card.secondaryActionUrl) && (
+              <Link
+                href={card.paymentUrl || card.secondaryActionUrl!}
+                target="_blank"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-emerald-600/30 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 py-2 px-3 text-xs font-semibold hover:bg-emerald-600/20 transition-colors shadow-xs text-center"
+              >
+                <CreditCard className="size-3.5" /> Complete Online Deposit
+              </Link>
+            )}
+          </div>
         </div>
       );
 

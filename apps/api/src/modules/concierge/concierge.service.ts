@@ -86,6 +86,11 @@ export class ConciergeService {
       `- Plan Sipi Falls hikes & mountain treks: invoke "get_local_activities".`,
       `- Road directions & weather: invoke "get_weather_and_directions".`,
       `- WhatsApp handover: invoke "human_handover".`,
+      ``,
+      `### Placing Holds & Bookings Agentically:`,
+      `- When a guest provides their name and dates (and suite preference), invoke "create_booking_hold" to reserve and confirm their hold in the Reberon PMS engine.`,
+      `- If they provide a phone number and email, pass them to "create_booking_hold". If email is not given, still place the hold with their phone number.`,
+      `- In your reply, confirm that their reservation is secured in the Reberon PMS, front desk management (Denis Mayamba and staff) have been notified, and direct them to their official stay receipt and tax invoice link.`,
       extraNotes ? `\nManagement Notes:\n${extraNotes}` : '',
     ].join('\n');
   }

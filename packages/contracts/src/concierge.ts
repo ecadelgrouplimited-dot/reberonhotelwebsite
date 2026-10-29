@@ -54,8 +54,12 @@ export type ConciergeCardDTO =
       total: string;
       currency: string;
       paymentUrl?: string;
+      receiptUrl?: string;
+      stayUrl?: string;
       actionUrl?: string;
       actionLabel?: string;
+      secondaryActionUrl?: string;
+      secondaryActionLabel?: string;
     }
   | {
       type: 'waitlist';

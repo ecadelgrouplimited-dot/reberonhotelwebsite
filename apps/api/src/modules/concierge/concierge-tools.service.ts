@@ -1,17 +1,34 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Currency, Prisma } from '@reberon/db';
 import { t } from '@reberon/contracts';
-import type { ConciergeCardDTO, LText } from '@reberon/contracts';
+import type { ConciergeCardDTO, LText, BookingInput } from '@reberon/contracts';
 import { referenceCode } from '@reberon/utils';
 import { PrismaService } from '../../common/prisma.service.js';
 import { PricingService } from '../booking/pricing.service.js';
 import { BookingService } from '../booking/booking.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { env } from '../../config.js';
 import { DeepSeekToolDefinition } from './deepseek.client.js';
 
 const toLText = (v: unknown): LText => (v && typeof v === 'object' ? (v as LText) : {});
 const tr = (v: unknown, fallback = ''): string => t(toLText(v)) || fallback;
 const getMediaUrl = (id?: string | null) => (id ? `${env.MEDIA_PUBLIC_URL || 'https://reberonhotel.com/media'}/i/${id}/1280.webp` : undefined);
+
+const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+function roomTypeWhere(raw: string) {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return { id: '00000000-0000-0000-0000-000000000000' };
+  if (isUuid(trimmed)) return { id: trimmed };
+  const clean = trimmed.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const prefix = clean.replace(/-suite|-king|-family|-twin/g, '');
+  return {
+    OR: [
+      { slug: clean },
+      ...(prefix && prefix.length >= 3 ? [{ slug: { contains: prefix } }] : []),
+    ],
+  };
+}
 
 export interface ToolExecutionResult {
   toolCallId: string;
@@ -28,6 +45,7 @@ export class ConciergeToolsService {
     private readonly prisma: PrismaService,
     private readonly pricing: PricingService,
     private readonly booking: BookingService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   getToolDefinitions(): DeepSeekToolDefinition[] {
@@ -313,9 +331,9 @@ export class ConciergeToolsService {
   /* ── 2. Get Room Details ── */
   private async handleGetRoomDetails(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
     const slug = String(args.slug || '').trim().toLowerCase();
-    const rt = await this.prisma.roomType.findFirst({
+    let rt = await this.prisma.roomType.findFirst({
       where: {
-        OR: [{ slug }, { id: slug }],
+        ...roomTypeWhere(slug),
         status: 'PUBLISHED',
         deletedAt: null,
       },
@@ -324,6 +342,17 @@ export class ConciergeToolsService {
         amenities: { include: { amenity: true }, orderBy: { order: 'asc' } },
       },
     });
+
+    if (!rt) {
+      const allRooms = await this.prisma.roomType.findMany({
+        where: { status: 'PUBLISHED', deletedAt: null },
+        include: {
+          hero: true,
+          amenities: { include: { amenity: true }, orderBy: { order: 'asc' } },
+        },
+      });
+      rt = allRooms.find((r) => r.slug.toLowerCase().includes(slug) || tr(r.name).toLowerCase().includes(slug)) || null;
+    }
 
     if (!rt) {
       return {
@@ -373,14 +402,23 @@ export class ConciergeToolsService {
 
   /* ── 3. Calculate Quote ── */
   private async handleCalculateQuote(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
-    const slug = String(args.roomSlug || '');
-    const arrival = String(args.arrival || '');
-    const departure = String(args.departure || '');
+    const slug = String(args.roomSlug || '').trim();
+    const arrival = String(args.arrival || '').trim();
+    const departure = String(args.departure || '').trim();
     const currency = (args.currency === 'USD' ? 'USD' : 'UGX') as 'UGX' | 'USD';
 
-    const rt = await this.prisma.roomType.findFirst({
-      where: { OR: [{ slug }, { id: slug }] },
+    let rt = await this.prisma.roomType.findFirst({
+      where: {
+        ...roomTypeWhere(slug),
+        status: 'PUBLISHED',
+        deletedAt: null,
+      },
     });
+
+    if (!rt) {
+      const allRooms = await this.prisma.roomType.findMany({ where: { status: 'PUBLISHED', deletedAt: null } });
+      rt = allRooms.find((r) => r.slug.toLowerCase().includes(slug.toLowerCase()) || tr(r.name).toLowerCase().includes(slug.toLowerCase())) || null;
+    }
 
     const d1 = new Date(`${arrival}T00:00:00Z`);
     const d2 = new Date(`${departure}T00:00:00Z`);
@@ -435,105 +473,201 @@ export class ConciergeToolsService {
 
   /* ── 4. Create Booking Hold ── */
   private async handleCreateBookingHold(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
-    const slug = String(args.roomSlug || '');
-    const arrivalStr = String(args.arrival || '');
-    const departureStr = String(args.departure || '');
-    const adults = Number(args.adults) || 2;
-    const children = Number(args.children) || 0;
-    const guestName = String(args.guestName || '').trim();
+    const slug = String(args.roomSlug || '').trim();
+    const arrivalStr = String(args.arrival || '').trim();
+    const departureStr = String(args.departure || '').trim();
+    const adults = Math.max(1, Number(args.adults) || 2);
+    const children = Math.max(0, Number(args.children) || 0);
+    const guestName = String(args.guestName || '').trim() || 'Valued Guest';
     const phone = String(args.phone || '').trim();
     const email = String(args.email || '').trim().toLowerCase();
     const specialRequests = String(args.specialRequests || '');
+    const currency = (args.currency === 'USD' ? 'USD' : 'UGX') as 'UGX' | 'USD';
 
-    const rt = await this.prisma.roomType.findFirst({
-      where: { OR: [{ slug }, { id: slug }] },
+    let rt = await this.prisma.roomType.findFirst({
+      where: {
+        ...roomTypeWhere(slug),
+        status: 'PUBLISHED',
+        deletedAt: null,
+      },
     });
+
+    if (!rt) {
+      const allRooms = await this.prisma.roomType.findMany({ where: { status: 'PUBLISHED', deletedAt: null } });
+      rt = allRooms.find((r) => r.slug.toLowerCase().includes(slug.toLowerCase()) || tr(r.name).toLowerCase().includes(slug.toLowerCase())) || null;
+    }
 
     if (!rt) {
       return {
         toolCallId: id,
         name: 'create_booking_hold',
-        output: JSON.stringify({ error: `Selected suite "${slug}" not found.` }),
+        output: JSON.stringify({ error: `Selected suite "${slug}" not found in hotel catalog.` }),
       };
     }
 
-    const arrival = new Date(`${arrivalStr}T00:00:00Z`);
-    const departure = new Date(`${departureStr}T00:00:00Z`);
-    const nights = Math.max(1, Math.round((departure.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24)));
-
-    // Upsert contact
-    let contact = await this.prisma.contact.findFirst({
-      where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
+    let ratePlan = await this.prisma.ratePlan.findFirst({
+      where: { isActive: true },
+      orderBy: { order: 'asc' },
     });
-    if (!contact) {
-      contact = await this.prisma.contact.create({
-        data: { name: guestName, phone, email: email || null },
-      });
-    }
-
-    // Default rate plan
-    let ratePlan = await this.prisma.ratePlan.findFirst({ where: { isActive: true } });
     if (!ratePlan) {
       ratePlan = await this.prisma.ratePlan.findFirst();
     }
+    if (!ratePlan) {
+      return {
+        toolCallId: id,
+        name: 'create_booking_hold',
+        output: JSON.stringify({ error: 'No active rate plan found in system.' }),
+      };
+    }
 
-    const code = referenceCode('RB');
-    const totalMinor = BigInt(Number(rt.fromPriceUgx || 450_000) * nights);
+    const guestEmail = email && email.includes('@')
+      ? email
+      : `${guestName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'guest'}@guest.reberonhotel.com`;
+    const guestPhone = phone || '+256760512691';
 
-    const reservation = await this.prisma.reservation.create({
-      data: {
-        code,
-        status: 'HELD',
-        source: 'DIRECT',
-        contactId: contact.id,
-        ratePlanId: ratePlan?.id ?? '00000000-0000-0000-0000-000000000000',
-        arrival,
-        departure,
+    try {
+      const bookingResult = await this.booking.start({
+        arrival: arrivalStr,
+        departure: departureStr,
         adults,
         children,
-        currency: 'UGX',
-        totalMinor,
-        paidMinor: BigInt(0),
-        depositMinor: totalMinor / BigInt(3),
-        cancellationSnapshot: { policy: 'Flexible 7-day cancellation', refundPercent: 100 },
-        guestNotes: specialRequests || 'Initiated by Sipi Concierge AI',
-        holdExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-hour complimentary hold
-      },
-    });
+        currency,
+        roomTypeId: rt.id,
+        ratePlanId: ratePlan.id,
+        rooms: 1,
+        extras: [],
+        payInFull: false,
+        payAtPremises: true,
+        guest: {
+          name: guestName,
+          phone: guestPhone,
+          email: guestEmail,
+        },
+        notes: specialRequests
+          ? `Sipi Concierge AI Hold: ${specialRequests}`
+          : 'Booked via Sipi Concierge AI (48-hr complimentary hold / Pay at premises)',
+        consent: true,
+      });
 
-    const webBase = env.WEB_URL || 'https://reberonhotel.com';
-    const paymentUrl = `${webBase}/book/return?code=${code}`;
+      const token = bookingResult.accessToken || this.booking.accessToken(bookingResult.code);
+      const webBase = env.WEB_URL || 'https://reberonhotel.com';
+      const stayUrl = `${webBase}/stay?code=${bookingResult.code}&t=${encodeURIComponent(token)}`;
+      const paymentUrl = `${webBase}/book/return?code=${bookingResult.code}&t=${encodeURIComponent(token)}`;
 
-    const card: ConciergeCardDTO = {
-      type: 'reservation',
-      code,
-      status: 'HELD (48-hr hold reserved)',
-      roomName: tr(rt.name),
-      arrival: arrivalStr,
-      departure: departureStr,
-      total: `${Number(totalMinor).toLocaleString()} UGX`,
-      currency: 'UGX',
-      paymentUrl,
-      actionUrl: paymentUrl,
-      actionLabel: 'Complete Deposit Online',
-    };
+      // Register unread Conversation in PMS inbox for front desk team (Denis Mayamba)
+      try {
+        const contact = await this.prisma.contact.findFirst({
+          where: { OR: [{ phone: guestPhone }, ...(email ? [{ email }] : [])] },
+        });
+        if (contact) {
+          await this.prisma.conversation.create({
+            data: {
+              reference: referenceCode('CN'),
+              contactId: contact.id,
+              channel: 'WEB_FORM',
+              intent: 'STAY',
+              status: 'NEW',
+              subject: `Concierge Agentic Hold: ${guestName} (${bookingResult.code})`,
+              context: {
+                source: 'Sipi Concierge AI',
+                reservationCode: bookingResult.code,
+                suite: tr(rt.name),
+                arrival: arrivalStr,
+                departure: departureStr,
+                phone: guestPhone,
+                email: email || null,
+                notes: specialRequests || null,
+              },
+            },
+          });
+        }
+      } catch (err) {
+        this.log.warn(`Could not create inbox conversation for concierge booking: ${err}`);
+      }
 
-    return {
-      toolCallId: id,
-      name: 'create_booking_hold',
-      output: JSON.stringify({
-        success: true,
-        reservationCode: code,
-        guestName,
+      // Send direct staff email notification
+      try {
+        const staffEmails = ((await this.prisma.setting.findUnique({ where: { key: 'notifications.staffEmails' } }))?.value as string[] | undefined) ?? [];
+        for (const staffTo of staffEmails) {
+          await this.notifications.email({
+            to: staffTo,
+            subject: `🤖 Sipi Concierge: Reservation ${bookingResult.code} (${guestName})`,
+            heading: `New Concierge Reservation: ${guestName}`,
+            paragraphs: [
+              `Sipi Concierge completed a confirmed reservation hold for **${guestName}**.`,
+              `**Suite**: ${tr(rt.name)} | **Dates**: ${arrivalStr} to ${departureStr} (${adults} adults${children ? `, ${children} children` : ''})`,
+              `**Contact**: ${guestPhone} ${email ? `| ${email}` : ''}`,
+              specialRequests ? `**Special Requests**: ${specialRequests}` : 'No special requests specified.',
+            ],
+            facts: [
+              ['Reservation Code', bookingResult.code],
+              ['Status', 'CONFIRMED (Pay at premises / 48h hold)'],
+              ['Suite', tr(rt.name)],
+            ],
+            action: {
+              label: 'View in PMS Admin',
+              url: `${env.ADMIN_URL || 'https://reberonhotel.com'}/reservations/${bookingResult.code}`,
+            },
+          });
+        }
+      } catch (err) {
+        this.log.warn(`Could not send staff notification email: ${err}`);
+      }
+
+      // Fetch the created reservation total
+      const resRecord = await this.prisma.reservation.findUnique({ where: { code: bookingResult.code } });
+      const totalStr = resRecord ? `${Number(resRecord.totalMinor).toLocaleString()} ${resRecord.currency}` : `${currency === 'USD' ? '$' : ''}Confirmed`;
+
+      const card: ConciergeCardDTO = {
+        type: 'reservation',
+        code: bookingResult.code,
+        status: 'CONFIRMED · 48-HR HOLD',
         roomName: tr(rt.name),
-        stayDates: `${arrivalStr} to ${departureStr} (${nights} nights)`,
-        totalUgx: `${Number(totalMinor).toLocaleString()} UGX`,
-        status: 'Complimentary 48-hour hold created in Reberon PMS',
-        checkoutUrl: paymentUrl,
-        instructions: 'Your room hold is secured. You can complete your deposit payment online or on arrival.',
-      }),
-      card,
-    };
+        arrival: arrivalStr,
+        departure: departureStr,
+        total: totalStr,
+        currency,
+        stayUrl,
+        receiptUrl: stayUrl,
+        paymentUrl,
+        actionUrl: stayUrl,
+        actionLabel: 'View & Print Stay Receipt',
+        secondaryActionUrl: paymentUrl,
+        secondaryActionLabel: 'Pay Deposit Online',
+      };
+
+      return {
+        toolCallId: id,
+        name: 'create_booking_hold',
+        output: JSON.stringify({
+          success: true,
+          reservationCode: bookingResult.code,
+          guestName,
+          roomName: tr(rt.name),
+          stayDates: `${arrivalStr} to ${departureStr}`,
+          status: 'Confirmed & held in Reberon PMS',
+          stayUrl,
+          receiptUrl: stayUrl,
+          paymentUrl,
+          instructions:
+            'Reservation is confirmed and secured in the PMS. The guest can view and print their official stay receipt and tax invoice using the stay link, or pay their deposit online. Staff have been alerted.',
+        }),
+        card,
+      };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.log.error(`Failed to execute booking.start in concierge: ${errMsg}`);
+      return {
+        toolCallId: id,
+        name: 'create_booking_hold',
+        output: JSON.stringify({
+          error: errMsg,
+          guestName,
+          room: tr(rt.name),
+          guidance: 'Inform the guest of the issue or offer an alternative room / dates.',
+        }),
+      };
+    }
   }
 
   /* ── 5. Claim Priority Waitlist ── */
