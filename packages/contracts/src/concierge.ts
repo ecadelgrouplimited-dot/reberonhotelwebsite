@@ -11,6 +11,7 @@ export interface ConciergeMessageDTO {
     function: { name: string; arguments: string };
   }[];
   cards?: ConciergeCardDTO[];
+  followUpQuestions?: string[];
   createdAt: string;
 }
 
@@ -22,8 +23,13 @@ export type ConciergeCardDTO =
       price: string;
       currency: string;
       imageUrl?: string;
+      galleryUrls?: string[];
       viewAspect?: string;
       bedSetup?: string;
+      actionUrl?: string;
+      actionLabel?: string;
+      secondaryActionUrl?: string;
+      secondaryActionLabel?: string;
     }
   | {
       type: 'quote';
@@ -35,6 +41,8 @@ export type ConciergeCardDTO =
       deposit: string;
       currency: string;
       inclusions: string[];
+      actionUrl?: string;
+      actionLabel?: string;
     }
   | {
       type: 'reservation';
@@ -46,6 +54,8 @@ export type ConciergeCardDTO =
       total: string;
       currency: string;
       paymentUrl?: string;
+      actionUrl?: string;
+      actionLabel?: string;
     }
   | {
       type: 'waitlist';
@@ -53,6 +63,8 @@ export type ConciergeCardDTO =
       guestName: string;
       preferredDates?: string;
       roomType?: string;
+      actionUrl?: string;
+      actionLabel?: string;
     }
   | {
       type: 'facility';
@@ -60,21 +72,31 @@ export type ConciergeCardDTO =
       name: string;
       hours?: string;
       imageUrl?: string;
+      galleryUrls?: string[];
       features: string[];
+      actionUrl?: string;
+      actionLabel?: string;
     }
   | {
       type: 'activity';
+      slug?: string;
       title: string;
       difficulty: string;
       duration: string;
       bestTime: string;
       notes: string;
+      imageUrl?: string;
+      galleryUrls?: string[];
+      actionUrl?: string;
+      actionLabel?: string;
     }
   | {
       type: 'handover';
       phone: string;
       whatsappUrl: string;
       message: string;
+      actionUrl?: string;
+      actionLabel?: string;
     };
 
 export const zConciergeChatInput = z.object({
@@ -92,4 +114,5 @@ export interface ConciergeChatResponseDTO {
   messages: ConciergeMessageDTO[];
   cards?: ConciergeCardDTO[];
   suggestedActions?: string[];
+  followUpQuestions?: string[];
 }

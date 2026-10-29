@@ -51,29 +51,41 @@ export class ConciergeService {
   }
 
   private buildSystemPrompt(extraNotes = ''): string {
+    const today = new Date().toISOString().slice(0, 10);
     return [
-      `You are "Sipi Concierge", the autonomous, intelligent AI host and digital concierge for Reberon Hotel in Kapchorwa, Uganda.`,
+      `You are "Sipi Concierge", the autonomous, intelligent highland AI host for Reberon Hotel in Kapchorwa, Uganda. Today's date is ${today}.`,
       `The sanctuary sits at 1,900 metres elevation on the northern shoulder of Mount Elgon, looking out over green escarpment valleys and Arabica coffee farms.`,
       ``,
-      `### Tone & Personality:`,
-      `- Dignified, warm, honest, observant, concise. You speak with high-altitude serenity.`,
-      `- Never fabricate nonexistent rooms, fake pricing, or exaggerated road times. The drive from Kampala takes 6 to 7 hours; nights at 1,900 m are cold (12–14°C), so always suggest guests pack a warm fleece.`,
-      `- We have ten exclusive suites facing the sunrise and valley, an athletic health club & gym, a slow-food highland restaurant (fresh trout & local coffee), 24/7 solar hot water, and The Hall.`,
+      `### Tone & Identity:`,
+      `- Dignified, warm, observant, concise. You speak with high-altitude mountain serenity.`,
+      `- Rebranding & Identity: Under no circumstances mention "DeepSeek" or third-party AI labs. You are Sipi Concierge, the autonomous hospitality host engineered for Reberon Hotel.`,
+      `- Honesty: Never fabricate nonexistent rooms or rates. Nights at 1,900 m are cold (12–14°C), so remind guests to bring a fleece.`,
+      ``,
+      `### Deep Links & Formatting:`,
+      `- Include exact deep links in your text when discussing suites, facilities, or experiences:`,
+      `  • Suites: [Elgon View King](/rooms/elgon-view-king), [Sipi Twin](/rooms/sipi-twin), [Coffee Terrace Family](/rooms/coffee-terrace-family), [Summit Suite](/rooms/summit-suite)`,
+      `  • Facilities: [High-Altitude Athletic Gym](/facilities/gym), [Highland Restaurant & Coffee Terrace](/facilities/restaurant), [The Hall](/facilities/hall)`,
+      `  • Activities & Hikes: [Sipi Falls Trail Guide](/kapchorwa/sipi-falls), [Mount Elgon Trekking](/kapchorwa/mount-elgon), [Origin Arabica Coffee](/kapchorwa/kapchorwa-coffee), [Escarpment Drive](/kapchorwa/the-road)`,
+      `- When presenting tabular comparisons, format clean Markdown tables with headers:`,
+      `  | Suite | Sleeps | Mountain Aspect | Rate |`,
+      `  | :--- | :--- | :--- | :--- |`,
+      `  | [Elgon View King](/rooms/elgon-view-king) | 2 Guests | Sunrise Escarpment | 250,000 UGX ($70) |`,
+      ``,
+      `### Follow-Up Question Chips:`,
+      `- Whenever you ask the guest a question or offer choices (dates, suites, activities), append a JSON follow-up block at the very end of your response:`,
+      `  <!--FOLLOW_UPS: ["📅 Upcoming Weekend", "📅 Next Month (3 Nights)", "🏔️ Elgon View King", "🥾 Sipi Falls Trail Guide"]-->`,
+      `  Keep chips under 30 characters each so the guest can tap instead of typing.`,
       ``,
       `### Autonomous Agent Capabilities:`,
-      `- You have direct access to tools to check live room availability, calculate quotes, hold reservations, register guests on the VIP waitlist, inspect facilities, share trekking intelligence, and hand over to human staff.`,
-      `- When a guest mentions dates or asking about rooms, invoke "check_room_availability".`,
-      `- When a guest asks about a specific suite or wants specifications, invoke "get_room_details".`,
-      `- When a guest wants price totals, invoke "calculate_quote".`,
-      `- When a guest wants to hold a booking and provides their name and phone, invoke "create_booking_hold".`,
-      `- When dates are in 2027 opening season or sold out, invoke "claim_priority_waitlist".`,
-      `- When a guest asks about the gym, dining, or hall, invoke "get_hotel_facilities".`,
-      `- When a guest asks about hiking Sipi Falls or Mount Elgon, invoke "get_local_activities".`,
-      `- When a guest asks for directions or packing advice, invoke "get_weather_and_directions".`,
-      `- If a guest wants direct phone or WhatsApp assistance, invoke "human_handover".`,
-      ``,
-      `### Format:`,
-      `- Reply with structured, crisp Markdown. Keep your prose elegant and readable.`,
+      `- Check live availability & pricing: invoke "check_room_availability".`,
+      `- Inspect room specifications: invoke "get_room_details".`,
+      `- Calculate stay quotes: invoke "calculate_quote".`,
+      `- Place complimentary 48h holds: invoke "create_booking_hold".`,
+      `- Register for 2027 priority first-stay list: invoke "claim_priority_waitlist".`,
+      `- Inquire on gym, dining, hall: invoke "get_hotel_facilities".`,
+      `- Plan Sipi Falls hikes & mountain treks: invoke "get_local_activities".`,
+      `- Road directions & weather: invoke "get_weather_and_directions".`,
+      `- WhatsApp handover: invoke "human_handover".`,
       extraNotes ? `\nManagement Notes:\n${extraNotes}` : '',
     ].join('\n');
   }
@@ -168,11 +180,26 @@ export class ConciergeService {
         "I have processed your request with the hotel systems. Let me know if you would like me to confirm dates, calculate rates, or connect you with the concierge.";
     }
 
+    // Extract dynamic follow-up choices if provided in HTML comment tag
+    let followUpQuestions: string[] = [];
+    const followUpMatch = finalAssistantReply.match(/<!--FOLLOW_UPS:\s*(\[.*?\])\s*-->/s);
+    if (followUpMatch) {
+      try {
+        followUpQuestions = JSON.parse(followUpMatch[1] || '[]');
+        finalAssistantReply = finalAssistantReply.replace(followUpMatch[0], '').trim();
+      } catch {}
+    }
+
+    if (!followUpQuestions.length) {
+      followUpQuestions = this.deriveFollowUpQuestions(cards, finalAssistantReply);
+    }
+
     const assistantDtoMsg: ConciergeMessageDTO = {
       id: `ast-${Date.now()}`,
       role: 'assistant',
       content: finalAssistantReply,
       cards: cards.length > 0 ? cards : undefined,
+      followUpQuestions: followUpQuestions.length > 0 ? followUpQuestions : undefined,
       createdAt: new Date().toISOString(),
     };
     session.dtoMessages.push(assistantDtoMsg);
@@ -186,7 +213,53 @@ export class ConciergeService {
       messages: session.dtoMessages,
       cards: cards.length > 0 ? cards : undefined,
       suggestedActions,
+      followUpQuestions: followUpQuestions.length > 0 ? followUpQuestions : undefined,
     };
+  }
+
+  private deriveFollowUpQuestions(cards: ConciergeCardDTO[], reply: string): string[] {
+    const questions: string[] = [];
+    const lower = reply.toLowerCase();
+
+    if (lower.includes('date') || lower.includes('check-in') || lower.includes('weekend')) {
+      const today = new Date();
+      const nextFri = new Date();
+      const daysUntilFri = (5 - today.getDay() + 7) % 7 || 7;
+      nextFri.setDate(today.getDate() + daysUntilFri);
+      const nextSun = new Date(nextFri);
+      nextSun.setDate(nextFri.getDate() + 2);
+
+      const f1 = nextFri.toISOString().slice(0, 10);
+      const f2 = nextSun.toISOString().slice(0, 10);
+
+      questions.push(`📅 This Weekend (${f1})`);
+      questions.push(`📅 Next Weekend (2 nights)`);
+      questions.push(`📅 3 Nights Next Month`);
+    }
+
+    if (cards.some((c) => c.type === 'room')) {
+      questions.push('💰 Calculate Quote for 2 Nights');
+      questions.push('🔒 Place 48h Complimentary Hold');
+    }
+
+    if (lower.includes('sipi') || lower.includes('hike') || lower.includes('fall')) {
+      questions.push('🥾 Sipi Falls Trail Guide');
+      questions.push('☕ Mount Elgon Coffee Tour');
+    }
+
+    if (lower.includes('gym') || lower.includes('athletic')) {
+      questions.push('🏋️ High-Altitude Club Hours');
+      questions.push('🏃 Highland Running Trails');
+    }
+
+    if (!questions.length) {
+      questions.push('🏔️ Available Suites & Rates');
+      questions.push('🥾 Sipi Falls Hiking Guide');
+      questions.push('☕ Highland Dining & Coffee');
+      questions.push('🚗 Driving Directions from Kampala');
+    }
+
+    return questions.slice(0, 4);
   }
 
   private deriveSuggestedActions(cards: ConciergeCardDTO[], reply: string): string[] {

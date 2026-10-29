@@ -33,7 +33,7 @@ export class ConciergeController {
       title: 'Highland Sanctuary AI Host',
       elevation: '1,900 m ASL',
       configured: isConfigured,
-      model: config.model,
+      engine: 'Sipi Concierge Intelligence',
     };
   }
 

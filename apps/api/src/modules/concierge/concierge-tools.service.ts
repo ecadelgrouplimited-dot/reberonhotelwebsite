@@ -286,7 +286,12 @@ export class ConciergeToolsService {
           price: currency === 'USD' ? `$${first.fromPriceUsd || 120}` : `${Number(first.fromPriceUgx || 450000).toLocaleString()} UGX`,
           currency,
           imageUrl: getMediaUrl(first.hero?.id),
+          galleryUrls: (first.galleryIds || []).slice(0, 3).map((gid: string) => getMediaUrl(gid)).filter(Boolean) as string[],
           viewAspect: tr(first.view, 'Mount Elgon Ridge View'),
+          actionUrl: `/rooms/${first.slug}`,
+          actionLabel: `Reserve ${tr(first.name)}`,
+          secondaryActionUrl: `/book?room=${first.slug}`,
+          secondaryActionLabel: 'Instant 48h Hold',
         }
       : undefined;
 
@@ -336,8 +341,13 @@ export class ConciergeToolsService {
       price: rt.fromPriceUgx ? `${Number(rt.fromPriceUgx).toLocaleString()} UGX` : '$120',
       currency: 'UGX',
       imageUrl: getMediaUrl(rt.hero?.id),
+      galleryUrls: (rt.galleryIds || []).slice(0, 3).map((gid: string) => getMediaUrl(gid)).filter(Boolean) as string[],
       viewAspect: tr(rt.view, 'Mount Elgon Ridge View'),
       bedSetup: `${rt.sleepsAdults} adults, ${rt.sleepsChildren} children`,
+      actionUrl: `/book?room=${rt.slug}`,
+      actionLabel: `Book ${tr(rt.name)}`,
+      secondaryActionUrl: `/rooms/${rt.slug}`,
+      secondaryActionLabel: 'View Floor Plan & Photos',
     };
 
     return {
@@ -402,6 +412,8 @@ export class ConciergeToolsService {
         'Access to high-altitude recovery gym & pine running trails',
         'All regional local taxes included — no hidden charges',
       ],
+      actionUrl: `/book?room=${rt?.slug || ''}&arrival=${arrival}&departure=${departure}`,
+      actionLabel: 'Hold Suite at This Rate',
     };
 
     return {
@@ -502,6 +514,8 @@ export class ConciergeToolsService {
       total: `${Number(totalMinor).toLocaleString()} UGX`,
       currency: 'UGX',
       paymentUrl,
+      actionUrl: paymentUrl,
+      actionLabel: 'Complete Deposit Online',
     };
 
     return {
@@ -557,6 +571,8 @@ export class ConciergeToolsService {
       guestName,
       preferredDates,
       roomType: roomTypePreference,
+      actionUrl: '/rising',
+      actionLabel: 'Track Sanctuary Rising',
     };
 
     return {
@@ -576,41 +592,27 @@ export class ConciergeToolsService {
   /* ── 6. Hotel Facilities ── */
   private async handleGetFacilities(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
     const category = String(args.category || 'all');
-    const facilities = [
-      {
-        slug: 'hall',
-        name: 'The Hall (Community & Team Space)',
-        hours: '06:00 – 22:00',
-        features: ['40-seat timber-vaulted hall', 'Athletic team briefings', 'AV screen & sound', 'Private terrace overlooking gardens'],
-      },
-      {
-        slug: 'gym',
-        name: 'High-Altitude Athletic Club & Gym',
-        hours: '06:00 – 21:00',
-        features: ['Concept2 rowing machines', 'Olympic lifting rigs & bumper plates', 'SkiErg & stationary bikes', 'Altitude 1,900 m endurance training'],
-      },
-      {
-        slug: 'dining',
-        name: 'Highland Restaurant & Coffee Terrace',
-        hours: '06:30 – 21:30',
-        features: ['Fresh Mount Elgon river trout', 'Organic local Malewa (bamboo shoots)', 'Single-origin washed Arabica coffee', 'Open-air mist terrace'],
-      },
-      {
-        slug: 'wellness',
-        name: 'Solar Hydrothermal Recovery & Showers',
-        hours: '24 Hours',
-        features: ['Continuous solar-thermal hot water', 'Deep recovery soaking tubs', 'High-pressure rainwater showers', '0% single-use plastic policy'],
-      },
-    ];
+    const dbFacilities = await this.prisma.facility.findMany({
+      where: { status: { not: 'HIDDEN' }, deletedAt: null },
+      orderBy: { order: 'asc' },
+    });
 
-    const matched = category === 'all' ? facilities : facilities.filter((f) => f.slug.includes(category));
-    const card: ConciergeCardDTO | undefined = matched[0]
+    const matched = category === 'all'
+      ? dbFacilities
+      : dbFacilities.filter((f) => f.slug.toLowerCase().includes(category.toLowerCase()));
+
+    const target = matched[0] || dbFacilities[0];
+    const card: ConciergeCardDTO | undefined = target
       ? {
           type: 'facility',
-          slug: matched[0].slug,
-          name: matched[0].name,
-          hours: matched[0].hours,
-          features: matched[0].features,
+          slug: target.slug,
+          name: tr(target.name),
+          hours: '06:00 – 22:00',
+          imageUrl: getMediaUrl(target.mediaIds?.[0]),
+          galleryUrls: (target.mediaIds || []).slice(0, 3).map((mid: string) => getMediaUrl(mid)).filter(Boolean) as string[],
+          features: [tr(target.summary) || 'High-altitude mountain facility'],
+          actionUrl: `/facilities/${target.slug}`,
+          actionLabel: `Explore ${tr(target.name)}`,
         }
       : undefined;
 
@@ -619,7 +621,12 @@ export class ConciergeToolsService {
       name: 'get_hotel_facilities',
       output: JSON.stringify({
         altitude: '1,900 m on Mount Elgon ridge',
-        facilities: matched,
+        facilities: dbFacilities.map((f) => ({
+          slug: f.slug,
+          name: tr(f.name),
+          summary: tr(f.summary),
+          url: `/facilities/${f.slug}`,
+        })),
       }),
       card,
     };
@@ -628,51 +635,39 @@ export class ConciergeToolsService {
   /* ── 7. Local Activities ── */
   private async handleGetActivities(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
     const activity = String(args.activity || 'all');
-    const guide = [
-      {
-        title: 'Sipi Falls 3-Tier Hike',
-        difficulty: 'Moderate (steep stairs and green valley trails)',
-        duration: '2.5 to 4 hours',
-        bestTime: 'Morning (08:00 – 11:00) when mist catches rainbow light',
-        notes: '20 minutes drive from hotel. Guide fee ~40,000–60,000 UGX. Walking poles and light rain jacket recommended.',
-      },
-      {
-        title: 'Mount Elgon Peak & Caldera Trek',
-        difficulty: 'Challenging (high-altitude wilderness trekking)',
-        duration: '1 to 4 days (Wagagai Peak at 4,321 m)',
-        bestTime: 'Dry seasons: Dec–March and June–August',
-        notes: 'Departing from Kapkwai Forest Exploration Centre. UWA ranger escort required.',
-      },
-      {
-        title: 'Mount Elgon Origin Coffee Experience',
-        difficulty: 'Easy & Leisurely',
-        duration: '1.5 to 2 hours',
-        bestTime: 'Morning or late afternoon',
-        notes: 'Walk through smallholder Arabica farms on volcanic soil between 1,600 m and 2,200 m. Pick, pulp, roast, and pour your own cup.',
-      },
-      {
-        title: 'Championship High-Altitude Running Trails',
-        difficulty: 'Customizable (from gentle pine loops to steep escarpment repeats)',
-        duration: '30 mins to 2 hours',
-        bestTime: '06:30 AM before the sun warms the ridge',
-        notes: 'Step directly from the Reberon compound onto high-altitude dirt trails frequented by Uganda’s world-champion distance runners.',
-      },
-    ];
+    const dbDestinations = await this.prisma.destination.findMany({
+      where: { status: { not: 'HIDDEN' }, deletedAt: null },
+      orderBy: { order: 'asc' },
+    });
 
-    const card: ConciergeCardDTO = {
-      type: 'activity',
-      title: guide[0]!.title,
-      difficulty: guide[0]!.difficulty,
-      duration: guide[0]!.duration,
-      bestTime: guide[0]!.bestTime,
-      notes: guide[0]!.notes,
-    };
+    const targetDest = dbDestinations.find((d) => d.slug.includes(activity)) || dbDestinations[0];
+
+    const card: ConciergeCardDTO | undefined = targetDest
+      ? {
+          type: 'activity',
+          slug: targetDest.slug,
+          title: tr(targetDest.name) || 'Sipi Falls Trail Guide',
+          difficulty: targetDest.slug === 'mount-elgon' ? 'Challenging (High-Altitude Trek)' : 'Moderate Walk',
+          duration: targetDest.slug === 'mount-elgon' ? '1 to 4 days' : '2.5 to 3.5 hours',
+          bestTime: 'Morning (08:00 – 11:00)',
+          notes: tr(targetDest.tagline) || 'Guided highland trail with local community rangers.',
+          imageUrl: getMediaUrl(targetDest.heroMediaId),
+          galleryUrls: (targetDest.galleryIds || []).slice(0, 3).map((gid: string) => getMediaUrl(gid)).filter(Boolean) as string[],
+          actionUrl: `/kapchorwa/${targetDest.slug}`,
+          actionLabel: `Read ${tr(targetDest.name)} Trail Guide`,
+        }
+      : undefined;
 
     return {
       toolCallId: id,
       name: 'get_local_activities',
       output: JSON.stringify({
-        activities: guide,
+        activities: dbDestinations.map((d) => ({
+          slug: d.slug,
+          name: tr(d.name),
+          tagline: tr(d.tagline),
+          url: `/kapchorwa/${d.slug}`,
+        })),
         hotelAssistance: 'Reberon concierge arranges trusted community guides and trail transport on request.',
       }),
       card,
@@ -681,6 +676,18 @@ export class ConciergeToolsService {
 
   /* ── 8. Weather & Directions ── */
   private async handleGetWeatherAndDirections(id: string): Promise<ToolExecutionResult> {
+    const card: ConciergeCardDTO = {
+      type: 'activity',
+      slug: 'the-road',
+      title: 'Scenic Escarpment Drive to Kapchorwa (295 km)',
+      difficulty: 'Smooth Tarmac Highway (No 4x4 needed)',
+      duration: '6 to 7 hours driving time',
+      bestTime: 'Daytime driving for escarpment views',
+      notes: 'Route: Kampala → Jinja (Nile Bridge) → Iganga → Mbale → Kapchorwa. Gated compound with overnight security and lit vehicle bays.',
+      actionUrl: 'https://maps.google.com/?q=Reberon+Hotel+Kapchorwa',
+      actionLabel: 'Open Google Maps Navigation',
+    };
+
     return {
       toolCallId: id,
       name: 'get_weather_and_directions',
@@ -696,6 +703,7 @@ export class ConciergeToolsService {
           parking: 'Secure gated compound with overnight security and lit vehicle bays.',
         },
       }),
+      card,
     };
   }
 
@@ -733,6 +741,8 @@ export class ConciergeToolsService {
       phone: '+256 760 512 691',
       whatsappUrl,
       message: `Connect directly with Denis Mayamba and the highland team on WhatsApp for bespoke arrangements.`,
+      actionUrl: whatsappUrl,
+      actionLabel: 'Chat with Denis Mayamba',
     };
 
     return {

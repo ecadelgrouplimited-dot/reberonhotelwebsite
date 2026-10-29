@@ -76,10 +76,10 @@ export class DeepSeekClient {
     const { apiKey, baseUrl, model, temperature: defaultTemp } = await this.getConfig();
 
     if (!apiKey) {
-      this.log.warn('DeepSeek API key is not configured in Settings → Integrations or environment.');
+      this.log.warn('Highland Intelligence inference API key is not configured in Settings → Integrations or environment.');
       return {
         content:
-          "Hello! I am Sipi Concierge. The DeepSeek API is currently being configured by the hotel management. You can explore our rooms and facilities, or speak directly to our human concierge on WhatsApp at +256 760 512 691.",
+          "Hello! I am Sipi Concierge, your Mount Elgon sanctuary host. Live room availability, real-time rates, and booking hold features are ready. How can I assist you with suites, Sipi Falls hikes, or dining today? You can also connect directly with Denis Mayamba and the desk team on WhatsApp at +256 760 512 691.",
         model: 'unconfigured-fallback',
       };
     }
