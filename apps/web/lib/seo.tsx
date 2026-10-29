@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { MediaRef, SeoDTO, SiteDTO, LText } from '@reberon/contracts';
 import { t } from '@reberon/contracts';
+import { cleanMediaCaption } from './media-clean';
 
 export const WEB_URL = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000';
 
@@ -24,7 +25,16 @@ export function buildMetadata(site: SiteDTO, opts: { title?: LText | string; seo
       description,
       url: opts.path,
       locale: 'en_UG',
-      images: shareUrl ? [{ url: shareUrl, width: 1280, height: Math.round(1280 * ((share!.height ?? 800) / (share!.width ?? 1280))), alt: t(share!.alt) }] : undefined,
+      images: shareUrl
+        ? [
+            {
+              url: shareUrl,
+              width: 1280,
+              height: Math.round(1280 * ((share!.height ?? 800) / (share!.width ?? 1280))),
+              alt: cleanMediaCaption(null, t(share!.alt)) || pageTitle || site.name,
+            },
+          ]
+        : undefined,
     },
     twitter: { card: 'summary_large_image', title: pageTitle || site.seo.defaultTitle, description, images: shareUrl ? [shareUrl] : undefined },
   };
