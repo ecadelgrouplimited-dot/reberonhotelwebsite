@@ -53,19 +53,38 @@ export function Story({ block, media, site, ctx }: BlockProps<H & { body?: LRich
 /* ───── Stats ───── */
 export function Stats({ block }: BlockProps<{ items?: { value: string; label: LText }[] }>) {
   const items = block.data.items ?? [];
+  const count = items.length;
+  const colsClass =
+    count <= 3
+      ? 'grid-cols-1 sm:grid-cols-3'
+      : count <= 4
+      ? 'grid-cols-2 md:grid-cols-4'
+      : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6';
+
   return (
     <div className="container-x">
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-12 border-y border-line py-12 md:grid-cols-4 md:py-16">
-        {items.map((it, i) => (
-          <div key={i} data-reveal style={{ ['--i' as string]: i }} className="md:border-l md:border-line md:pl-8 md:first:border-l-0 md:first:pl-0">
-            <dt className="sr-only">{t(it.label)}</dt>
-            <dd>
-              <span className="block font-display text-step-4 leading-none tabular text-fg">{it.value}</span>
-              <span className="mt-3 block max-w-[16rem] text-sm leading-relaxed text-fg-muted">{t(it.label)}</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <div className="rounded-[var(--r-xl)] border border-line bg-surface/50 p-6 backdrop-blur-xs sm:p-10 shadow-[var(--shadow-soft)]">
+        <dl className={cn('grid gap-6 sm:gap-8', colsClass)}>
+          {items.map((it, i) => (
+            <div
+              key={i}
+              data-reveal
+              style={{ ['--i' as string]: i }}
+              className="group flex flex-col justify-between rounded-2xl border border-line/60 bg-surface-2/40 p-5 transition-all duration-300 hover:border-brand/40 hover:bg-surface-2"
+            >
+              <dt className="sr-only">{t(it.label)}</dt>
+              <dd>
+                <span className="block font-display text-step-3 font-semibold leading-none tabular text-brand tracking-tight transition-transform duration-300 group-hover:scale-105">
+                  {it.value}
+                </span>
+                <span className="mt-3 block text-xs leading-relaxed text-fg-muted font-medium">
+                  {t(it.label)}
+                </span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     </div>
   );
 }
@@ -271,15 +290,31 @@ export function Features({ block }: BlockProps<H & { items?: { icon?: string; ti
   return (
     <div className={cn('container-x', list && 'grid gap-12 lg:grid-cols-[1fr_1.4fr]')}>
       <SectionHeading eyebrow={block.data.eyebrow} heading={block.data.heading} intro={block.data.intro} size="md" className={cn(!list && 'mb-14')} />
-      <ul className={cn(list ? 'divide-y divide-line border-y border-line' : 'grid gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-3')}>
+      <ul className={cn(list ? 'divide-y divide-line border-y border-line' : 'grid gap-6 sm:grid-cols-2 lg:grid-cols-3')}>
         {items.map((it, i) => (
-          <li key={i} className={cn(list ? 'grid grid-cols-[auto_1fr] gap-6 py-7' : '')} data-reveal style={{ ['--i' as string]: i % 3 }}>
-            <span className={cn('grid size-12 place-items-center rounded-full bg-surface-2 text-brand', !list && 'mb-6')}>
-              <Icon name={it.icon} className="size-5" />
-            </span>
+          <li
+            key={i}
+            className={cn(
+              list
+                ? 'grid grid-cols-[auto_1fr] gap-6 py-7'
+                : 'group relative flex flex-col justify-between overflow-hidden rounded-[var(--r-xl)] border border-line bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:border-brand/40 hover:bg-surface-2 hover:shadow-[var(--shadow-lift)]',
+            )}
+            data-reveal
+            style={{ ['--i' as string]: i % 3 }}
+          >
             <div>
-              <h3 className="font-sans text-step-1 font-semibold tracking-normal">{t(it.title)}</h3>
-              {t(it.text) && <p className="mt-2 leading-relaxed text-fg-muted">{t(it.text)}</p>}
+              <span
+                className={cn(
+                  'grid size-12 place-items-center rounded-2xl border border-line-strong bg-surface-2 text-brand transition-colors group-hover:border-brand/40 group-hover:bg-brand/10',
+                  !list && 'mb-6',
+                )}
+              >
+                <Icon name={it.icon} className="size-5.5" />
+              </span>
+              <h3 className="font-display text-step-1 font-normal text-fg transition-colors group-hover:text-brand">
+                {t(it.title)}
+              </h3>
+              {t(it.text) && <p className="mt-3 text-sm leading-relaxed text-fg-muted">{t(it.text)}</p>}
             </div>
           </li>
         ))}

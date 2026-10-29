@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
+    "migrate:about": "tsx seed/migrate-about.ts",
     "seed": "tsx seed/index.ts",
     "seed:ref": "tsx seed/index.ts --reference-only",
     "seed:refresh": "tsx seed/index.ts --refresh",

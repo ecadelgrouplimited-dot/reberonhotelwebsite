@@ -192,27 +192,97 @@ export async function seedPages(refs: Refs, ownerId: string) {
     'ABOUT',
     'About the house',
     [
-      block('hero', { eyebrow: en('About the house'), heading: en('A small hotel, built by people from the mountain.'), sub: en('Who built it, why Kapchorwa, and what you can expect when you arrive.'), media: [aboutHero] }, { variant: 'split' }),
-      block('story', {
-        eyebrow: en('Who built it'),
-        heading: en('Denis, the builders, and a long view'),
-        body: rt.md('Reberon is owned and built by Denis Mayamba, working with masons, carpenters and electricians from Kapchorwa and Mbale. The hotel technology suite and digital platform are created and managed by [Ecadel Group Limited](https://ecadelgroup.com).\n\nWe set out to build something modest and well made: ten rooms, not fifty; a restaurant that serves the district’s food; a hall the district can use. The view did the rest.'),
-        media: aboutStory,
-      }, { variant: 'left' }),
-      block('features', {
-        eyebrow: en('What to expect'),
-        heading: en('Our promises, plainly'),
+      block(
+        'hero',
+        {
+          eyebrow: en('Kapchorwa · 1,900 m · Mount Elgon'),
+          heading: en('A mountain sanctuary, built by people of Elgon.'),
+          sub: en('Ten panoramic suites, honest highland hospitality, and a quiet retreat above the clouds in Kapchorwa. Built with local hands, powered by mountain sun and fresh spring water.'),
+          media: [aboutHero],
+          ctas: [
+            cta('Explore rooms', 'link', 'primary', '/rooms'),
+            cta('WhatsApp concierge', 'whatsapp', 'secondary'),
+            cta('Our facilities', 'link', 'ghost', '/facilities'),
+          ],
+          showScrollCue: true,
+        },
+        { variant: 'split' },
+      ),
+      block('stats', {
         items: [
-          { icon: 'eye', title: en('Only what exists'), text: en('If a facility is not finished, we say so. Drawings are labelled as drawings.') },
-          { icon: 'clock', title: en('Hours spoken honestly'), text: en('The road takes six to seven hours. We will not tell you four.') },
-          { icon: 'cloud', title: en('Weather allowed to be weather'), text: en('Some mornings the mountain is in cloud. Some guests come for that.') },
-          { icon: 'hand-coins', title: en('The price you see is the price you pay'), text: en('Taxes stated clearly. No silent currency conversion.') },
+          { value: '1,900 m', label: en('altitude on Mount Elgon shoulder, pure cool mountain air') },
+          { value: '10 Suites', label: en('exclusive guest rooms framing panoramic ridge & valley views') },
+          { value: '100%', label: en('local stone masons, carpenters & regional artisans') },
+          { value: '24/7', label: en('solar energy & gravity-fed mountain spring water system') },
+          { value: '0 Plastic', label: en('commitment to refillable glass and mountain conservation') },
+          { value: '6:30 AM', label: en('single-origin Arabica brewed fresh before trail departure') },
         ],
-      }, { variant: 'list', tone: 'warm' }),
-      block('gallery', { eyebrow: en('As drawn'), heading: en('The house before it is finished'), media: aboutGallery }, { variant: 'filmstrip' }),
-      block('ctaBand', { heading: en('Watch it rise'), sub: en('We post the site as it is, every few weeks.'), ctas: [cta('See the progress', 'link', 'primary', '/rising')] }),
+      }),
+      block(
+        'story',
+        {
+          eyebrow: en('The People & The Vision'),
+          heading: en('Denis, local hands, and a quiet sanctuary'),
+          body: rt.md('Reberon was conceived by Denis Mayamba as a sanctuary of quiet dignity on the slopes of Mount Elgon. Rather than imposing a standard city structure, the house is hand-shaped by stone masons, carpenters, and metalworkers from Kapchorwa and Mbale.\n\nEvery timber beam, volcanic basalt stone, and window opening is placed to respect the mountain ridge. Our digital guest experience and hotel infrastructure are engineered by [Ecadel Group Limited](https://ecadelgroup.com), blending high-altitude serenity with dependable modern connectivity.\n\nWe are building a place that honours the rhythm of Kapchorwa: early mornings in the mist, warm fires at night, and food grown within sight of the terrace.'),
+          media: aboutStory,
+          ctas: [
+            cta('Claim a first stay', 'waitlist', 'primary'),
+            cta('Message Denis & the team', 'whatsapp', 'secondary'),
+          ],
+        },
+        { variant: 'left' },
+      ),
+      block(
+        'features',
+        {
+          eyebrow: en('The Highland Ethos'),
+          heading: en('Built for the mountain, not despite it'),
+          intro: en('Six guiding commitments that define life, hospitality, and comfort at Reberon Hotel.'),
+          items: [
+            { icon: 'mountain-snow', title: en('Athletic heritage & trails'), text: en('Kapchorwa is the home of world champions. Step straight onto high-altitude trails, pine forest runs, and quiet escarpment walks.') },
+            { icon: 'utensils', title: en('Slow highland food'), text: en('Fresh mountain trout, Elgon bamboo shoots (malewa), organic vegetables, and wholesome meals prepared for hungry walkers.') },
+            { icon: 'coffee', title: en('Origin Arabica coffee'), text: en('Cultivated on the rich volcanic soils between 1,600 m and 2,200 m. Picked, roasted, and poured fresh every morning.') },
+            { icon: 'zap', title: en('Resilient solar & water'), text: en('Continuous hot water from solar thermal systems, battery storage, and gravity-fed spring lines tested for clarity.') },
+            { icon: 'users', title: en('The Hall for community'), text: en('A warm 40-seat space equipped for athletic team briefings, masterclasses, cultural gatherings, and family celebrations.') },
+            { icon: 'shield-check', title: en('Honest promises'), text: en('If a facility is under construction, we declare it. No surprises, no hidden levies, and travel guidance you can rely on.') },
+          ],
+        },
+        { variant: 'grid', tone: 'warm' },
+      ),
+      block(
+        'nowStrip',
+        {
+          heading: en('Right now on the ridge'),
+          intro: en('Kapchorwa sits 700 metres higher than the plateau — pack a fleece for the evening.'),
+          showForecast: true,
+          compareKampala: true,
+        },
+        { variant: 'band' },
+      ),
+      block(
+        'gallery',
+        {
+          eyebrow: en('Craft & Architecture'),
+          heading: en('Spaces designed for light, stone, and horizon'),
+          media: aboutGallery,
+        },
+        { variant: 'mosaic' },
+      ),
+      block(
+        'ctaBand',
+        {
+          heading: en('Come and see the mountain.'),
+          sub: en('Reserve your place for our 2027 opening season or speak to our team today. No deposit required for the priority waitlist.'),
+          ctas: [
+            cta('Claim a first stay', 'waitlist', 'primary'),
+            cta('Ask a question', 'enquire', 'secondary'),
+            cta('WhatsApp concierge', 'whatsapp', 'ghost'),
+          ],
+          media: aboutHero,
+        },
+      ),
     ],
-    { description: 'Who built Reberon Hotel, why Kapchorwa, and what a guest can expect.' },
+    { description: 'Who built Reberon Hotel, why Kapchorwa, and the highland ethos behind our 10-suite Mount Elgon sanctuary.' },
     ownerId,
   );
 
