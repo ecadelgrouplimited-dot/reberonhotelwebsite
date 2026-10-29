@@ -66,7 +66,7 @@ export const facilityConfig: EntityConfig = {
   noun: 'Facility',
   crumbs: [{ label: 'Website' }, { label: 'Facilities', href: '/website/facilities' }],
   title: (v) => en(v.name),
-  viewUrl: () => `${WEB_URL}/facilities`,
+  viewUrl: (v) => `${WEB_URL}/facilities/${v.slug}`,
   empty: { name: {}, slug: '', summary: {}, icon: 'building', mediaIds: [], status: 'AVAILABLE' },
   toInput: ({ media: _m, ...v }) => v,
   sections: [

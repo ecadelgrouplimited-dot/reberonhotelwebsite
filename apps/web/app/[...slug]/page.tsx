@@ -10,7 +10,7 @@ export async function generateStaticParams() {
   const pages = await api.pageIndex().catch(() => []);
   return pages
     .map((p) => p.path.replace(/^\//, ''))
-    .filter((p) => p && !/^(rooms|kapchorwa|rising)(\/|$)/.test(p))
+    .filter((p) => p && !/^(rooms|kapchorwa|rising|facilities\/)/.test(p))
     .map((p) => ({ slug: p.split('/') }));
 }
 

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ViewTransition } from 'react';
-import { ArrowUpRight, BedDouble, Maximize2, Mountain, Users } from 'lucide-react';
+import { ArrowUpRight, BedDouble, Images, Maximize2, Mountain, Users } from 'lucide-react';
 import type { AmenityDTO, Cta, FacilityDTO, LRich, LText, MediaRef, RoomTypeCardDTO } from '@reberon/contracts';
 import { t } from '@reberon/contracts';
 import { MediaImage } from '@/components/ui/media-image';
@@ -11,6 +11,7 @@ import { CtaButton } from '@/components/site/cta-button';
 import { Price } from '@/components/site/price';
 import { resolveCta } from '@/lib/cta';
 import { cn } from '@/lib/cn';
+import { getFacilityFeatures } from '@/lib/facility-features';
 import type { BlockProps } from './types';
 
 type H = { eyebrow?: LText; heading?: LText; intro?: LText };
@@ -170,27 +171,95 @@ export function Facilities({ block }: BlockProps<H, { facilities: FacilityDTO[] 
   return (
     <div className="container-x">
       <SectionHeading eyebrow={block.data.eyebrow} heading={block.data.heading} intro={block.data.intro} className="mb-14" />
-      <ul className="grid gap-px overflow-hidden rounded-[var(--r-lg)] border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((f, i) => (
-          <li key={f.id} className="group relative flex flex-col bg-bg p-7 transition-colors [.tone-warm_&]:bg-bg-warm" data-reveal="fade" style={{ ['--i' as string]: i % 3 }}>
-            <div className="flex items-start justify-between gap-4">
-              <span className="grid size-12 place-items-center rounded-full border border-line-strong text-brand">
-                <Icon name={f.icon} className="size-5" />
-              </span>
-              {f.status === 'COMING_SOON' && (
-                <span className="rounded-full border border-gold-400/50 bg-gold-400/10 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-gold-500 [.tone-moss_&]:text-gold-400">
-                  Being built
-                </span>
-              )}
-            </div>
-            <h3 className="mt-8 text-step-2">{t(f.name)}</h3>
-            <p className="mt-3 flex-1 text-fg-muted">{t(f.summary)}</p>
-            {f.media[0] && (
-              <MediaImage media={f.media[0]} sizes="(min-width:1024px) 30vw, 90vw" className="mt-6 aspect-[16/9] rounded-[var(--r-md)] opacity-90 transition-opacity group-hover:opacity-100" />
-            )}
-          </li>
-        ))}
-      </ul>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((f, i) => {
+          const features = getFacilityFeatures(f);
+          const isComingSoon = f.status === 'COMING_SOON';
+          return (
+            <Link
+              key={f.id}
+              href={`/facilities/${f.slug}`}
+              className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--r-xl)] border border-line bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:border-brand/40 hover:bg-surface-2 hover:shadow-[var(--shadow-lift)] focus-visible:outline-none cursor-pointer"
+              data-reveal="fade"
+              style={{ ['--i' as string]: i % 3 }}
+            >
+              <div>
+                {/* Header row with Icon, Badges and Hover Arrow */}
+                <div className="flex items-start justify-between gap-3">
+                  <span className="grid size-12 place-items-center rounded-2xl border border-line-strong bg-surface-2 text-brand transition-colors group-hover:border-brand/40 group-hover:bg-brand/10">
+                    <Icon name={f.icon} className="size-5.5" />
+                  </span>
+
+                  <div className="flex items-center gap-2">
+                    {isComingSoon ? (
+                      <span className="rounded-full border border-gold-400/50 bg-gold-400/10 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-gold-500">
+                        Being built
+                      </span>
+                    ) : (
+                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[0.68rem] font-semibold tracking-wider text-emerald-600 dark:text-emerald-400">
+                        Available
+                      </span>
+                    )}
+                    <span className="grid size-8 place-items-center rounded-full bg-surface-2 text-fg-muted transition-all duration-300 group-hover:bg-brand group-hover:text-basalt-950">
+                      <ArrowUpRight className="size-4 transition-transform duration-300 group-hover:rotate-45" />
+                    </span>
+                  </div>
+                </div>
+
+                {/* Title & Summary */}
+                <h3 className="mt-6 text-step-2 font-display text-fg transition-colors group-hover:text-brand">
+                  {t(f.name)}
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-fg-muted">
+                  {t(f.summary)}
+                </p>
+
+                {/* Actionable Feature Badges */}
+                <div className="mt-5 flex flex-wrap gap-1.5">
+                  {features.tags.slice(0, 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full border border-line/60 bg-surface-2/80 px-2.5 py-1 font-mono text-[11px] text-fg-muted"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Photo with count badge */}
+              <div className="mt-6">
+                {f.media[0] && (
+                  <div className="relative aspect-[16/10] overflow-hidden rounded-[var(--r-md)] bg-surface-2">
+                    <MediaImage
+                      media={f.media[0]}
+                      sizes="(min-width:1024px) 30vw, 90vw"
+                      className="size-full opacity-90 transition-all duration-500 group-hover:scale-105 group-hover:opacity-100"
+                    />
+                    {f.media.length > 1 && (
+                      <span className="absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full bg-basalt-950/80 px-2.5 py-1 font-mono text-[10px] text-mist-50 backdrop-blur-md">
+                        <Images className="size-3 text-brand" />
+                        <span>{f.media.length} Photos</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Card Footer: Explore Prompt & Action */}
+                <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3 text-xs">
+                  <span className="font-semibold text-brand inline-flex items-center gap-1">
+                    <span>Learn more &amp; view gallery</span>
+                    <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  </span>
+                  <span className="font-mono text-[11px] text-fg-subtle">
+                    {features.ctaIntent === 'EVENT' ? 'Event Space' : 'Sanctuary'}
+                  </span>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }

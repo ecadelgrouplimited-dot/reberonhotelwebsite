@@ -1,7 +1,7 @@
 import 'server-only';
 import { draftMode, cookies } from 'next/headers';
 import type {
-  SiteDTO, PageDTO, RoomTypeCardDTO, RoomTypeDetailDTO, DestinationCardDTO, DestinationDetailDTO, FacilityDTO, ProgressDTO, Paginated, LText, MeDTO,
+  SiteDTO, PageDTO, RoomTypeCardDTO, RoomTypeDetailDTO, DestinationCardDTO, DestinationDetailDTO, FacilityDTO, FacilityDetailDTO, ProgressDTO, Paginated, LText, MeDTO,
 } from '@reberon/contracts';
 
 const API = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -87,6 +87,7 @@ export const api = {
   roomTypes: () => get<RoomTypeCardDTO[]>('/room-types'),
   roomType: (slug: string) => get<RoomTypeDetailDTO>(`/room-types/${encodeURIComponent(slug)}`),
   facilities: () => get<FacilityDTO[]>('/facilities'),
+  facility: (slug: string) => get<FacilityDetailDTO>(`/facilities/${encodeURIComponent(slug)}`),
   destinations: () => get<DestinationCardDTO[]>('/destinations'),
   destination: (slug: string) => get<DestinationDetailDTO>(`/destinations/${encodeURIComponent(slug)}`),
   progress: (cursor?: string, limit = 20) => get<Paginated<ProgressDTO> & { percent: number | null }>(`/progress?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`),

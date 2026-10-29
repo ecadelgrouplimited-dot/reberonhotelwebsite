@@ -126,6 +126,10 @@ export interface FacilityDTO {
   media: MediaRef[];
 }
 
+export interface FacilityDetailDTO extends FacilityDTO {
+  related: FacilityDTO[];
+}
+
 export interface RouteStopDTO {
   id: string;
   name: LText;

@@ -1,5 +1,5 @@
 import { Controller, Get, Headers, Param, Query } from '@nestjs/common';
-import type { DestinationDetailDTO, PageDTO, Paginated, ProgressDTO, RoomTypeDetailDTO, Block } from '@reberon/contracts';
+import type { DestinationDetailDTO, FacilityDetailDTO, PageDTO, Paginated, ProgressDTO, RoomTypeDetailDTO, Block } from '@reberon/contracts';
 import { PrismaService } from '../../common/prisma.service.js';
 import { CacheService } from '../../common/cache.service.js';
 import { notFound } from '../../common/errors.js';
@@ -30,17 +30,19 @@ export class PublicContentController {
   @Get('pages')
   async pageIndex() {
     return this.cache.wrap('pages:index', ['pages'], TTL, async () => {
-      const [pages, rooms, dests, progress] = await Promise.all([
+      const [pages, rooms, dests, progress, facilities] = await Promise.all([
         this.prisma.page.findMany({ where: { status: 'PUBLISHED', deletedAt: null, kind: { not: 'SYSTEM' } }, select: { slug: true, updatedAt: true, draftSeo: true } }),
         this.prisma.roomType.findMany({ where: { status: 'PUBLISHED', deletedAt: null }, select: { slug: true, updatedAt: true } }),
         this.prisma.destination.findMany({ where: { status: 'PUBLISHED', deletedAt: null }, select: { slug: true, updatedAt: true } }),
         this.prisma.progressUpdate.findMany({ where: { status: 'PUBLISHED', deletedAt: null }, select: { slug: true, updatedAt: true } }),
+        this.prisma.facility.findMany({ where: { status: { not: 'HIDDEN' }, deletedAt: null }, select: { slug: true, updatedAt: true } }),
       ]);
       return [
         ...pages.filter((p) => !toSeo(p.draftSeo).noindex).map((p) => ({ path: `/${p.slug}`, updatedAt: p.updatedAt })),
         ...rooms.map((r) => ({ path: `/rooms/${r.slug}`, updatedAt: r.updatedAt })),
         ...dests.map((d) => ({ path: `/kapchorwa/${d.slug}`, updatedAt: d.updatedAt })),
         ...progress.map((p) => ({ path: `/rising/${p.slug}`, updatedAt: p.updatedAt })),
+        ...facilities.map((f) => ({ path: `/facilities/${f.slug}`, updatedAt: f.updatedAt })),
       ];
     });
   }
@@ -106,6 +108,25 @@ export class PublicContentController {
       const rows = await this.prisma.facility.findMany({ where: { status: { not: 'HIDDEN' }, deletedAt: null }, orderBy: { order: 'asc' } });
       const media = await this.resolver.mediaMap(rows.flatMap((f) => f.mediaIds));
       return rows.map((f) => toFacility(f, media));
+    });
+  }
+
+  @Get('facilities/:slug')
+  async facility(@Param('slug') slug: string): Promise<FacilityDetailDTO> {
+    return this.cache.wrap(`facility:${slug}`, [`facility:${slug}`, 'facilities', 'media'], TTL, async () => {
+      const f = await this.prisma.facility.findFirst({ where: { slug, status: { not: 'HIDDEN' }, deletedAt: null } });
+      if (!f) throw notFound('Facility');
+      const relatedRows = await this.prisma.facility.findMany({
+        where: { slug: { not: slug }, status: { not: 'HIDDEN' }, deletedAt: null },
+        orderBy: { order: 'asc' },
+        take: 3,
+      });
+      const allMediaIds = [...f.mediaIds, ...relatedRows.flatMap((r) => r.mediaIds)];
+      const media = await this.resolver.mediaMap(allMediaIds);
+      return {
+        ...toFacility(f, media),
+        related: relatedRows.map((r) => toFacility(r, media)),
+      };
     });
   }
 
