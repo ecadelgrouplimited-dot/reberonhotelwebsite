@@ -30,17 +30,39 @@ import {
   Info,
   Printer,
   CreditCard,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  Car,
+  Utensils,
+  Search,
+  Share2,
+  Download,
+  QrCode,
+  CalendarPlus,
 } from 'lucide-react';
 import type { ConciergeChatResponseDTO, ConciergeMessageDTO, ConciergeCardDTO } from '@reberon/contracts';
 import { cn } from '@/lib/cn';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
+const INTENT_TABS = [
+  { id: 'suites', label: 'Suites & Rates', icon: Mountain, prompt: 'What suites are available next weekend, and what are the rates?' },
+  { id: 'hikes', label: 'Sipi Falls Hikes', icon: Compass, prompt: 'Tell me about guided hiking at Sipi Falls and Mount Elgon.' },
+  { id: 'dining', label: 'Dining & Trout', icon: Utensils, prompt: 'What does the Highland Restaurant serve, and tell me about the Mount Elgon river trout.' },
+  { id: 'transfers', label: '4x4 Transfers', icon: Car, prompt: 'Can I arrange a private 4x4 airport transfer from Entebbe or Kampala to Kapchorwa?' },
+  { id: 'lookup', label: 'Check Booking', icon: Search, prompt: 'Can you look up my reservation status?' },
+  { id: 'weather', label: 'Weather & Packing', icon: MapPin, prompt: 'What is the altitude weather like and what should I pack for my stay?' },
+  { id: 'whatsapp', label: 'WhatsApp Desk', icon: MessageCircle, prompt: 'I want to speak directly with Denis Mayamba on WhatsApp.' },
+];
+
 const INITIAL_SUGGESTIONS = [
   { label: 'Check suite rates & availability', prompt: 'What suites are available next weekend, and what are the rates?' },
   { label: 'Hold a suite (48h complimentary)', prompt: 'I want to hold an Elgon View King suite for my upcoming stay.' },
   { label: 'Sipi Falls & hiking guide', prompt: 'Tell me about hiking the 3 waterfalls at Sipi Falls and what guides cost.' },
   { label: 'Highland dining & coffee', prompt: 'What local food and Arabica coffee experiences do you serve?' },
+  { label: 'Private 4x4 airport transfer', prompt: 'Can you arrange a private 4x4 transfer from Entebbe Airport to Kapchorwa?' },
   { label: 'Driving directions from Kampala', prompt: 'How do I drive from Kampala to Reberon Hotel and what is the road like?' },
   { label: 'WhatsApp concierge', prompt: 'Can I connect with Denis Mayamba or the team on WhatsApp?' },
 ];
@@ -54,8 +76,101 @@ export function SipiConciergeWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [hasSpeechRec, setHasSpeechRec] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // Check speech recognition support
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      setHasSpeechRec(Boolean(SpeechRecognition));
+    }
+  }, []);
+
+  // Play subtle mountain chime on message received
+  const playChime = () => {
+    try {
+      if (typeof window === 'undefined') return;
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.04, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {}
+  };
+
+  // Toggle voice speech recognition
+  const toggleListening = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (isListening) {
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      recognition.onstart = () => setIsListening(true);
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((r: any) => r[0].transcript)
+          .join('');
+        setInput(transcript);
+      };
+      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => setIsListening(false);
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setIsListening(false);
+    }
+  };
+
+  // Speak assistant message aloud
+  const speakMessage = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const clean = text
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[#*`_~|]/g, '')
+      .slice(0, 400);
+
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
 
   // Initialize session
   useEffect(() => {
@@ -134,6 +249,7 @@ export function SipiConciergeWidget() {
       }
 
       const data: ConciergeChatResponseDTO = await res.json();
+      playChime();
       if (data.messages && data.messages.length > 0) {
         setMessages(data.messages);
       } else {
@@ -279,6 +395,17 @@ export function SipiConciergeWidget() {
               </div>
 
               <div className="flex items-center gap-1">
+                {/* Print / Export Itinerary */}
+                <button
+                  type="button"
+                  onClick={() => typeof window !== 'undefined' && window.print()}
+                  title="Print / Save Itinerary"
+                  className="rounded-lg p-2 text-fg-muted hover:bg-surface hover:text-fg transition-colors"
+                  aria-label="Print itinerary"
+                >
+                  <Printer className="size-4" />
+                </button>
+
                 {/* Full Screen Toggle */}
                 <button
                   type="button"
@@ -312,6 +439,25 @@ export function SipiConciergeWidget() {
             </div>
           </div>
 
+          {/* Quick Intent Navigation Tabs */}
+          <div className="border-b border-line/60 bg-surface/50 px-3 py-2 overflow-x-auto scrollbar-none flex items-center gap-1.5 shrink-0">
+            {INTENT_TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => handleSend(tab.prompt)}
+                  className="shrink-0 text-nowrap rounded-lg border border-line bg-surface/80 hover:bg-surface-2 hover:border-amber-500/40 px-2.5 py-1 text-[11px] font-medium text-fg flex items-center gap-1.5 transition-colors shadow-2xs"
+                >
+                  <Icon className="size-3 text-amber-600 dark:text-amber-400" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Body: Split View in Fullscreen Desktop, Single View otherwise */}
           <div className="flex-1 flex overflow-hidden">
             {/* Main Chat Column */}
@@ -327,9 +473,14 @@ export function SipiConciergeWidget() {
                     )}
                   >
                     {m.role === 'assistant' ? (
-                      <div className="size-7 shrink-0 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 grid place-items-center mt-0.5 shadow-xs">
-                        <Sparkles className="size-3.5" />
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => speakMessage(m.content)}
+                        className="size-7 shrink-0 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 grid place-items-center mt-0.5 shadow-xs hover:bg-amber-500/25 transition-colors"
+                        title={isSpeaking ? 'Stop voice readout' : 'Listen to Highland Host voice'}
+                      >
+                        {isSpeaking ? <VolumeX className="size-3.5 animate-pulse text-amber-600" /> : <Volume2 className="size-3.5" />}
+                      </button>
                     ) : (
                       <div className="size-7 shrink-0 rounded-lg bg-surface-2 border border-line text-fg-muted grid place-items-center mt-0.5">
                         <User className="size-3.5" />
@@ -434,18 +585,40 @@ export function SipiConciergeWidget() {
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask Sipi Concierge about suites, dates, rates, hikes..."
+                    placeholder={
+                      isListening
+                        ? '🎙️ Listening... speak naturally to Sipi Concierge...'
+                        : 'Ask Sipi Concierge about suites, dates, rates, hikes, transfers...'
+                    }
                     disabled={isLoading}
-                    className="w-full rounded-xl border border-line bg-surface-2/60 pl-3.5 pr-11 py-2.5 text-xs text-fg placeholder:text-fg-muted/70 focus:border-amber-500/60 focus:bg-surface focus:outline-none transition-colors"
+                    className="w-full rounded-xl border border-line bg-surface-2/60 pl-3.5 pr-20 py-2.5 text-xs text-fg placeholder:text-fg-muted/70 focus:border-amber-500/60 focus:bg-surface focus:outline-none transition-colors"
                   />
-                  <button
-                    type="submit"
-                    disabled={!input.trim() || isLoading}
-                    className="absolute right-1.5 rounded-lg bg-brand text-brand-fg p-1.5 disabled:opacity-30 disabled:pointer-events-none hover:opacity-90 transition-opacity"
-                    aria-label="Send message"
-                  >
-                    <Send className="size-3.5" />
-                  </button>
+                  <div className="absolute right-1.5 flex items-center gap-1">
+                    {hasSpeechRec && (
+                      <button
+                        type="button"
+                        onClick={toggleListening}
+                        className={cn(
+                          'rounded-lg p-1.5 transition-colors',
+                          isListening
+                            ? 'bg-red-500 text-white animate-pulse'
+                            : 'text-fg-muted hover:text-fg hover:bg-surface-2'
+                        )}
+                        title={isListening ? 'Stop listening' : 'Voice input (Speak to Concierge)'}
+                        aria-label="Voice input"
+                      >
+                        {isListening ? <MicOff className="size-3.5" /> : <Mic className="size-3.5" />}
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={!input.trim() || isLoading}
+                      className="rounded-lg bg-brand text-brand-fg p-1.5 disabled:opacity-30 disabled:pointer-events-none hover:opacity-90 transition-opacity"
+                      aria-label="Send message"
+                    >
+                      <Send className="size-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[10px] text-fg-muted px-1">
                   <span className="flex items-center gap-1">
@@ -829,6 +1002,37 @@ function parseFormatting(
   }
 }
 
+const downloadIcs = (code: string, roomName: string, arrival: string, departure: string) => {
+  const start = (arrival || '').replace(/-/g, '');
+  const end = (departure || '').replace(/-/g, '');
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Reberon Hotel//Sipi Concierge//EN',
+    'BEGIN:VEVENT',
+    `UID:reberon-${code}@reberonhotel.com`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+    `DTSTART;VALUE=DATE:${start}`,
+    `DTEND;VALUE=DATE:${end}`,
+    `SUMMARY:Stay at Reberon Hotel Kapchorwa (${roomName})`,
+    `DESCRIPTION:Reservation ${code} at Reberon Hotel, Mount Elgon sanctuary (1,900 m ASL).\\nReceipt & Stay Portal: https://reberonhotel.com/stay?code=${code}`,
+    'LOCATION:Reberon Hotel, Kapchorwa, Mount Elgon, Uganda',
+    'STATUS:CONFIRMED',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reberon-stay-${code}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
 /* ── Rich Card Component for Agentic Tool Deliveries ── */
 function ConciergeCardView({
   card,
@@ -839,6 +1043,7 @@ function ConciergeCardView({
   onPromptSelect: (prompt: string) => void;
   onImageClick?: (url: string) => void;
 }) {
+  const [copiedLink, setCopiedLink] = useState(false);
   switch (card.type) {
     case 'room':
       return (
@@ -975,11 +1180,16 @@ function ConciergeCardView({
       return (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3 shadow-xs">
           <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2.5">
-            <div>
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="size-3.5" /> Reservation Secured in PMS
-              </span>
-              <h4 className="font-mono text-base font-bold tracking-tight text-fg">{card.code}</h4>
+            <div className="flex items-center gap-2">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                <QrCode className="size-4" />
+              </div>
+              <div>
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="size-3" /> Confirmed & Held in PMS
+                </span>
+                <h4 className="font-mono text-base font-bold tracking-tight text-fg">{card.code}</h4>
+              </div>
             </div>
             <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
               {card.status || 'CONFIRMED'}
@@ -1001,12 +1211,12 @@ function ConciergeCardView({
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
             {(card.stayUrl || card.receiptUrl || card.actionUrl) && (
               <Link
                 href={card.stayUrl || card.receiptUrl || card.actionUrl!}
                 target="_blank"
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-fg py-2 px-3 text-xs font-semibold hover:opacity-90 transition-opacity shadow-xs text-center"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-fg py-2 px-3 text-xs font-semibold hover:opacity-90 transition-opacity shadow-xs text-center"
               >
                 <Printer className="size-3.5" /> View & Print Receipt
               </Link>
@@ -1015,12 +1225,267 @@ function ConciergeCardView({
               <Link
                 href={card.paymentUrl || card.secondaryActionUrl!}
                 target="_blank"
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-emerald-600/30 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 py-2 px-3 text-xs font-semibold hover:bg-emerald-600/20 transition-colors shadow-xs text-center"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-600/30 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 py-2 px-3 text-xs font-semibold hover:bg-emerald-600/20 transition-colors shadow-xs text-center"
               >
                 <CreditCard className="size-3.5" /> Complete Online Deposit
               </Link>
             )}
           </div>
+
+          <div className="flex items-center justify-between pt-1 border-t border-emerald-500/15 text-[11px]">
+            <button
+              type="button"
+              onClick={() => downloadIcs(card.code, card.roomName, card.arrival, card.departure)}
+              className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 hover:underline"
+            >
+              <CalendarPlus className="size-3" /> Add to Calendar (.ics)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                  navigator.clipboard.writeText(card.stayUrl || `https://reberonhotel.com/stay?code=${card.code}`);
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2000);
+                }
+              }}
+              className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 hover:underline"
+            >
+              {copiedLink ? <Check className="size-3" /> : <Copy className="size-3" />}
+              {copiedLink ? 'Copied Stay Link' : 'Copy Stay Link'}
+            </button>
+          </div>
+        </div>
+      );
+
+    case 'lookup':
+      return (
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 space-y-3 shadow-xs">
+          <div className="flex items-center justify-between border-b border-blue-500/20 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400">
+                <Search className="size-4" />
+              </div>
+              <div>
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase text-blue-600 dark:text-blue-400">
+                  Verified In Reberon PMS
+                </span>
+                <h4 className="font-mono text-base font-bold tracking-tight text-fg">{card.code}</h4>
+              </div>
+            </div>
+            <span className="rounded-full bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+              {card.status}
+            </span>
+          </div>
+
+          <div className="text-xs space-y-1.5 text-fg-muted">
+            <div className="flex justify-between">
+              <span>Primary Guest:</span>
+              <span className="font-semibold text-fg">{card.guestName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Suite:</span>
+              <span className="font-semibold text-fg">{card.roomName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Dates:</span>
+              <span className="font-semibold text-fg">{card.arrival} to {card.departure} ({card.nights} nights)</span>
+            </div>
+            <div className="flex justify-between border-t border-blue-500/15 pt-1.5">
+              <span>Total Stay:</span>
+              <span className="font-mono font-bold text-fg">{card.total}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Paid:</span>
+              <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{card.paid}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Balance due:</span>
+              <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{card.balance}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            <Link
+              href={card.stayUrl || card.receiptUrl}
+              target="_blank"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-fg py-2 px-3 text-xs font-semibold hover:opacity-90 transition-opacity shadow-xs text-center"
+            >
+              <Printer className="size-3.5" /> View & Print Receipt
+            </Link>
+            {card.paymentUrl && (
+              <Link
+                href={card.paymentUrl}
+                target="_blank"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-blue-600/30 bg-blue-600/10 text-blue-700 dark:text-blue-300 py-2 px-3 text-xs font-semibold hover:bg-blue-600/20 transition-colors shadow-xs text-center"
+              >
+                <CreditCard className="size-3.5" /> Pay Balance Online
+              </Link>
+            )}
+          </div>
+        </div>
+      );
+
+    case 'transfer':
+      return (
+        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-3 shadow-xs">
+          <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+                <Car className="size-4" />
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold tracking-wider uppercase text-indigo-600 dark:text-indigo-400">
+                  Private 4x4 Sanctuary Transfer
+                </span>
+                <h4 className="font-serif text-sm font-bold text-fg">{card.vehicleType}</h4>
+              </div>
+            </div>
+            <span className="font-mono font-bold text-xs text-fg">{card.estimatedCost}</span>
+          </div>
+
+          <div className="text-xs space-y-1.5 text-fg-muted">
+            <div className="flex justify-between">
+              <span>Pickup:</span>
+              <span className="font-semibold text-fg">{card.pickupLocation}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Destination:</span>
+              <span className="font-semibold text-fg">{card.destination}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Scenic Drive:</span>
+              <span className="font-semibold text-fg">{card.travelTime}</span>
+            </div>
+          </div>
+
+          {card.inclusions && (
+            <div className="space-y-1 border-t border-indigo-500/15 pt-2 text-xs text-fg-muted">
+              {card.inclusions.map((inc, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <CheckCircle2 className="size-3.5 text-indigo-500 shrink-0" />
+                  <span>{inc}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {card.actionUrl && (
+            <a
+              href={card.actionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white py-2 px-3 text-xs font-semibold hover:bg-indigo-700 transition-colors shadow-xs text-center"
+            >
+              <MessageCircle className="size-3.5" />
+              <span>{card.actionLabel || 'Confirm 4x4 Transfer on WhatsApp'}</span>
+            </a>
+          )}
+        </div>
+      );
+
+    case 'dining':
+      return (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3 shadow-xs">
+          <div className="flex items-center justify-between border-b border-amber-500/20 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400">
+                <Utensils className="size-4" />
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold tracking-wider uppercase text-amber-600 dark:text-amber-400">
+                  Highland Culinary Experience
+                </span>
+                <h4 className="font-serif text-sm font-bold text-fg">{card.venue}</h4>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono text-fg-muted bg-surface px-2 py-0.5 rounded-full border border-line">
+              {card.hours}
+            </span>
+          </div>
+
+          <div className="text-xs space-y-1.5">
+            <div className="font-medium text-amber-700 dark:text-amber-300">{card.cuisine}</div>
+            <div className="space-y-1 text-fg-muted">
+              {card.highlights.map((h, i) => (
+                <div key={i} className="flex items-start gap-1.5">
+                  <Coffee className="size-3 text-amber-600 shrink-0 mt-0.5" />
+                  <span>{h}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {card.dietaryOptions && (
+            <div className="flex flex-wrap gap-1 border-t border-amber-500/15 pt-2">
+              {card.dietaryOptions.map((opt, i) => (
+                <span key={i} className="rounded-md bg-amber-600/10 border border-amber-600/20 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                  ✓ {opt}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {card.actionUrl && (
+            <Link
+              href={card.actionUrl}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-surface py-2 px-3 text-xs font-semibold text-fg hover:bg-surface-2 transition-colors text-center"
+            >
+              <span>{card.actionLabel || 'View Full Dining Menu'}</span>
+              <ChevronRight className="size-3" />
+            </Link>
+          )}
+        </div>
+      );
+
+    case 'weather':
+      return (
+        <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-4 space-y-3 shadow-xs">
+          <div className="flex items-center justify-between border-b border-sky-500/20 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-600 dark:text-sky-400">
+                <Mountain className="size-4" />
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold tracking-wider uppercase text-sky-600 dark:text-sky-400">
+                  Elevation Weather & Packing
+                </span>
+                <h4 className="font-serif text-sm font-bold text-fg">{card.altitude}</h4>
+              </div>
+            </div>
+            <span className="font-mono font-bold text-xs text-fg">{card.temperatureRange}</span>
+          </div>
+
+          <div className="text-xs space-y-1 text-fg-muted">
+            <div><strong className="text-fg">Day:</strong> {card.dayClimate}</div>
+            <div><strong className="text-fg">Night:</strong> {card.nightClimate}</div>
+          </div>
+
+          {card.packingChecklist && (
+            <div className="space-y-1 border-t border-sky-500/15 pt-2 text-xs text-fg-muted">
+              <div className="font-semibold text-fg text-[11px] uppercase tracking-wider">What to Pack:</div>
+              {card.packingChecklist.map((item, i) => (
+                <div key={i} className="flex items-start gap-1.5">
+                  <Check className="size-3 text-sky-500 shrink-0 mt-0.5" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="rounded-lg bg-surface/80 border border-line p-2 text-[11px] text-fg-muted">
+            <strong className="text-fg">Road condition:</strong> {card.routeStatus}
+          </div>
+
+          {card.actionUrl && (
+            <Link
+              href={card.actionUrl}
+              className="inline-flex w-full items-center justify-center gap-1 text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline pt-0.5"
+            >
+              <span>{card.actionLabel || 'Driving Directions from Kampala'}</span>
+              <ChevronRight className="size-3" />
+            </Link>
+          )}
         </div>
       );
 

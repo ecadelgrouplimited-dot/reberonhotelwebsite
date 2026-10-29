@@ -101,6 +101,62 @@ export type ConciergeCardDTO =
       message: string;
       actionUrl?: string;
       actionLabel?: string;
+    }
+  | {
+      type: 'lookup';
+      code: string;
+      status: string;
+      guestName: string;
+      roomName: string;
+      arrival: string;
+      departure: string;
+      nights: number;
+      total: string;
+      paid: string;
+      balance: string;
+      currency: string;
+      stayUrl: string;
+      receiptUrl: string;
+      paymentUrl?: string;
+      actionUrl?: string;
+      actionLabel?: string;
+      secondaryActionUrl?: string;
+      secondaryActionLabel?: string;
+    }
+  | {
+      type: 'transfer';
+      pickupLocation: string;
+      destination: string;
+      vehicleType: string;
+      travelTime: string;
+      estimatedCost: string;
+      currency: string;
+      inclusions: string[];
+      notes: string;
+      actionUrl?: string;
+      actionLabel?: string;
+    }
+  | {
+      type: 'dining';
+      venue: string;
+      cuisine: string;
+      hours: string;
+      highlights: string[];
+      dietaryOptions: string[];
+      coffeeExperience?: string;
+      actionUrl?: string;
+      actionLabel?: string;
+    }
+  | {
+      type: 'weather';
+      altitude: string;
+      temperatureRange: string;
+      dayClimate: string;
+      nightClimate: string;
+      packingChecklist: string[];
+      routeStatus: string;
+      actionUrl?: string;
+      actionLabel?: string;
     };
 
 export const zConciergeChatInput = z.object({

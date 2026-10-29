@@ -215,6 +215,73 @@ export class ConciergeToolsService {
           },
         },
       },
+      {
+        type: 'function',
+        function: {
+          name: 'lookup_reservation',
+          description:
+            'Look up an existing reservation by code (e.g. RB-XXXXX) or guest contact phone to check live status, room assignments, balance, and printable receipt link.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Reservation reference code, e.g. "RB-JKHD5" or "RB-XXXXX".' },
+              phone: { type: 'string', description: 'Guest contact phone number if code is not remembered.' },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'request_airport_transfer',
+          description:
+            'Arrange private 4x4 sanctuary airport transfers between Entebbe International Airport (EBB) or Kampala and Reberon Hotel Kapchorwa.',
+          parameters: {
+            type: 'object',
+            properties: {
+              pickupLocation: { type: 'string', description: 'Pickup location (e.g. "Entebbe Airport (EBB)", "Kampala", "Jinja", "Mbale").' },
+              date: { type: 'string', description: 'Desired transfer date in YYYY-MM-DD format.' },
+              passengers: { type: 'number', description: 'Number of passengers (1-6).' },
+              guestName: { type: 'string', description: 'Guest name.' },
+              phone: { type: 'string', description: 'Guest WhatsApp or mobile phone.' },
+              flightNumber: { type: 'string', description: 'Flight number if arriving at Entebbe Airport.' },
+            },
+            required: ['pickupLocation', 'guestName'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_dining_and_dietary',
+          description:
+            'Get details on highland dining, Mount Elgon fresh trout, farm-to-table breakfast, Arabica coffee ceremony, and dietary accommodations (vegetarian, vegan, halal).',
+          parameters: {
+            type: 'object',
+            properties: {
+              interest: {
+                type: 'string',
+                enum: ['trout', 'breakfast', 'coffee', 'dietary', 'all'],
+                description: 'Dining topic of interest.',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_weather_and_packing_guide',
+          description:
+            'Get Mount Elgon altitude packing recommendations, microclimate advice (1,900 m ASL), daytime vs evening temperatures, and road highway navigation.',
+          parameters: {
+            type: 'object',
+            properties: {
+              season: { type: 'string', description: 'Travel month or season.' },
+            },
+          },
+        },
+      },
     ];
   }
 
@@ -229,6 +296,14 @@ export class ConciergeToolsService {
           return await this.handleCalculateQuote(toolCall.id, toolCall.args);
         case 'create_booking_hold':
           return await this.handleCreateBookingHold(toolCall.id, toolCall.args);
+        case 'lookup_reservation':
+          return await this.handleLookupReservation(toolCall.id, toolCall.args);
+        case 'request_airport_transfer':
+          return await this.handleRequestTransfer(toolCall.id, toolCall.args);
+        case 'get_dining_and_dietary':
+          return await this.handleGetDining(toolCall.id, toolCall.args);
+        case 'get_weather_and_packing_guide':
+          return await this.handleGetWeatherAndPacking(toolCall.id, toolCall.args);
         case 'claim_priority_waitlist':
           return await this.handleClaimWaitlist(toolCall.id, toolCall.args);
         case 'get_hotel_facilities':
@@ -886,6 +961,263 @@ export class ConciergeToolsService {
         whatsappUrl,
         conciergeNumber: '+256 760 512 691',
         instructions: 'Click the WhatsApp link to chat directly with our front desk and management.',
+      }),
+      card,
+    };
+  }
+
+  /* ── 10. Lookup Existing Reservation ── */
+  private async handleLookupReservation(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
+    const rawCode = String(args.code || '').trim().toUpperCase();
+    const phone = String(args.phone || '').trim();
+
+    let reservation = null;
+    if (rawCode) {
+      reservation = await this.prisma.reservation.findFirst({
+        where: { code: rawCode },
+        include: { contact: true, rooms: true, ratePlan: true },
+      });
+    }
+    if (!reservation && phone) {
+      reservation = await this.prisma.reservation.findFirst({
+        where: { contact: { phone } },
+        include: { contact: true, rooms: true, ratePlan: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (!reservation) {
+      return {
+        toolCallId: id,
+        name: 'lookup_reservation',
+        output: JSON.stringify({
+          found: false,
+          message: `No reservation found matching code "${rawCode || phone}". Please verify your code or connect with front desk on WhatsApp.`,
+        }),
+      };
+    }
+
+    const r = reservation;
+    const token = this.booking.accessToken(r.code);
+    const webBase = env.WEB_URL || 'https://reberonhotel.com';
+    const stayUrl = `${webBase}/stay?code=${r.code}&t=${encodeURIComponent(token)}`;
+    const balanceMinor = r.totalMinor - r.paidMinor;
+    const paymentUrl = balanceMinor > 0n ? `${webBase}/book/return?code=${r.code}&t=${encodeURIComponent(token)}` : undefined;
+
+    const firstRoom = r.rooms[0];
+    let roomName = 'Mount Elgon Suite';
+    if (firstRoom) {
+      const rt = await this.prisma.roomType.findUnique({ where: { id: firstRoom.roomTypeId } });
+      if (rt) roomName = tr(rt.name);
+    }
+
+    const nights = Math.max(1, Math.round((r.departure.getTime() - r.arrival.getTime()) / (1000 * 60 * 60 * 24)));
+    const arrivalStr = r.arrival.toISOString().slice(0, 10);
+    const departureStr = r.departure.toISOString().slice(0, 10);
+
+    const card: ConciergeCardDTO = {
+      type: 'lookup',
+      code: r.code,
+      status: r.status,
+      guestName: r.contact.name,
+      roomName,
+      arrival: arrivalStr,
+      departure: departureStr,
+      nights,
+      total: `${Number(r.totalMinor).toLocaleString()} ${r.currency}`,
+      paid: `${Number(r.paidMinor).toLocaleString()} ${r.currency}`,
+      balance: `${Number(balanceMinor).toLocaleString()} ${r.currency}`,
+      currency: r.currency,
+      stayUrl,
+      receiptUrl: stayUrl,
+      paymentUrl,
+      actionUrl: stayUrl,
+      actionLabel: 'View & Print Official Receipt',
+      secondaryActionUrl: paymentUrl,
+      secondaryActionLabel: balanceMinor > 0n ? 'Pay Balance Online' : undefined,
+    };
+
+    return {
+      toolCallId: id,
+      name: 'lookup_reservation',
+      output: JSON.stringify({
+        found: true,
+        code: r.code,
+        status: r.status,
+        guestName: r.contact.name,
+        room: roomName,
+        dates: `${arrivalStr} to ${departureStr} (${nights} nights)`,
+        total: `${Number(r.totalMinor).toLocaleString()} ${r.currency}`,
+        paid: `${Number(r.paidMinor).toLocaleString()} ${r.currency}`,
+        balanceDue: `${Number(balanceMinor).toLocaleString()} ${r.currency}`,
+        stayUrl,
+        receiptUrl: stayUrl,
+        paymentUrl,
+        checkInTime: '14:00',
+        checkOutTime: '10:30',
+      }),
+      card,
+    };
+  }
+
+  /* ── 11. Request Airport / Sanctuary Transfer ── */
+  private async handleRequestTransfer(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
+    const pickupLocation = String(args.pickupLocation || 'Entebbe Airport (EBB)').trim();
+    const date = String(args.date || '').trim() || new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const passengers = Number(args.passengers) || 2;
+    const guestName = String(args.guestName || 'Valued Guest').trim();
+    const phone = String(args.phone || '').trim();
+    const flightNumber = String(args.flightNumber || '').trim();
+
+    const isMbale = pickupLocation.toLowerCase().includes('mbale');
+    const travelTime = isMbale ? '1 hour 15 minutes' : '6 to 7 hours scenic drive';
+    const costUgx = isMbale ? '120,000 UGX' : '450,000 UGX ($120)';
+
+    try {
+      let contact = await this.prisma.contact.findFirst({
+        where: { OR: [phone ? { phone } : { id: '00000000-0000-0000-0000-000000000000' }, { name: guestName }] },
+      });
+      if (!contact) {
+        contact = await this.prisma.contact.create({
+          data: { name: guestName, phone: phone || null },
+        });
+      }
+
+      await this.prisma.conversation.create({
+        data: {
+          reference: referenceCode('CN'),
+          contactId: contact.id,
+          channel: 'WEB_FORM',
+          intent: 'GENERAL',
+          status: 'NEW',
+          subject: `Transfer Request: ${guestName} (${pickupLocation})`,
+          context: {
+            source: 'Sipi Concierge AI',
+            pickupLocation,
+            date,
+            passengers,
+            phone,
+            flightNumber: flightNumber || null,
+            estimatedCost: costUgx,
+          },
+        },
+      });
+    } catch (err) {
+      this.log.warn(`Could not log transfer ticket: ${err}`);
+    }
+
+    const whatsappUrl = `https://wa.me/256760512691?text=${encodeURIComponent(
+      `Hello Denis, I would like to confirm my private 4x4 transfer from ${pickupLocation} to Reberon Hotel for ${guestName} on ${date} (${passengers} passengers).`
+    )}`;
+
+    const card: ConciergeCardDTO = {
+      type: 'transfer',
+      pickupLocation,
+      destination: 'Reberon Hotel, Kapchorwa (1,900 m ASL)',
+      vehicleType: 'Executive 4x4 Safari SUV / Land Cruiser Prado',
+      travelTime,
+      estimatedCost: costUgx,
+      currency: 'UGX',
+      inclusions: [
+        'Dedicated professional licensed mountain driver',
+        'Chilled spring water & Mount Elgon dried fruits / Arabica roast flask',
+        'Tarmac highway toll fees & luggage handling included',
+        'Scenic stops at River Nile Bridge (Jinja) & Tororo rock vistas on request',
+      ],
+      notes: `Pickup on ${date} for ${passengers} passenger(s)${flightNumber ? ` · Flight: ${flightNumber}` : ''}. Concierge desk notified.`,
+      actionUrl: whatsappUrl,
+      actionLabel: 'Confirm Transfer with Denis Mayamba',
+    };
+
+    return {
+      toolCallId: id,
+      name: 'request_airport_transfer',
+      output: JSON.stringify({
+        confirmedInquiry: true,
+        pickupLocation,
+        destination: 'Reberon Hotel, Kapchorwa',
+        travelTime,
+        vehicle: 'Executive 4x4 SUV',
+        cost: costUgx,
+        inclusions: card.inclusions,
+        whatsappConfirmation: whatsappUrl,
+        message: 'Transfer request logged with Front Desk. Click to confirm directly with Denis on WhatsApp.',
+      }),
+      card,
+    };
+  }
+
+  /* ── 12. Dining & Dietary Intelligence ── */
+  private async handleGetDining(id: string, _args: Record<string, unknown>): Promise<ToolExecutionResult> {
+    const card: ConciergeCardDTO = {
+      type: 'dining',
+      venue: 'The Highland Dining Room & Arabica Coffee Terrace',
+      cuisine: 'High-Altitude Ugandan & Mountain Trout Fusion',
+      hours: 'Breakfast 06:30 – 10:30 · Lunch 12:30 – 15:30 · Dinner 18:30 – 22:00',
+      highlights: [
+        'Fresh Mount Elgon River Trout pan-seared with wild mountain herbs and lemon beurre blanc',
+        'Farm-fresh highland eggs, smoked beef bacon, and organic yellow corn cakes',
+        'Hand-pulled single-origin Kapchorwa Arabica coffee roasted daily on premise',
+        'Crisp terrace fire pit dining overlooking the northern escarpment valley',
+      ],
+      dietaryOptions: [
+        '100% Halal certified meats and preparation',
+        'Dedicated vegetarian & vegan farm-to-plate selections',
+        'Gluten-free sorghum and millet breakfast crumbles',
+        'High-protein endurance athlete nutrition plans for mountain runners',
+      ],
+      coffeeExperience:
+        'Kapchorwa volcanic soils produce some of East Africa\'s finest specialty Arabica (grown at 1,800–2,200 m). We offer pour-over, Chemex, and live bean roasting sessions on the terrace.',
+      actionUrl: '/facilities/restaurant',
+      actionLabel: 'View Restaurant & Terrace Menu',
+    };
+
+    return {
+      toolCallId: id,
+      name: 'get_dining_and_dietary',
+      output: JSON.stringify({
+        venue: card.venue,
+        cuisine: card.cuisine,
+        hours: card.hours,
+        highlights: card.highlights,
+        dietary: card.dietaryOptions,
+        coffee: card.coffeeExperience,
+      }),
+      card,
+    };
+  }
+
+  /* ── 13. Weather & Packing Guidance ── */
+  private async handleGetWeatherAndPacking(id: string, _args: Record<string, unknown>): Promise<ToolExecutionResult> {
+    const card: ConciergeCardDTO = {
+      type: 'weather',
+      altitude: '1,900 m ASL (Kapchorwa Northern Escarpment)',
+      temperatureRange: 'Daytime 21°C–25°C · Evenings 12°C–15°C',
+      dayClimate: 'Crisp mountain sunshine with refreshing alpine breeze',
+      nightClimate: 'Cool highland air — terrace fire bowls lit nightly',
+      packingChecklist: [
+        'Warm fleece, lightweight knit sweater, or down gilet for cool evenings',
+        'Sturdy trail running shoes or ankle-support hiking boots for Sipi Falls trails',
+        'Lightweight waterproof shell or rain jacket for waterfall spray and mist',
+        'UV sunglasses, broad-brim hat, and SPF sunscreen (high altitude sun is strong)',
+        'Camera or binoculars for valley birdwatching (crested cranes, turacos, eagles)',
+        'Universal travel plug adapter (Uganda uses UK Type G 240V)',
+      ],
+      routeStatus: '100% paved tarmac highway from Kampala / Jinja / Mbale to hotel entrance. No 4x4 strictly required.',
+      actionUrl: '/kapchorwa/the-road',
+      actionLabel: 'Read Highway Travel Guide',
+    };
+
+    return {
+      toolCallId: id,
+      name: 'get_weather_and_packing_guide',
+      output: JSON.stringify({
+        altitude: card.altitude,
+        temperatures: card.temperatureRange,
+        day: card.dayClimate,
+        night: card.nightClimate,
+        packingList: card.packingChecklist,
+        road: card.routeStatus,
       }),
       card,
     };
