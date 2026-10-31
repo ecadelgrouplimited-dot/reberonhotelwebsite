@@ -439,7 +439,8 @@ export class DashboardController {
 
   @Get('audit')
   @Requires('audit:read')
-  async audit(@Query() q: Record<string, string>) {
+  async audit(@Query() q: Record<string, string>, @CurrentUser() user: AuthUser) {
+    if (user.role !== 'OWNER') throw forbidden('Audit logs are strictly visible to the Super Admin (Owner)');
     const where: Prisma.AuditLogWhereInput = {};
     if (q.entityType) where.entityType = q.entityType;
     if (q.entityId) where.entityId = q.entityId;
@@ -447,9 +448,9 @@ export class DashboardController {
     if (q.action) where.action = { startsWith: q.action };
     if (q.q) where.summary = { contains: q.q, mode: 'insensitive' };
     const skip = Number(q.cursor) || 0;
-    const limit = Math.min(100, Number(q.limit) || 50);
+    const limit = Math.min(200, Number(q.limit) || 50);
     const [rows, total] = await Promise.all([
-      this.prisma.auditLog.findMany({ where, include: { actor: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+      this.prisma.auditLog.findMany({ where, include: { actor: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
       this.prisma.auditLog.count({ where }),
     ]);
     return {

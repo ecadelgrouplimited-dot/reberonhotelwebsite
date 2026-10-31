@@ -11,7 +11,7 @@ import type { Prisma, Reservation } from '@reberon/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { RedisService } from '../../common/redis.service.js';
 import { AuditService } from '../../common/audit.service.js';
-import { AppError, badRequest, conflict, notFound } from '../../common/errors.js';
+import { AppError, badRequest, conflict, forbidden, notFound } from '../../common/errors.js';
 import type { AuthUser } from '../../common/auth.js';
 import { env } from '../../config.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -453,6 +453,51 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       await this.messaging.forReservation('booking.cancelled', id, { refund }).catch((e) => this.log.error(e));
     }
     return { refundDueMinor: out.refundDue.toString() };
+  }
+
+  async deleteReservation(id: string, reason: string | undefined, actor: AuthUser) {
+    if (actor.role !== 'OWNER') {
+      throw forbidden('Only the Super Admin (Owner) can delete reservations');
+    }
+    const deleted = await this.prisma.$transaction(async (tx) => {
+      const r = await tx.reservation.findUnique({ where: { id }, include: { contact: true, rooms: true } });
+      if (!r) throw notFound('Reservation');
+      if (['HELD', 'CONFIRMED', 'IN_HOUSE'].includes(r.status)) {
+        const nights = nightsOf(iso(r.arrival), iso(r.departure));
+        for (const rr of r.rooms) {
+          await this.inventory.release(tx, rr.roomTypeId, nights, rr.quantity, r.status === 'HELD' ? 'held' : 'sold');
+        }
+      }
+      await tx.issuedDocument.updateMany({ where: { reservationId: id }, data: { reservationId: null } });
+      await tx.posOrder.updateMany({ where: { reservationId: id }, data: { reservationId: null } });
+      await tx.healthClubAccessLog.updateMany({ where: { reservationId: id }, data: { reservationId: null } });
+      await tx.outboundMessage.updateMany({ where: { reservationId: id }, data: { reservationId: null } });
+      await tx.quotation.updateMany({ where: { convertedReservationId: id }, data: { convertedReservationId: null } });
+      await tx.paymentIntent.deleteMany({ where: { reservationId: id } });
+      await tx.reservation.delete({ where: { id } });
+      return r;
+    });
+    const cleanReason = reason?.trim() || 'Super Admin permanent deletion';
+    await this.audit.record({
+      actor,
+      action: 'reservation.delete',
+      entityType: 'Reservation',
+      entityId: id,
+      summary: `Deleted reservation ${deleted.code} (${deleted.contact.name}, ${iso(deleted.arrival)} → ${iso(deleted.departure)}): ${cleanReason}`,
+      before: {
+        code: deleted.code,
+        status: deleted.status,
+        guestName: deleted.contact.name,
+        guestPhone: deleted.contact.phone,
+        arrival: iso(deleted.arrival),
+        departure: iso(deleted.departure),
+        totalMinor: deleted.totalMinor.toString(),
+        paidMinor: deleted.paidMinor.toString(),
+        currency: deleted.currency,
+        reason: cleanReason,
+      },
+    });
+    return { ok: true, deleted: true, code: deleted.code };
   }
 
   async recordRefund(id: string, p: { amount: bigint; method: 'MOBILE_MONEY' | 'CARD' | 'CASH' | 'BANK' | 'UNKNOWN'; reference?: string; note?: string }, actor: AuthUser) {

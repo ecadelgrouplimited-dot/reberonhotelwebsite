@@ -653,18 +653,18 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
 
             {/* Mode Switcher Bar (Chat · Action Center · My Activity & Receipts) */}
             {identity && !showIdentityForm && (
-              <div className="mt-2 flex items-center justify-between gap-1 rounded-lg bg-surface/80 p-1 border border-line/70 text-[11px]">
+              <div className="mt-2 flex items-center justify-between gap-1 rounded-lg bg-surface p-1 border border-line text-[11px]">
                 <button
                   type="button"
                   onClick={() => setActiveTab('chat')}
                   className={cn(
                     'flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 px-2 font-medium transition-colors cursor-pointer',
                     activeTab === 'chat'
-                      ? 'bg-amber-600 text-white shadow-2xs'
+                      ? 'bg-surface-2 text-fg border border-line-strong shadow-2xs'
                       : 'text-fg-muted hover:text-fg',
                   )}
                 >
-                  <Sparkles className="size-3" />
+                  <Sparkles className="size-3 text-amber-500/80" />
                   <span>Concierge</span>
                 </button>
                 <button
@@ -673,11 +673,11 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
                   className={cn(
                     'flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 px-2 font-medium transition-colors cursor-pointer',
                     activeTab === 'actions'
-                      ? 'bg-amber-600 text-white shadow-2xs'
+                      ? 'bg-surface-2 text-fg border border-line-strong shadow-2xs'
                       : 'text-fg-muted hover:text-fg',
                   )}
                 >
-                  <Zap className="size-3" />
+                  <Zap className="size-3 text-amber-500/80" />
                   <span>Quick Actions</span>
                 </button>
                 <button
@@ -689,17 +689,17 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
                   className={cn(
                     'flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 px-2 font-medium transition-colors cursor-pointer',
                     activeTab === 'dossier'
-                      ? 'bg-amber-600 text-white shadow-2xs'
+                      ? 'bg-surface-2 text-fg border border-line-strong shadow-2xs'
                       : 'text-fg-muted hover:text-fg',
                   )}
                 >
-                  <FileText className="size-3" />
+                  <FileText className="size-3 text-amber-500/80" />
                   <span>Activity & Docs</span>
                   {totalDossierBadge > 0 && (
                     <span
                       className={cn(
                         'rounded-full px-1.5 py-0.2 text-[9.5px] font-mono font-bold',
-                        activeTab === 'dossier' ? 'bg-white/25 text-white' : 'bg-amber-500/20 text-amber-600 dark:text-amber-400',
+                        'bg-surface text-fg border border-line',
                       )}
                     >
                       {totalDossierBadge}
@@ -901,10 +901,10 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
                           <div className="space-y-2 flex-1 min-w-0">
                             <div
                               className={cn(
-                                'rounded-xl px-3.5 py-2.5 shadow-2xs font-sans',
+                                'rounded-xl px-3.5 py-2.5 shadow-2xs font-sans border',
                                 m.role === 'user'
-                                  ? 'bg-brand text-brand-fg rounded-tr-xs'
-                                  : 'bg-surface-2/90 border border-line rounded-tl-xs text-fg',
+                                  ? 'bg-surface-2 border-line-strong text-fg rounded-tr-xs'
+                                  : 'bg-surface/90 border-line rounded-tl-xs text-fg',
                               )}
                             >
                               <ConciergeMarkdown content={m.content} />
@@ -2228,15 +2228,15 @@ function ConciergeCardView({
 
     case 'lookup':
       return (
-        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-3.5 space-y-2.5 shadow-2xs">
-          <div className="flex items-center justify-between border-b border-blue-500/20 pb-2">
+        <div className="rounded-xl border border-line-strong bg-surface-2/70 p-3.5 space-y-2.5 shadow-2xs">
+          <div className="flex items-center justify-between border-b border-line pb-2">
             <div>
-              <span className="text-[9.5px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
+              <span className="text-[9.5px] font-semibold uppercase tracking-wider text-fg-muted block">
                 Live Booking Record · {card.guestName}
               </span>
               <h4 className="font-mono text-sm font-bold text-fg">{card.code} · {card.roomName}</h4>
             </div>
-            <span className="rounded-full bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+            <span className="rounded-full bg-surface border border-line px-2 py-0.5 text-[10px] font-semibold text-fg">
               {card.status}
             </span>
           </div>
@@ -2252,13 +2252,13 @@ function ConciergeCardView({
             </div>
             <div className="flex justify-between">
               <span>Balance:</span>
-              <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{card.balance}</span>
+              <span className="font-mono font-bold text-fg">{card.balance}</span>
             </div>
           </div>
 
           {/* Attached Official Receipts & Invoices */}
           {card.documents && card.documents.length > 0 && (
-            <div className="space-y-1 border-t border-blue-500/20 pt-2">
+            <div className="space-y-1 border-t border-line pt-2">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted block">
                 Official Receipts & Invoices ({card.documents.length})
               </span>
@@ -2271,7 +2271,7 @@ function ConciergeCardView({
                   <button
                     type="button"
                     onClick={() => onOpenDocument?.(doc)}
-                    className="inline-flex items-center gap-1 rounded bg-primary text-primary-fg px-2 py-0.5 text-[10px] font-semibold cursor-pointer"
+                    className="inline-flex items-center gap-1 rounded bg-surface-2 border border-line text-fg px-2 py-0.5 text-[10px] font-semibold cursor-pointer hover:bg-surface"
                   >
                     <Printer className="size-2.5" /> Print
                   </button>
@@ -2284,7 +2284,7 @@ function ConciergeCardView({
             <Link
               href={card.stayUrl}
               target="_blank"
-              className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-primary text-primary-fg py-1.5 px-2.5 text-[11px] font-semibold text-center"
+              className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-line bg-surface text-fg py-1.5 px-2.5 text-[11px] font-semibold text-center hover:bg-surface-2"
             >
               <Printer className="size-3" /> Stay Portal & Voucher
             </Link>
@@ -2292,9 +2292,9 @@ function ConciergeCardView({
               <Link
                 href={card.paymentUrl}
                 target="_blank"
-                className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-blue-600/30 bg-blue-600/10 text-blue-700 dark:text-blue-300 py-1.5 px-2.5 text-[11px] font-semibold text-center"
+                className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-amber-500/35 bg-amber-500/10 text-fg py-1.5 px-2.5 text-[11px] font-semibold text-center hover:bg-amber-500/20"
               >
-                <CreditCard className="size-3" /> Pay Balance
+                <CreditCard className="size-3 text-amber-500" /> Pay Balance
               </Link>
             )}
           </div>
@@ -2303,10 +2303,10 @@ function ConciergeCardView({
 
     case 'transfer':
       return (
-        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-3.5 space-y-2 text-xs">
-          <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2">
+        <div className="rounded-xl border border-line bg-surface-2/60 p-3.5 space-y-2 text-xs">
+          <div className="flex items-center justify-between border-b border-line pb-2">
             <div>
-              <span className="text-[9.5px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
+              <span className="text-[9.5px] font-semibold uppercase tracking-wider text-fg-muted block">
                 Private 4x4 Sanctuary Transfer
               </span>
               <h4 className="font-serif text-xs font-bold text-fg">{card.pickupLocation} → Reberon</h4>
@@ -2319,9 +2319,9 @@ function ConciergeCardView({
               href={card.actionUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 text-white py-1.5 px-3 text-[11.5px] font-semibold hover:bg-indigo-700"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-line-strong bg-surface text-fg py-1.5 px-3 text-[11.5px] font-semibold hover:bg-surface-2"
             >
-              <MessageCircle className="size-3.5" />
+              <MessageCircle className="size-3.5 text-amber-500" />
               <span>{card.actionLabel || 'Confirm Transfer on WhatsApp'}</span>
             </a>
           )}
@@ -2330,10 +2330,10 @@ function ConciergeCardView({
 
     case 'dining':
       return (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 space-y-2.5 text-xs">
-          <div className="flex items-center justify-between border-b border-amber-500/20 pb-2">
+        <div className="rounded-xl border border-line bg-surface-2/60 p-3.5 space-y-2.5 text-xs">
+          <div className="flex items-center justify-between border-b border-line pb-2">
             <div>
-              <span className="text-[9.5px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
+              <span className="text-[9.5px] font-semibold uppercase tracking-wider text-fg-muted block">
                 Highland Dining & Live POS Menu
               </span>
               <h4 className="font-serif text-xs font-bold text-fg">{card.venue}</h4>
@@ -2346,7 +2346,7 @@ function ConciergeCardView({
               {card.menuItems.slice(0, 5).map((item, i) => (
                 <div key={i} className="flex items-center justify-between rounded bg-surface px-2 py-1 border border-line/60 text-[11px]">
                   <span className="font-medium text-fg truncate">{item.name}</span>
-                  <span className="font-mono text-amber-700 dark:text-amber-300 font-semibold shrink-0">{item.price}</span>
+                  <span className="font-mono text-fg font-semibold shrink-0">{item.price}</span>
                 </div>
               ))}
             </div>
@@ -2354,7 +2354,7 @@ function ConciergeCardView({
 
           <div className="flex flex-wrap gap-1">
             {card.dietaryOptions.map((opt, i) => (
-              <span key={i} className="rounded bg-amber-600/10 px-1.5 py-0.5 text-[9.5px] font-medium text-amber-800 dark:text-amber-300">
+              <span key={i} className="rounded bg-surface border border-line px-1.5 py-0.5 text-[9.5px] font-medium text-fg-muted">
                 ✓ {opt}
               </span>
             ))}
@@ -2364,15 +2364,15 @@ function ConciergeCardView({
 
     case 'weather':
       return (
-        <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3.5 space-y-2 text-xs">
-          <div className="flex items-center justify-between border-b border-sky-500/20 pb-2">
+        <div className="rounded-xl border border-line bg-surface-2/60 p-3.5 space-y-2 text-xs">
+          <div className="flex items-center justify-between border-b border-line pb-2">
             <span className="font-serif font-bold text-fg">{card.altitude}</span>
-            <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{card.temperatureRange}</span>
+            <span className="font-mono font-bold text-fg">{card.temperatureRange}</span>
           </div>
           <div className="space-y-1 text-[11px] text-fg-muted">
             {card.packingChecklist.slice(0, 4).map((item, i) => (
               <div key={i} className="flex items-center gap-1.5">
-                <Check className="size-3 text-sky-500 shrink-0" />
+                <Check className="size-3 text-amber-500 shrink-0" />
                 <span>{item}</span>
               </div>
             ))}

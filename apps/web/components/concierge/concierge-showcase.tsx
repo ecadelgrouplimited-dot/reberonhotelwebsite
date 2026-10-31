@@ -100,7 +100,7 @@ const CAPABILITY_MODULES = [
     description:
       'Already booked or in-house? Submit live guest requests straight into the Front Desk queue — from late check-out and extra beds to private Sipi Falls rangers and Highland Restaurant river trout & Arabica coffee orders.',
     icon: BellRing,
-    accent: 'text-sky-500',
+    accent: 'text-amber-500',
     features: [
       'Direct GuestRequest logging (Late Check-Out, Trail Guide, Extra Bed, Extend Stay)',
       'Live POS Kitchen & Bar menu items with current UGX pricing',
@@ -136,7 +136,7 @@ const CAPABILITY_MODULES = [
     description:
       'Arrange executive 4x4 Land Cruiser Prado pickups from Entebbe International Airport (EBB), Kampala, or Mbale, or hand over your conversation seamlessly to Denis Mayamba and the human concierge desk on WhatsApp.',
     icon: Car,
-    accent: 'text-indigo-400',
+    accent: 'text-amber-500',
     features: [
       'Door-to-door 4x4 sanctuary transfers with chilled spring water & Arabica flask',
       'Step-by-step paved highway route guide (Kampala → Jinja → Mbale → Kapchorwa)',
@@ -279,7 +279,7 @@ export function ConciergeShowcase() {
                   <div className="text-xs text-fg-muted mt-0.5">Instant PMS reservation lock</div>
                 </div>
                 <div className="rounded-xl border border-line bg-surface p-3">
-                  <div className="font-mono text-xs text-sky-400 font-semibold">VOICE & AUDIO</div>
+                  <div className="font-mono text-xs text-fg font-semibold">VOICE & AUDIO</div>
                   <div className="text-xs text-fg-muted mt-0.5">Hands-free speech & readout</div>
                 </div>
               </div>

@@ -118,20 +118,12 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
     };
   }
 
-  if (pulse.rooms.totalActive > 0) {
-    if (pulse.rooms.vacantClean === 0) {
-      map.rack = {
-        count: pulse.rooms.occupied,
-        tone: 'red',
-        tooltip: `0 vacant clean rooms ready · ${pulse.rooms.occupied} occupied`,
-      };
-    } else {
-      map.rack = {
-        count: pulse.rooms.vacantClean,
-        tone: 'green',
-        tooltip: `${pulse.rooms.vacantClean} room(s) vacant clean & ready to sell`,
-      };
-    }
+  if (pulse.rooms.totalActive > 0 && pulse.rooms.vacantClean === 0) {
+    map.rack = {
+      count: pulse.rooms.occupied,
+      tone: 'red',
+      tooltip: `0 vacant clean rooms ready · ${pulse.rooms.occupied} occupied`,
+    };
   }
 
   const hkAttention = pulse.rooms.vacantDirty + pulse.rooms.hkTodoCount + pulse.rooms.hkDoneToInspect;
@@ -141,12 +133,6 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
       tone: 'red',
       tooltip: `${pulse.rooms.vacantDirty} dirty room(s), ${pulse.rooms.hkTodoCount} task(s) to clean, ${pulse.rooms.hkDoneToInspect} awaiting inspection`,
     };
-  } else if (pulse.rooms.vacantClean > 0) {
-    map.housekeeping = {
-      count: pulse.rooms.vacantClean,
-      tone: 'green',
-      tooltip: `All rooms clean (${pulse.rooms.vacantClean} ready)`,
-    };
   }
 
   if (pulse.feedback.openIssues > 0) {
@@ -155,29 +141,9 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
       tone: 'red',
       tooltip: `${pulse.feedback.openIssues} unresolved guest feedback issue(s)`,
     };
-  } else if (pulse.feedback.goodCount > 0) {
-    map.feedback = {
-      count: pulse.feedback.goodCount,
-      tone: 'green',
-      tooltip: `${pulse.feedback.goodCount} positive guest reviews · 0 open issues`,
-    };
   }
 
   // 3. Revenue & Billing
-  if (pulse.desk.lateArrivals > 0) {
-    map.brief = {
-      count: pulse.desk.lateArrivals,
-      tone: 'red',
-      tooltip: `${pulse.desk.lateArrivals} overdue arrival(s) needing follow-up`,
-    };
-  } else if (pulse.finance.clearedTodayCount > 0) {
-    map.brief = {
-      count: pulse.finance.clearedTodayCount,
-      tone: 'green',
-      tooltip: `${pulse.finance.clearedTodayCount} payment(s) cleared today`,
-    };
-  }
-
   if (pulse.finance.receiptsIssuedToday > 0) {
     map.receipts = {
       count: pulse.finance.receiptsIssuedToday,
@@ -192,12 +158,6 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
       tone: 'red',
       tooltip: `${pulse.finance.pendingQuotations} draft/sent quotation(s) awaiting client confirmation`,
     };
-  } else if (pulse.finance.acceptedQuotations > 0) {
-    map.quotations = {
-      count: pulse.finance.acceptedQuotations,
-      tone: 'green',
-      tooltip: `${pulse.finance.acceptedQuotations} accepted/converted event quotation(s)`,
-    };
   }
 
   // 4. Operations & POS
@@ -207,12 +167,6 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
       tone: 'red',
       tooltip: `${pulse.operations.posOpenOrders} active kitchen/bar order(s) in preparation`,
     };
-  } else if (pulse.operations.posCompletedToday > 0) {
-    map.pos = {
-      count: pulse.operations.posCompletedToday,
-      tone: 'green',
-      tooltip: `${pulse.operations.posCompletedToday} POS order(s) settled today`,
-    };
   }
 
   if (pulse.operations.healthClubInsideNow > 0) {
@@ -220,12 +174,6 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
       count: pulse.operations.healthClubInsideNow,
       tone: 'green',
       tooltip: `${pulse.operations.healthClubInsideNow} guest(s) currently checked into Health Club & Spa`,
-    };
-  } else if (pulse.operations.healthClubActiveMembers > 0) {
-    map.healthclub = {
-      count: pulse.operations.healthClubActiveMembers,
-      tone: 'green',
-      tooltip: `${pulse.operations.healthClubActiveMembers} active Health Club membership(s)`,
     };
   }
 
@@ -235,12 +183,6 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
       tone: 'red',
       tooltip: `${pulse.operations.lowStockCount} inventory item(s) at or below reorder par level`,
     };
-  } else if (pulse.operations.totalInventoryItems > 0) {
-    map.inventory = {
-      count: pulse.operations.totalInventoryItems,
-      tone: 'green',
-      tooltip: `${pulse.operations.totalInventoryItems} tracked SKUs · all above par level`,
-    };
   }
 
   if (pulse.operations.pendingRequisitions > 0) {
@@ -249,36 +191,9 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
       tone: 'red',
       tooltip: `${pulse.operations.pendingRequisitions} requisition(s) awaiting approval (${pulse.operations.urgentRequisitions} urgent)`,
     };
-  } else if (pulse.operations.pinnedAnnouncements > 0) {
-    map.requisitions = {
-      count: pulse.operations.pinnedAnnouncements,
-      tone: 'green',
-      tooltip: `${pulse.operations.pinnedAnnouncements} pinned staff announcement(s)`,
-    };
   }
 
   // 5. Human Resources
-  if (pulse.hr.activeStaff > 0) {
-    map.staff = {
-      count: pulse.hr.activeStaff,
-      tone: 'green',
-      tooltip: `${pulse.hr.activeStaff} active staff member(s)`,
-    };
-  }
-  if (pulse.hr.departmentsCount > 0) {
-    map.departments = {
-      count: pulse.hr.departmentsCount,
-      tone: 'green',
-      tooltip: `${pulse.hr.departmentsCount} active hotel cost centers`,
-    };
-  }
-  if (pulse.hr.shiftsToday > 0) {
-    map.shifts = {
-      count: pulse.hr.shiftsToday,
-      tone: 'green',
-      tooltip: `${pulse.hr.shiftsToday} shift(s) scheduled today`,
-    };
-  }
   if (pulse.hr.pendingLeaves > 0) {
     map.leave = {
       count: pulse.hr.pendingLeaves,
@@ -301,12 +216,6 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
       tone: 'red',
       tooltip: `${pulse.cms.unpublishedPages} page(s) have unpublished draft changes`,
     };
-  } else if (pulse.cms.publishedPages > 0) {
-    map.publishing = {
-      count: pulse.cms.publishedPages,
-      tone: 'green',
-      tooltip: `All ${pulse.cms.publishedPages} pages published & live`,
-    };
   }
 
   return map;
@@ -319,14 +228,14 @@ function NavBadge({ badge, compact = false }: { badge?: BadgeInfo; compact?: boo
     <span
       title={badge.tooltip}
       className={cn(
-        'inline-flex items-center justify-center gap-1 rounded-full font-bold tabular leading-none transition-all',
-        compact ? 'h-4 min-w-4 px-1 text-[9.5px]' : 'h-4.5 min-w-[1.25rem] px-1.5 text-[10px]',
+        'inline-flex items-center justify-center gap-1 rounded-full font-semibold tabular leading-none transition-all',
+        compact ? 'h-4 min-w-4 px-1.5 text-[9.5px]' : 'h-4.5 min-w-[1.25rem] px-1.5 text-[10px]',
         isRed
-          ? 'bg-rose-500 text-white shadow-[0_1px_6px_rgba(244,63,94,0.45)] ring-1 ring-rose-400/50'
-          : 'bg-emerald-500/20 text-emerald-300 ring-1 ring-inset ring-emerald-500/40',
+          ? 'bg-rose-500/20 text-rose-200 ring-1 ring-inset ring-rose-400/35'
+          : 'bg-emerald-500/18 text-emerald-200 ring-1 ring-inset ring-emerald-400/30',
       )}
     >
-      {isRed && !compact && <span className="size-1.5 rounded-full bg-white animate-pulse" />}
+      <span className={cn('size-1.5 rounded-full', isRed ? 'bg-rose-400' : 'bg-emerald-400')} />
       {badge.count}
     </span>
   );
@@ -515,11 +424,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   hasActiveChild ? 'text-white' : 'text-[var(--sidebar-muted)] hover:text-white',
                 )}
               >
-                <g.icon className={cn('size-3.5 shrink-0 transition-colors', hasActiveChild ? 'text-amber-400' : 'opacity-75 group-hover:opacity-100')} strokeWidth={1.8} />
+                <g.icon className="size-3.5 shrink-0 opacity-75 transition-opacity group-hover:opacity-100" strokeWidth={1.8} />
                 <span className="flex-1 truncate text-[10.5px] font-bold uppercase tracking-[0.11em]">
                   {g.label}
                 </span>
-                {groupRed > 0 && (
+                {!isOpen && groupRed > 0 && (
                   <NavBadge
                     compact
                     badge={{
@@ -577,8 +486,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                               : 'text-[var(--sidebar-fg)]/85 hover:bg-white/6 hover:text-white',
                           )}
                         >
-                          {active && <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-amber-400" />}
-                          <i.icon className={cn('size-3.5 shrink-0', active ? 'text-amber-300' : 'opacity-80')} strokeWidth={1.75} />
+                          {active && <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-white" />}
+                          <i.icon className="size-3.5 shrink-0 opacity-85" strokeWidth={1.75} />
                           <span className="flex-1 truncate">{i.label}</span>
                           <NavBadge badge={badge} />
                         </Link>
@@ -598,10 +507,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           href={`${WEB_URL}/concierge`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-between rounded-lg border border-amber-400/20 bg-amber-400/8 px-3 py-2 text-[12px] font-medium text-amber-200 transition hover:border-amber-400/40 hover:bg-amber-400/12 hover:text-white"
+          className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-[var(--sidebar-fg)] transition hover:border-white/20 hover:bg-white/6 hover:text-white"
         >
           <span className="flex items-center gap-2">
-            <Sparkles className="size-3.5 text-amber-400" />
+            <Sparkles className="size-3.5 opacity-80" />
             <span>Sipi AI Concierge</span>
           </span>
           <ExternalLink className="size-3 opacity-75" />
@@ -660,34 +569,23 @@ function AccountMenu() {
     <div className="flex items-center gap-2">
       {pulse && (
         <div className="hidden items-center gap-1.5 md:flex">
-          {urgentTotal > 0 ? (
-            <Link
-              href="/"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 text-[11.5px] font-semibold text-danger transition hover:bg-rose-500/15"
-              title="Items requiring attention today"
-            >
-              <span className="size-2 rounded-full bg-rose-500 animate-pulse" />
-              <span className="tabular">{urgentTotal}</span>
-              <span>Action Required</span>
-            </Link>
-          ) : (
-            <Link
-              href="/"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-[11.5px] font-semibold text-success transition hover:bg-emerald-500/15"
-              title="All house queues clear"
-            >
-              <span className="size-2 rounded-full bg-emerald-500" />
-              <span>All Clear</span>
-            </Link>
-          )}
+          <Link
+            href="/"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[11.5px] font-medium text-fg-muted transition hover:border-line-strong hover:text-fg"
+            title="Live house queue summary"
+          >
+            <span className={cn('size-2 rounded-full', urgentTotal > 0 ? 'bg-rose-500' : 'bg-emerald-500')} />
+            <span className="tabular font-semibold text-fg">{urgentTotal}</span>
+            <span>{urgentTotal === 1 ? 'action' : 'actions'}</span>
+          </Link>
           {pulse.rooms.totalActive > 0 && (
             <Link
               href="/rack"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[11.5px] font-semibold text-fg-muted transition hover:border-line-strong hover:text-fg"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[11.5px] font-medium text-fg-muted transition hover:border-line-strong hover:text-fg"
               title="Vacant clean rooms ready for check-in"
             >
               <span className={cn('size-2 rounded-full', pulse.rooms.vacantClean > 0 ? 'bg-emerald-500' : 'bg-rose-500')} />
-              <span className="tabular font-bold text-fg">{pulse.rooms.vacantClean}</span>
+              <span className="tabular font-semibold text-fg">{pulse.rooms.vacantClean}</span>
               <span>/ {pulse.rooms.totalActive} clean</span>
             </Link>
           )}

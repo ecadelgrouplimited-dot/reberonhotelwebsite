@@ -2,11 +2,12 @@
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Send } from 'lucide-react';
+import { Download, Send } from 'lucide-react';
 import { get, post } from '@/lib/api';
 import { useCan } from '@/lib/providers';
 import { dateShort } from '@/lib/format';
 import { money } from '@/lib/money';
+import { exportToCsv } from '@/lib/export-csv';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Section, Skeleton, Status } from '@/components/ui/bits';
 import { StatTile } from '@/components/charts/charts';
@@ -24,12 +25,31 @@ export default function BriefPage() {
   const { data: b, isLoading } = useQuery({ queryKey: ['brief'], queryFn: () => get<Brief>('/owner/brief'), refetchInterval: 60_000 });
   const send = useMutation({ mutationFn: () => post('/owner/brief/send'), onSuccess: () => toast.success('Brief emailed to directors') });
   if (isLoading || !b) return <Skeleton className="h-80" />;
+  const exportBriefCsv = () => {
+    exportToCsv(
+      `reberon-owner-brief-${b.date}.csv`,
+      ['Section', 'Code', 'Guest Name', 'Status', 'Details / Arrival', 'Balance Due'],
+      [
+        ['Executive Summary', 'OCCUPANCY', `${b.occupancy.tonight}/${b.occupancy.total} rooms`, `${b.occupancy.percent}%`, b.date, ''],
+        ['Executive Summary', 'CLEARED TODAY', `${b.clearedToday.count} payments`, 'PAID', money(b.clearedToday.UGX, 'UGX'), money(b.clearedToday.USD, 'USD')],
+        ...b.arrivals.map((a) => ['Tomorrow Arrival', a.code, a.name, a.status, `${a.rooms}${a.eta ? ` (ETA ${a.eta})` : ''}`, a.balance]),
+        ...b.promised.map((p) => ['Receivable (7d)', p.code, p.name, p.status, `Arrives ${p.arrival}`, p.balance]),
+      ],
+    );
+  };
   return (
     <div className="fade-in">
       <PageHeader
         title="Owner Brief"
         description={`${dateShort(b.date)} · Daily executive snapshot (auto-dispatched at 19:00 EAT)`}
-        actions={can('settings:features') && <Button size="sm" icon={<Send className="size-3.5" />} loading={send.isPending} onClick={() => send.mutate()}>Dispatch Email Now</Button>}
+        actions={
+          <>
+            <Button size="sm" variant="secondary" icon={<Download className="size-3.5" />} onClick={exportBriefCsv}>
+              Export CSV
+            </Button>
+            {can('settings:features') && <Button size="sm" icon={<Send className="size-3.5" />} loading={send.isPending} onClick={() => send.mutate()}>Dispatch Email Now</Button>}
+          </>
+        }
       />
       <div className="grid gap-2.5 sm:grid-cols-3">
         <StatTile label="Occupied Tonight" value={`${b.occupancy.tonight} / ${b.occupancy.total}`} note={`${b.occupancy.percent}% occupancy`} />

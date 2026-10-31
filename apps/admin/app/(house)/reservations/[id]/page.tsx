@@ -1,12 +1,12 @@
 'use client';
 import { use, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Ban, BedDouble, CalendarDays, Copy, HandCoins, Mail, MessageSquareText, Phone, RotateCcw, Send, Undo2, Users } from 'lucide-react';
+import { Ban, BedDouble, CalendarDays, Copy, HandCoins, Mail, MessageSquareText, Phone, RotateCcw, Send, Trash2, Undo2, Users } from 'lucide-react';
 import { whatsappLink } from '@reberon/utils';
-import { ApiError, get, patch, post } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { ApiError, del, get, patch, post } from '@/lib/api';
+import { useCan, useMe } from '@/lib/providers';
 import { dateRange, dateShort, dateTime } from '@/lib/format';
 import { money, toMinorStr } from '@/lib/money';
 import { Button } from '@/components/ui/button';
@@ -36,11 +36,14 @@ const MEAL: Record<string, string> = { RO: 'Room only', BB: 'Breakfast included'
 
 export default function ReservationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const qc = useQueryClient();
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
   const autoCheckIn = useSearchParams().get('checkin') === '1';
   const { data: r, isLoading } = useQuery({ queryKey: ['reservation', id], queryFn: () => get<Detail>(`/reservations/${id}`) });
-  const [dialog, setDialog] = useState<null | 'pay' | 'refund' | 'cancel'>(null);
+  const [dialog, setDialog] = useState<null | 'pay' | 'refund' | 'cancel' | 'delete'>(null);
   const [notes, setNotes] = useState('');
   const [eta, setEta] = useState('');
   useEffect(() => {
@@ -76,6 +79,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
             {can('payments:refund') && r.status === 'CANCELLED' && BigInt(r.paidMinor) > 0n && balance >= 0n && <Button icon={<Undo2 className="size-4" />} onClick={() => setDialog('refund')}>Record refund</Button>}
             {r.status === 'CONFIRMED' && r.contact.email && <Button icon={<Send className="size-4" />} loading={resend.isPending} onClick={() => resend.mutate()}>Resend confirmation</Button>}
             {can('bookings:write') && open && <Button variant="danger" icon={<Ban className="size-4" />} onClick={() => setDialog('cancel')}>Cancel</Button>}
+            {isOwner && <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setDialog('delete')}>Delete</Button>}
           </>
         }
       />
@@ -180,6 +184,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
 
       <PaymentDialog kind={dialog === 'refund' ? 'refund' : 'pay'} open={dialog === 'pay' || dialog === 'refund'} onClose={() => setDialog(null)} r={r} onDone={(d) => { refresh(d); setDialog(null); }} />
       <CancelDialog open={dialog === 'cancel'} onClose={() => setDialog(null)} r={r} onDone={() => { refresh(); setDialog(null); }} />
+      {isOwner && <DeleteReservationDialog open={dialog === 'delete'} onClose={() => setDialog(null)} r={r} onDeleted={() => { qc.invalidateQueries({ queryKey: ['reservations'] }); router.push('/reservations'); }} />}
     </div>
   );
 }
@@ -237,6 +242,42 @@ function CancelDialog({ open, onClose, r, onDone }: { open: boolean; onClose: ()
         </div>
         <TextInput label="Reason" required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Plans changed, road closed…" />
         <Switch label="Waive the cancellation fee" hint="Refund everything that was paid (e.g. weather, illness)." checked={waive} onChange={setWaive} />
+      </div>
+    </Dialog>
+  );
+}
+
+function DeleteReservationDialog({ open, onClose, r, onDeleted }: { open: boolean; onClose: () => void; r: Detail; onDeleted: () => void }) {
+  const [reason, setReason] = useState('');
+  const m = useMutation({
+    mutationFn: () => del<{ ok: boolean; code: string }>(`/reservations/${r.id}`, { reason: reason.trim() || 'Super Admin permanent deletion' }),
+    onSuccess: () => {
+      toast.success(`Reservation ${r.code} permanently deleted`);
+      onDeleted();
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not delete reservation'),
+  });
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={`Permanently delete ${r.code}?`}
+      description="Super Admin exclusive action — releases any held or sold rooms and removes this reservation record. Recorded in the Owner Audit Log."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" icon={<Trash2 className="size-4" />} loading={m.isPending} onClick={() => m.mutate()}>
+            Permanently Delete
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 text-[13px]">
+        <div className="rounded-xl bg-surface-2 p-4">
+          <p>Guest: <b>{r.contact.name}</b> ({dateRange(r.arrival, r.departure)})</p>
+          <p className="mt-1 text-fg-muted">Total: {money(r.totalMinor, r.currency)} · Paid: {money(r.paidMinor, r.currency)}</p>
+        </div>
+        <TextInput label="Reason for deletion (recorded in Owner Audit Log)" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Test booking or duplicate entry" />
       </div>
     </Dialog>
   );

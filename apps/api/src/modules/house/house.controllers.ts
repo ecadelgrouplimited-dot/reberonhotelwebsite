@@ -148,6 +148,13 @@ export class GuestsController {
     return this.guests.update(id, body, user);
   }
 
+  @Delete('guests/:id')
+  @HttpCode(200)
+  @Requires('guests:write')
+  remove(@Param('id') id: string, @Body() body: { reason?: string } | undefined, @CurrentUser() user: AuthUser) {
+    return this.guests.delete(id, body?.reason, user);
+  }
+
   @Post('guests/merge')
   @HttpCode(200)
   @Requires('guests:merge')

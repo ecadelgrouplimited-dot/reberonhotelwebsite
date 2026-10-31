@@ -249,9 +249,27 @@ export class ReservationsAdminController {
   @Patch('reservations/:id')
   @Requires('bookings:write')
   async patch(@Param('id') id: string, @Body(new ZodPipe(zReservationPatch)) body: z.infer<typeof zReservationPatch>, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    const before = await this.prisma.reservation.findUnique({ where: { id }, include: { contact: true } });
+    if (!before) throw notFound('Reservation');
     await this.prisma.reservation.update({ where: { id }, data: body });
-    await this.audit.record({ actor: user, action: 'reservation.update', entityType: 'Reservation', entityId: id, summary: 'Updated notes/ETA', after: body, req });
+    await this.audit.record({
+      actor: user,
+      action: 'reservation.update',
+      entityType: 'Reservation',
+      entityId: id,
+      summary: `Updated reservation ${before.code} (${before.contact.name}) notes/ETA`,
+      before: { code: before.code, eta: before.eta, staffNotes: before.staffNotes, guestNotes: before.guestNotes },
+      after: body,
+      req,
+    });
     return this.booking.detail(id);
+  }
+
+  @Delete('reservations/:id')
+  @HttpCode(200)
+  @Requires('bookings:write')
+  async remove(@Param('id') id: string, @Body() body: { reason?: string } | undefined, @CurrentUser() user: AuthUser) {
+    return this.booking.deleteReservation(id, body?.reason, user);
   }
 
   @Post('reservations/:id/payments')

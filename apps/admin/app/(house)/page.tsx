@@ -83,23 +83,17 @@ function StatusBadgePill({
   tone: 'red' | 'green' | 'amber' | 'neutral';
   label: string;
 }) {
-  const styles = {
-    red: 'bg-rose-500/12 text-danger border-rose-500/30',
-    green: 'bg-emerald-500/12 text-success border-emerald-500/30',
-    amber: 'bg-amber-500/12 text-warning border-amber-500/30',
-    neutral: 'bg-surface-2 text-fg-muted border-line',
-  }[tone];
   const dot = {
-    red: 'bg-rose-500 animate-pulse',
+    red: 'bg-rose-500',
     green: 'bg-emerald-500',
     amber: 'bg-amber-500',
     neutral: 'bg-fg-subtle',
   }[tone];
 
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular', styles)}>
-      <span className={cn('size-1.5 rounded-full', dot)} />
-      {count !== undefined && <span className="font-bold">{count}</span>}
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium text-fg tabular">
+      <span className={cn('size-1.5 rounded-full shrink-0', dot)} />
+      {count !== undefined && <span className="font-semibold">{count}</span>}
       <span>{label}</span>
     </span>
   );
@@ -120,12 +114,12 @@ function KpiCard({
   icon: LucideIcon;
   badge?: { text: string; tone: 'red' | 'green' | 'amber' | 'neutral' };
 }) {
-  const badgeCls = badge
+  const dotCls = badge
     ? {
-        red: 'bg-rose-500 text-white shadow-xs',
-        green: 'bg-emerald-500/15 text-success border border-emerald-500/30',
-        amber: 'bg-amber-500/15 text-warning border border-amber-500/30',
-        neutral: 'bg-surface-2 text-fg-muted',
+        red: 'bg-rose-500',
+        green: 'bg-emerald-500',
+        amber: 'bg-amber-500',
+        neutral: 'bg-fg-subtle',
       }[badge.tone]
     : '';
 
@@ -140,8 +134,8 @@ function KpiCard({
           {label}
         </span>
         {badge && (
-          <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular', badgeCls)}>
-            {badge.tone === 'red' && <span className="size-1.5 rounded-full bg-white animate-pulse" />}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-fg tabular">
+            <span className={cn('size-1.5 rounded-full shrink-0', dotCls)} />
             {badge.text}
           </span>
         )}
@@ -624,7 +618,7 @@ export default function Today() {
       {pulse && (
         <div className="card flex flex-wrap items-center gap-2 px-3.5 py-2.5">
           <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-fg-subtle mr-1">
-            <Sparkles className="size-3.5 text-warning" />
+            <Sparkles className="size-3.5 text-fg-muted" />
             House Pulse:
           </span>
           {actionAlerts.length > 0 ? (
@@ -632,10 +626,10 @@ export default function Today() {
               <Link
                 key={a.label}
                 href={a.href}
-                className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11.5px] font-semibold text-danger transition hover:border-rose-500/50 hover:bg-rose-500/15"
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-fg transition hover:border-line-strong"
               >
-                <span className="size-1.5 rounded-full bg-rose-500 animate-pulse" />
-                <span className="font-bold tabular">{a.count}</span>
+                <span className="size-1.5 rounded-full bg-rose-500" />
+                <span className="font-semibold tabular">{a.count}</span>
                 <span>{a.label}</span>
               </Link>
             ))
@@ -645,20 +639,20 @@ export default function Today() {
           {canRooms && pulse.rooms.vacantClean > 0 && (
             <Link
               href="/rack"
-              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11.5px] font-semibold text-success transition hover:bg-emerald-500/15"
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-fg transition hover:border-line-strong"
             >
               <span className="size-1.5 rounded-full bg-emerald-500" />
-              <span className="font-bold tabular">{pulse.rooms.vacantClean}</span>
+              <span className="font-semibold tabular">{pulse.rooms.vacantClean}</span>
               <span>Clean Rooms Ready</span>
             </Link>
           )}
           {canDesk && pulse.desk.inHouse > 0 && (
             <Link
               href="/desk"
-              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11.5px] font-semibold text-success transition hover:bg-emerald-500/15"
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-fg transition hover:border-line-strong"
             >
               <span className="size-1.5 rounded-full bg-emerald-500" />
-              <span className="font-bold tabular">{pulse.desk.inHouse}</span>
+              <span className="font-semibold tabular">{pulse.desk.inHouse}</span>
               <span>In-House ({pulse.desk.guestsInHouse} Guests)</span>
             </Link>
           )}
@@ -683,14 +677,8 @@ export default function Today() {
                     {a.label}
                   </span>
                   {a.badgeCount !== undefined && a.badgeCount > 0 && (
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full px-1.5 py-0.2 text-[10px] font-bold tabular',
-                        a.badgeTone === 'red'
-                          ? 'bg-rose-500 text-white'
-                          : 'bg-emerald-500/15 text-success border border-emerald-500/30',
-                      )}
-                    >
+                    <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-1.5 py-0.2 text-[10px] font-semibold text-fg tabular">
+                      <span className={cn('size-1.5 rounded-full', a.badgeTone === 'red' ? 'bg-rose-500' : 'bg-emerald-500')} />
                       {a.badgeCount}
                     </span>
                   )}
@@ -1037,33 +1025,41 @@ export default function Today() {
                   <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <Link
                       href="/rack"
-                      className="rounded-lg border border-emerald-500/25 bg-emerald-500/8 p-2 text-center transition hover:bg-emerald-500/12"
+                      className="rounded-lg border border-line bg-surface-2/50 p-2 text-center transition hover:bg-surface-2"
                     >
-                      <span className="block text-lg font-bold text-success tabular">{pulse.rooms.vacantClean}</span>
-                      <span className="text-[10.5px] font-semibold text-fg-muted">Vacant Clean</span>
+                      <span className="block text-lg font-bold text-fg tabular">{pulse.rooms.vacantClean}</span>
+                      <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-fg-muted">
+                        <span className="size-1.5 rounded-full bg-emerald-500" /> Vacant Clean
+                      </span>
                     </Link>
                     <Link
                       href="/rack"
-                      className="rounded-lg border border-sky-500/25 bg-sky-500/8 p-2 text-center transition hover:bg-sky-500/12"
+                      className="rounded-lg border border-line bg-surface-2/50 p-2 text-center transition hover:bg-surface-2"
                     >
-                      <span className="block text-lg font-bold text-info tabular">{pulse.rooms.occupied}</span>
-                      <span className="text-[10.5px] font-semibold text-fg-muted">Occupied</span>
+                      <span className="block text-lg font-bold text-fg tabular">{pulse.rooms.occupied}</span>
+                      <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-fg-muted">
+                        <span className="size-1.5 rounded-full bg-fg-subtle" /> Occupied
+                      </span>
                     </Link>
                     <Link
                       href="/housekeeping"
-                      className="rounded-lg border border-rose-500/25 bg-rose-500/8 p-2 text-center transition hover:bg-rose-500/12"
+                      className="rounded-lg border border-line bg-surface-2/50 p-2 text-center transition hover:bg-surface-2"
                     >
-                      <span className="block text-lg font-bold text-danger tabular">{pulse.rooms.vacantDirty}</span>
-                      <span className="text-[10.5px] font-semibold text-fg-muted">Vacant Dirty</span>
+                      <span className="block text-lg font-bold text-fg tabular">{pulse.rooms.vacantDirty}</span>
+                      <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-fg-muted">
+                        <span className="size-1.5 rounded-full bg-rose-500" /> Vacant Dirty
+                      </span>
                     </Link>
                     <Link
                       href="/housekeeping"
-                      className="rounded-lg border border-amber-500/25 bg-amber-500/8 p-2 text-center transition hover:bg-amber-500/12"
+                      className="rounded-lg border border-line bg-surface-2/50 p-2 text-center transition hover:bg-surface-2"
                     >
-                      <span className="block text-lg font-bold text-warning tabular">
+                      <span className="block text-lg font-bold text-fg tabular">
                         {pulse.rooms.hkTodoCount + pulse.rooms.hkDoneToInspect}
                       </span>
-                      <span className="text-[10.5px] font-semibold text-fg-muted">Active Tasks</span>
+                      <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-fg-muted">
+                        <span className="size-1.5 rounded-full bg-amber-500" /> Active Tasks
+                      </span>
                     </Link>
                   </div>
                 </div>

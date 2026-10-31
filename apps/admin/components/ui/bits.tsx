@@ -6,18 +6,27 @@ import { cn } from '@/lib/cn';
 
 const TONES = {
   neutral: 'bg-surface-2 text-fg-muted border-line',
-  green: 'bg-success/10 text-success border-success/20',
-  amber: 'bg-warning/10 text-warning border-warning/25',
-  red: 'bg-danger/10 text-danger border-danger/20',
-  blue: 'bg-info/10 text-info border-info/20',
+  green: 'bg-surface-2 text-fg border-line',
+  amber: 'bg-surface-2 text-fg border-line',
+  red: 'bg-surface-2 text-danger border-danger/25',
+  blue: 'bg-surface-2 text-fg border-line',
   dark: 'bg-fg text-bg border-transparent',
 } as const;
 export type Tone = keyof typeof TONES;
 
+const DOT_TONES: Record<Tone, string> = {
+  neutral: 'bg-fg-subtle',
+  green: 'bg-emerald-500',
+  amber: 'bg-amber-500',
+  red: 'bg-rose-500',
+  blue: 'bg-emerald-500',
+  dark: 'bg-bg',
+};
+
 export function Pill({ tone = 'neutral', children, dot, className }: { tone?: Tone; children: ReactNode; dot?: boolean; className?: string }) {
   return (
-    <span className={cn('inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold leading-none', TONES[tone], className)}>
-      {dot && <span className="size-1.5 rounded-full bg-current" />}
+    <span className={cn('inline-flex h-5 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11px] font-medium leading-none', TONES[tone], className)}>
+      {dot && <span className={cn('size-1.5 rounded-full shrink-0', DOT_TONES[tone])} />}
       {children}
     </span>
   );

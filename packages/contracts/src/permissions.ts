@@ -54,7 +54,7 @@ const ALL = [...PERMISSIONS];
 /** "Who may touch what" from the spec, made enforceable. The API is the wall. */
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   OWNER: ALL,
-  MANAGER: ALL.filter((p) => !['settings:features', 'users:manage', 'vault:manage'].includes(p)),
+  MANAGER: ALL.filter((p) => !['settings:features', 'users:manage', 'vault:manage', 'audit:read'].includes(p)),
   DESK: [
     'dashboard:view', 'media:read', 'media:upload', 'inbox:read', 'inbox:write',
     'waitlist:read', 'waitlist:write', 'rooms:status', 'bookings:read', 'bookings:write',
@@ -69,8 +69,8 @@ export function can(role: Role | undefined | null, permission: Permission): bool
   return !!role && ROLE_PERMISSIONS[role].includes(permission);
 }
 
-/** Powers that stay with owners, whatever is granted: people, keys, feature switches. */
-export const OWNER_ONLY: Permission[] = ['users:manage', 'vault:manage', 'settings:features'];
+/** Powers that stay with owners, whatever is granted: people, keys, feature switches, audit trail. */
+export const OWNER_ONLY: Permission[] = ['users:manage', 'vault:manage', 'settings:features', 'audit:read'];
 
 /**
  * What one person may do: their role's preset, plus what the owner added,

@@ -33,6 +33,7 @@ import { useCan } from '@/lib/providers';
 import { money, toMinorStr } from '@/lib/money';
 import { dateRange } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { exportToCsv } from '@/lib/export-csv';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Section, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
@@ -207,17 +208,43 @@ export default function ReportsPage() {
 
   const csv = () => {
     if (!r) return;
-    const rows = [
-      ['Date', 'Rooms Available', 'Rooms Sold', 'Occupancy (%)'],
-      ...r.days.map((d) => [d.date, d.available, d.sold, d.occupancy]),
+    if (activeTab === 'EXPENSES') {
+      exportToCsv(
+        `reberon-expenses-${from}-to-${to}.csv`,
+        ['Number', 'Date', 'Department', 'Category', 'Title', 'Vendor', 'Payment Method', 'Reference', 'Currency', 'Amount', 'Recorded By'],
+        filteredExpenses.map((e) => [
+          e.number,
+          e.date,
+          DEPT_LABELS[e.department] ?? e.department,
+          CATEGORY_LABELS[e.category] ?? e.category,
+          e.title,
+          e.vendor ?? '',
+          PAYMENT_METHOD_LABELS[e.paymentMethod] ?? e.paymentMethod,
+          e.referenceNumber ?? '',
+          e.currency,
+          money(e.amountMinor, e.currency),
+          e.recordedByName ?? '',
+        ]),
+      );
+      return;
+    }
+
+    const rows: Array<Array<string | number>> = [
+      ['SECTION', 'METRIC / ITEM', 'VALUE UGX', 'VALUE USD / NOTES'],
+      ['Executive Summary', 'Period', `${from} to ${to}`, `${r.days.length} days`],
+      ['Executive Summary', 'Occupancy %', `${r.totals.occupancy}%`, `${r.totals.roomNightsSold} / ${r.totals.roomNightsAvailable} room nights`],
+      ['Executive Summary', 'Total Gross Revenue', ugx(r.financialSummary?.totalGrossRevenue?.UGX), money(r.financialSummary?.totalGrossRevenue?.USD ?? '0', 'USD')],
+      ['Executive Summary', 'Cost of Sales (COGS)', ugx(r.financialSummary?.costOfSales?.UGX), money(r.financialSummary?.costOfSales?.USD ?? '0', 'USD')],
+      ['Executive Summary', 'Operating Expenses (OPEX)', ugx(r.financialSummary?.operatingExpenses?.UGX), money(r.financialSummary?.operatingExpenses?.USD ?? '0', 'USD')],
+      ['Executive Summary', 'Gross Operating Profit (GOP)', ugx(r.financialSummary?.grossOperatingProfit?.UGX), money(r.financialSummary?.grossOperatingProfit?.USD ?? '0', 'USD')],
+      ['Executive Summary', 'Room Revenue', ugx(r.totals.roomRevenue.UGX), `${r.totals.bookings} bookings`],
+      ...(r.departments ?? []).map((d) => ['Department Revenue', d.label, ugx(d.revenue.UGX), `${d.ordersCount} orders (${d.sharePercent}%)`]),
+      ...r.roomTypes.map((rt) => ['Suite Performance', rt.name, `${rt.roomNightsSold} nights sold`, `${rt.occupancy}% occupancy`]),
+      ...(r.paymentReconciliation ?? []).map((m) => ['Payment Channel', m.label, ugx(m.amount.UGX), `${m.count} transactions`]),
+      ...r.days.map((d) => ['Daily Occupancy', d.date, `${d.sold} / ${d.available} rooms`, `${d.occupancy}%`]),
+      ...(expensesList ?? []).map((e) => ['Expense Ledger', `${e.date} · ${e.number} · ${e.title}`, money(e.amountMinor, e.currency), DEPT_LABELS[e.department] ?? e.department]),
     ];
-    const blob = new Blob([rows.map((x) => x.join(',')).join('\n')], { type: 'text/csv' });
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(blob),
-      download: `reberon-hotel-performance-${from}-to-${to}.csv`,
-    });
-    a.click();
-    URL.revokeObjectURL(a.href);
+    exportToCsv(`reberon-hotel-report-${from}-to-${to}.csv`, rows[0] as string[], rows.slice(1));
   };
 
   return (

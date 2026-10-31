@@ -7,11 +7,11 @@ import type { Prisma } from '@reberon/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
 import { has, type AuthUser } from '../../common/auth.js';
-import { badRequest, conflict, notFound } from '../../common/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../../common/errors.js';
 import { last4, seal } from '../../common/crypto.js';
 import { Events } from '../../common/events.js';
 import { BookingService } from '../booking/booking.service.js';
-import { iso, nightsOf } from '../booking/inventory.service.js';
+import { InventoryService, iso, nightsOf } from '../booking/inventory.service.js';
 
 const STAYED = ['CHECKED_OUT', 'IN_HOUSE'] as const;
 const LIVE = ['CONFIRMED', 'IN_HOUSE', 'CHECKED_OUT'] as const;
@@ -42,6 +42,7 @@ export class GuestsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly booking: BookingService,
+    private readonly inventory: InventoryService,
     private readonly events: EventEmitter2,
   ) {}
 
@@ -152,8 +153,89 @@ export class GuestsService {
     if (body.idDocNumber !== undefined) Object.assign(data, body.idDocNumber ? { idDocNumberEnc: seal(body.idDocNumber), idDocLast4: last4(body.idDocNumber) } : { idDocNumberEnc: null, idDocLast4: null });
     if (body.tags) data.tags = [...new Set(body.tags.map((t) => t.toLowerCase()))];
     await this.prisma.contact.update({ where: { id }, data });
-    await this.audit.record({ actor, action: 'guest.update', entityType: 'Contact', entityId: id, summary: `Updated guest ${body.name ?? c.name}`, after: { ...body, idDocNumber: body.idDocNumber ? '••••' : body.idDocNumber } });
+    const changedFields = Object.keys(body).filter((k) => (body as Record<string, unknown>)[k] !== undefined);
+    await this.audit.record({
+      actor,
+      action: 'guest.update',
+      entityType: 'Contact',
+      entityId: id,
+      summary: `Updated guest "${body.name ?? c.name}" (${changedFields.join(', ') || 'profile'}) by ${actor.name} (${actor.role})`,
+      before: {
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        country: c.country,
+        nationality: c.nationality,
+        isVip: c.isVip,
+        tags: c.tags,
+        guestNotes: c.guestNotes,
+      },
+      after: {
+        ...body,
+        idDocNumber: body.idDocNumber ? '••••' : body.idDocNumber,
+        actorRole: actor.role,
+      },
+    });
     return this.profile(id, actor);
+  }
+
+  async delete(id: string, reason: string | undefined, actor: AuthUser) {
+    if (!['OWNER', 'MANAGER'].includes(actor.role)) {
+      throw forbidden('Only the Super Admin (Owner) or Manager can delete a guest profile');
+    }
+    const existing = await this.prisma.contact.findUnique({
+      where: { id },
+      include: { reservations: { include: { rooms: true } } },
+    });
+    if (!existing) throw notFound('Guest');
+    const inHouse = existing.reservations.filter((r) => r.status === 'IN_HOUSE');
+    if (inHouse.length > 0 && actor.role !== 'OWNER') {
+      throw badRequest(`Cannot delete ${existing.name} while they have an active In-House stay (${inHouse.map((r) => r.code).join(', ')}). Check them out first.`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const r of existing.reservations) {
+        if (['HELD', 'CONFIRMED', 'IN_HOUSE'].includes(r.status)) {
+          const nights = nightsOf(iso(r.arrival), iso(r.departure));
+          for (const rr of r.rooms) {
+            await this.inventory.release(tx, rr.roomTypeId, nights, rr.quantity, r.status === 'HELD' ? 'held' : 'sold');
+          }
+        }
+        await tx.issuedDocument.updateMany({ where: { reservationId: r.id }, data: { reservationId: null } });
+        await tx.posOrder.updateMany({ where: { reservationId: r.id }, data: { reservationId: null } });
+        await tx.healthClubAccessLog.updateMany({ where: { reservationId: r.id }, data: { reservationId: null } });
+        await tx.outboundMessage.updateMany({ where: { reservationId: r.id }, data: { reservationId: null } });
+        await tx.quotation.updateMany({ where: { convertedReservationId: r.id }, data: { convertedReservationId: null } });
+        await tx.paymentIntent.deleteMany({ where: { reservationId: r.id } });
+        await tx.reservation.delete({ where: { id: r.id } });
+      }
+      await tx.contact.updateMany({ where: { mergedIntoId: id }, data: { mergedIntoId: null } });
+      await tx.contact.delete({ where: { id } });
+    });
+
+    const cleanReason = reason?.trim() || `Deleted by ${actor.role}`;
+    await this.audit.record({
+      actor,
+      action: 'guest.delete',
+      entityType: 'Contact',
+      entityId: id,
+      summary: `Deleted guest "${existing.name}" (${existing.phone ?? existing.email ?? 'no contact'}, ${existing.reservations.length} stays) by ${actor.name} (${actor.role}): ${cleanReason}`,
+      before: {
+        name: existing.name,
+        phone: existing.phone,
+        email: existing.email,
+        country: existing.country,
+        nationality: existing.nationality,
+        isVip: existing.isVip,
+        tags: existing.tags,
+        guestNotes: existing.guestNotes,
+        reservationCodes: existing.reservations.map((r) => r.code),
+        reservationsCount: existing.reservations.length,
+        actorRole: actor.role,
+        reason: cleanReason,
+      },
+    });
+    return { ok: true, deleted: true, name: existing.name };
   }
 
   /** Fold `mergeId` into `keepId`: bookings, conversations and list entries follow; gaps are filled. */

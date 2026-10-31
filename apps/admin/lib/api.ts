@@ -61,7 +61,7 @@ export const get = <T,>(path: string) => api<T>(path);
 export const post = <T,>(path: string, body?: unknown) => api<T>(path, { method: 'POST', body: body ?? {} });
 export const patch = <T,>(path: string, body: unknown, headers?: Record<string, string>) => api<T>(path, { method: 'PATCH', body, headers });
 export const put = <T,>(path: string, body: unknown) => api<T>(path, { method: 'PUT', body });
-export const del = (path: string) => api<void>(path, { method: 'DELETE' });
+export const del = <T = void>(path: string, body?: unknown) => api<T>(path, { method: 'DELETE', body });
 
 export const WEB_URL = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000';
 export const MEDIA_URL = process.env.NEXT_PUBLIC_MEDIA_URL ?? 'http://localhost:4000/media';

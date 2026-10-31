@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { BedDouble, Clock, ExternalLink, LogIn, LogOut, Plus, Search, Star, UserRoundPlus, UserX } from 'lucide-react';
+import { BedDouble, Clock, Download, ExternalLink, LogIn, LogOut, Plus, Search, Star, UserRoundPlus, UserX } from 'lucide-react';
 import type { DeskBoardDTO, DeskStayDTO } from '@reberon/contracts';
 import { ApiError, get, post } from '@/lib/api';
 import { useCan } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { dateShort } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { exportToCsv } from '@/lib/export-csv';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Status } from '@/components/ui/bits';
 import { useConfirm } from '@/components/ui/confirm';
@@ -80,6 +81,36 @@ export default function DeskPage() {
         description={heading ? `${heading} · Live check-in, in-house folios, and departures` : 'Live front desk operations'}
         actions={
           <>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!shown.length}
+              icon={<Download className="size-3.5" />}
+              onClick={() =>
+                exportToCsv(
+                  `reberon-desk-${tab}-${today}.csv`,
+                  ['Code', 'Guest', 'Phone', 'VIP', 'Arrival', 'Departure', 'Nights', 'Adults', 'Children', 'Rooms', 'Assigned Rooms', 'Status', 'Total', 'Balance'],
+                  shown.map((s) => [
+                    s.code,
+                    s.guest.name,
+                    s.guest.phone ?? '',
+                    s.isVip ? 'Yes' : 'No',
+                    s.arrival,
+                    s.departure,
+                    s.nights,
+                    s.adults,
+                    s.children,
+                    s.rooms.map((r) => `${r.quantity}x ${r.roomTypeName}`).join('; '),
+                    s.rooms.flatMap((r) => r.assigned.map((a) => a.number)).join(', '),
+                    s.status,
+                    money(s.totalMinor, s.currency),
+                    money(s.balanceMinor, s.currency),
+                  ]),
+                )
+              }
+            >
+              Export CSV
+            </Button>
             {can('bookings:write') && (
               <>
                 <Button size="sm" href="/reservations/new" icon={<Plus className="size-3.5" />}>New Booking</Button>

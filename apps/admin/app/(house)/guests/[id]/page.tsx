@@ -4,16 +4,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Frown, Mail, Meh, Merge, MessageSquareText, Phone, Smile, Star, X } from 'lucide-react';
+import { Frown, Mail, Meh, Merge, MessageSquareText, Phone, Smile, Star, Trash2, X } from 'lucide-react';
 import type { GuestProfileDTO } from '@reberon/contracts';
 import { whatsappLink } from '@reberon/utils';
-import { ApiError, get, patch, post } from '@/lib/api';
-import { useCan } from '@/lib/providers';
+import { ApiError, del, get, patch, post } from '@/lib/api';
+import { useCan, useMe } from '@/lib/providers';
 import { money } from '@/lib/money';
-import { dateRange, dateShort } from '@/lib/format';
+import { ago, dateRange, dateShort } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Pill, Section, Skeleton, Status } from '@/components/ui/bits';
+import { Dialog } from '@/components/ui/dialog';
 import { Switch, TextArea, TextInput } from '@/components/ui/field';
 import { useConfirm } from '@/components/ui/confirm';
 
@@ -24,17 +25,36 @@ export default function GuestPage({ params }: { params: Promise<{ id: string }> 
   const qc = useQueryClient();
   const router = useRouter();
   const can = useCan();
+  const me = useMe();
+  const isOwner = me.role === 'OWNER';
+  const canDelete = me.role === 'OWNER' || me.role === 'MANAGER';
   const confirm = useConfirm();
   const { data: g, isLoading } = useQuery({ queryKey: ['guest', id], queryFn: () => get<GuestProfileDTO>(`/guests/${id}`) });
+  const { data: guestAudit } = useQuery({
+    queryKey: ['guest-audit', id],
+    queryFn: () => get<{ data: { id: string; action: string; summary: string | null; actor: { name: string; role?: string } | null; createdAt: string }[] }>(`/audit?entityType=Contact&entityId=${id}`),
+    enabled: isOwner,
+  });
   const [form, setForm] = useState({ name: '', phone: '', email: '', country: '', nationality: '', guestNotes: '', tags: [] as string[], isVip: false, idDocType: '', idDocNumber: '' });
   const [tag, setTag] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
   useEffect(() => {
     if (g) setForm({ name: g.name, phone: g.phone ?? '', email: g.email ?? '', country: g.country ?? '', nationality: g.nationality ?? '', guestNotes: g.guestNotes ?? '', tags: g.tags, isVip: g.isVip, idDocType: g.idDocType ?? '', idDocNumber: '' });
   }, [g]);
   const save = useMutation({
     mutationFn: () => patch<GuestProfileDTO>(`/guests/${id}`, { ...form, phone: form.phone || null, email: form.email || null, country: form.country || null, nationality: form.nationality || null, guestNotes: form.guestNotes || null, idDocType: form.idDocType || null, idDocNumber: form.idDocNumber || undefined }),
-    onSuccess: (d) => { qc.setQueryData(['guest', id], d); qc.invalidateQueries({ queryKey: ['guests'] }); toast.success('Saved'); },
+    onSuccess: (d) => { qc.setQueryData(['guest', id], d); qc.invalidateQueries({ queryKey: ['guests'] }); qc.invalidateQueries({ queryKey: ['guest-audit', id] }); toast.success('Saved'); },
     onError: (e) => toast.error(e instanceof ApiError ? (e.errors[0]?.message ?? e.message) : 'Could not save'),
+  });
+  const deleteMut = useMutation({
+    mutationFn: () => del<{ ok: boolean; name: string }>(`/guests/${id}`, { reason: deleteReason.trim() || `Deleted by ${me.role}` }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['guests'] });
+      toast.success('Guest profile deleted');
+      router.push('/guests');
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not delete guest'),
   });
   const merge = useMutation({
     mutationFn: (mergeId: string) => post<GuestProfileDTO>('/guests/merge', { keepId: id, mergeId }),
@@ -57,7 +77,16 @@ export default function GuestPage({ params }: { params: Promise<{ id: string }> 
         crumbs={[{ label: 'Guests', href: '/guests' }, { label: g.name }]}
         title={<span className="flex flex-wrap items-center gap-3">{g.name}{g.isVip && <Pill tone="dark"><Star className="size-3" /> VIP</Pill>}{g.stays >= 2 && <Pill tone="blue">Regular</Pill>}</span>}
         description={`Guest since ${dateShort(g.createdAt)} · first came through ${g.source.toLowerCase().replace('_', ' ')}`}
-        actions={can('bookings:write') && <Button variant="primary" href={`/reservations/new`}>New booking</Button>}
+        actions={
+          <>
+            {can('bookings:write') && <Button variant="primary" href={`/reservations/new`}>New booking</Button>}
+            {canDelete && (
+              <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setDeleteOpen(true)}>
+                Delete Guest
+              </Button>
+            )}
+          </>
+        }
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -125,6 +154,24 @@ export default function GuestPage({ params }: { params: Promise<{ id: string }> 
               </ul>
             </Section>
           )}
+
+          {isOwner && guestAudit?.data && guestAudit.data.length > 0 && (
+            <Section title="Super Admin Profile Audit Log" description="Strictly visible only to the Hotel Owner (Super Admin)">
+              <ul className="-my-2 divide-y divide-line text-[13px]">
+                {guestAudit.data.map((log) => (
+                  <li key={log.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div>
+                      <span className="font-medium text-fg">{log.summary ?? log.action}</span>
+                      <span className="ml-2 text-xs text-fg-muted">
+                        by {log.actor?.name ?? 'Staff'}{log.actor?.role ? ` (${log.actor.role})` : ''}
+                      </span>
+                    </div>
+                    <span className="text-xs text-fg-subtle">{ago(log.createdAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
         </div>
 
         <aside className="grid gap-5 xl:sticky xl:top-20">
@@ -147,7 +194,7 @@ export default function GuestPage({ params }: { params: Promise<{ id: string }> 
               </div>
             </div>
             <Switch label="VIP" hint="Shown to the desk on arrival." checked={form.isVip} onChange={(v) => setForm({ ...form, isVip: v })} disabled={!edit} />
-            <details className="group">
+            <details className="group" open>
               <summary className="cursor-pointer text-[13px] font-medium text-fg-muted">Contact and identity</summary>
               <div className="mt-3 grid gap-3">
                 <TextInput label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} disabled={!edit} />
@@ -167,6 +214,27 @@ export default function GuestPage({ params }: { params: Promise<{ id: string }> 
           </div>
         </aside>
       </div>
+
+      {canDelete && (
+        <Dialog
+          open={deleteOpen}
+          onClose={() => setDeleteOpen(false)}
+          title={`Delete guest profile "${g.name}"?`}
+          description="Removes this guest profile and any associated reservations. Logged in the Super Admin Audit Trail."
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+              <Button variant="danger" icon={<Trash2 className="size-4" />} loading={deleteMut.isPending} onClick={() => deleteMut.mutate()}>
+                Delete Guest Profile
+              </Button>
+            </>
+          }
+        >
+          <div className="grid gap-4 text-[13px]">
+            <TextInput label="Reason for deletion (recorded in Owner Audit Log)" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} placeholder="e.g. Duplicate test guest or erroneous entry" />
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

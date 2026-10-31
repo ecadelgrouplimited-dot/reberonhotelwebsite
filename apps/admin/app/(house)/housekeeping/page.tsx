@@ -3,11 +3,12 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { BellOff, Boxes, CheckCheck, CircleCheck, Play, RotateCcw, Search, Sparkles } from 'lucide-react';
+import { BellOff, Boxes, CheckCheck, CircleCheck, Download, Play, RotateCcw, Search, Sparkles } from 'lucide-react';
 import type { HkBoardDTO, HkTaskDTO, HkTaskStatus } from '@reberon/contracts';
 import { ApiError, get, patch } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
 import { cn } from '@/lib/cn';
+import { exportToCsv } from '@/lib/export-csv';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
 import { HkBadge, TASK_KIND } from '@/components/house/hk';
@@ -99,6 +100,31 @@ export default function HousekeepingPage() {
             {can('inventory:manage') && (
               <Button size="sm" href="/inventory" icon={<Boxes className="size-3.5" />}>Linen Store</Button>
             )}
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!shown.length}
+              icon={<Download className="size-3.5" />}
+              onClick={() =>
+                exportToCsv(
+                  `reberon-housekeeping-${data?.date ?? 'today'}.csv`,
+                  ['Room Number', 'Floor', 'Room Type', 'Room Status', 'Task Kind', 'Task Status', 'Assignee', 'Arrival Today', 'Notes'],
+                  shown.map((t) => [
+                    t.room.number,
+                    t.room.floor,
+                    t.room.roomTypeName,
+                    t.room.hkStatus,
+                    t.kind,
+                    t.status,
+                    t.assignee?.name ?? 'Unassigned',
+                    t.arrivalToday ? 'Yes' : 'No',
+                    t.notes ?? '',
+                  ]),
+                )
+              }
+            >
+              Export CSV
+            </Button>
           </>
         }
       />
