@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Contour } from '@/components/ui/contour';
 import { cn } from '@/lib/cn';
+import { SipiConciergeOrb } from './sipi-concierge-orb';
 
 function triggerConcierge(opts: {
   open?: boolean;
@@ -289,9 +290,7 @@ export function ConciergeShowcase() {
             <div className="rounded-2xl border border-line-strong bg-surface/95 p-5 sm:p-6 shadow-2xl backdrop-blur-xl space-y-5">
               <div className="flex items-center justify-between border-b border-line pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-linear-to-tr from-amber-700 to-amber-500 text-white shadow-md">
-                    <Sparkles className="size-5" />
-                  </div>
+                  <SipiConciergeOrb size="md" active />
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="font-serif text-base font-semibold text-mist-50">Instant Command Console</h2>

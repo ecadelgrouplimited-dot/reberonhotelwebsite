@@ -53,6 +53,7 @@ import type {
   ConciergeDocumentItemDTO,
 } from '@reberon/contracts';
 import { cn } from '@/lib/cn';
+import { SipiConciergeOrb } from './sipi-concierge-orb';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const IDENTITY_STORAGE_KEY = 'reberon_concierge_identity_v2';
@@ -190,7 +191,12 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
 
   // Sync guest identity with backend & load live dossier
   const syncIdentityWithBackend = useCallback(
-    async (sid: string, targetIdentity: ConciergeGuestIdentityDTO, updateWelcome = false) => {
+    async (
+      sid: string,
+      targetIdentity: ConciergeGuestIdentityDTO,
+      updateWelcome = false,
+      isProfileEdit = false,
+    ) => {
       if (!sid || !targetIdentity.name.trim()) return null;
       setIsSyncingIdentity(true);
       try {
@@ -207,15 +213,65 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
         });
         if (res.ok) {
           const data: ConciergeGuestDossierDTO = await res.json();
-          setIdentity(data.identity);
-          setDossier(data);
+          const submittedName = targetIdentity.name.trim();
+          const submittedEmail = targetIdentity.email?.trim();
+          const resolvedIdentity: ConciergeGuestIdentityDTO = {
+            ...data.identity,
+            name:
+              submittedName && submittedName.toLowerCase() !== 'guest'
+                ? submittedName
+                : data.identity.name || submittedName || 'Guest',
+            phone: targetIdentity.phone?.trim() || data.identity.phone || undefined,
+            email:
+              submittedEmail && !submittedEmail.toLowerCase().startsWith('guest@')
+                ? submittedEmail
+                : data.identity.email && !data.identity.email.toLowerCase().startsWith('guest@')
+                  ? data.identity.email
+                  : undefined,
+            bookingCode: targetIdentity.bookingCode?.trim().toUpperCase() || data.identity.bookingCode || undefined,
+          };
+          const resolvedDossier: ConciergeGuestDossierDTO = {
+            ...data,
+            identity: resolvedIdentity,
+          };
+          setIdentity(resolvedIdentity);
+          setDossier(resolvedDossier);
+          setIdForm({
+            name: resolvedIdentity.name && resolvedIdentity.name.toLowerCase() !== 'guest' ? resolvedIdentity.name : '',
+            phone: resolvedIdentity.phone || '',
+            email:
+              resolvedIdentity.email && !resolvedIdentity.email.toLowerCase().startsWith('guest@')
+                ? resolvedIdentity.email
+                : '',
+            bookingCode: resolvedIdentity.bookingCode || '',
+          });
           try {
-            localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(data.identity));
+            localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(resolvedIdentity));
           } catch {}
           if (updateWelcome) {
-            setMessages([buildWelcomeMessage(data.identity, data)]);
+            setMessages([buildWelcomeMessage(resolvedIdentity, resolvedDossier)]);
+          } else if (isProfileEdit) {
+            setMessages((prev) =>
+              prev.map((m, idx) => {
+                const updatedCards = m.cards?.map((c) => {
+                  if (c.type === 'lookup' || c.type === 'activity_log' || c.type === 'documents') {
+                    return { ...c, guestName: resolvedIdentity.name };
+                  }
+                  return c;
+                });
+                const updatedContent =
+                  idx === 0
+                    ? buildWelcomeMessage(resolvedIdentity, resolvedDossier).content
+                    : m.content.replace(/\bGuest\b/g, resolvedIdentity.name);
+                return {
+                  ...m,
+                  content: updatedContent,
+                  cards: updatedCards,
+                };
+              }),
+            );
           }
-          return data;
+          return resolvedDossier;
         }
       } catch {} finally {
         setIsSyncingIdentity(false);
@@ -471,18 +527,36 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
     window.speechSynthesis.speak(utterance);
   };
 
+  const openIdentityEditor = useCallback(() => {
+    setIdForm({
+      name: identity?.name && identity.name.trim().toLowerCase() !== 'guest' ? identity.name : '',
+      phone: identity?.phone || '',
+      email:
+        identity?.email && !identity.email.toLowerCase().startsWith('guest@')
+          ? identity.email
+          : '',
+      bookingCode: identity?.bookingCode || '',
+    });
+    setShowIdentityForm(true);
+  }, [identity]);
+
   const handleIdentitySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!idForm.name.trim()) return;
+    const isEdit = Boolean(identity);
     const newId: ConciergeGuestIdentityDTO = {
       name: idForm.name.trim(),
       phone: idForm.phone.trim() || undefined,
-      email: idForm.email.trim() || undefined,
+      email:
+        idForm.email.trim() && !idForm.email.trim().toLowerCase().startsWith('guest@')
+          ? idForm.email.trim()
+          : undefined,
       bookingCode: idForm.bookingCode.trim().toUpperCase() || undefined,
+      contactId: identity?.contactId,
       identifiedAt: new Date().toISOString(),
     };
+    await syncIdentityWithBackend(sessionId, newId, messages.length <= 1, isEdit);
     setShowIdentityForm(false);
-    await syncIdentityWithBackend(sessionId, newId, messages.length <= 1);
   };
 
   const resetChat = () => {
@@ -516,14 +590,14 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
           <button
             type="button"
             onClick={() => setIsOpen(true)}
-            className="hidden sm:flex cursor-pointer items-center gap-2 rounded-full border border-amber-500/35 bg-surface/95 px-3.5 py-2 text-xs font-medium text-fg shadow-lg backdrop-blur-md transition-all duration-300 hover:border-amber-500/70 hover:shadow-xl"
+            className="hidden sm:flex cursor-pointer items-center gap-2 rounded-full border border-amber-500/35 bg-surface/95 px-3.5 py-2 text-xs font-medium text-fg shadow-lg backdrop-blur-md transition-all duration-300 hover:border-emerald-500/60 hover:shadow-xl"
           >
             <span className="relative flex size-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
             </span>
             <span>
-              {identity?.name
+              {identity?.name && identity.name.toLowerCase() !== 'guest'
                 ? `Sipi Concierge · ${identity.name.split(' ')[0]}`
                 : 'Sipi Concierge · Bookings, Receipts & Hikes'}
             </span>
@@ -534,23 +608,21 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
           className={cn(
-            'group relative flex size-13 items-center justify-center rounded-full shadow-2xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 cursor-pointer',
+            'group relative flex items-center justify-center transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 cursor-pointer',
             isOpen
-              ? 'bg-surface-2 text-fg border border-line scale-95'
-              : 'bg-linear-to-tr from-amber-700 via-amber-600 to-amber-500 text-white hover:scale-105',
+              ? 'size-12 rounded-2xl bg-surface-2 text-fg border border-line shadow-xl scale-95'
+              : 'rounded-2xl hover:scale-108 active:scale-95',
           )}
           aria-label={isOpen ? 'Close Sipi Concierge' : 'Open Sipi Concierge'}
         >
           {isOpen ? (
             <X className="size-5" />
           ) : (
-            <>
-              <Sparkles className="size-5" />
-              <span className="absolute -top-0.5 -right-0.5 flex size-3">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex size-3 rounded-full bg-emerald-500" />
-              </span>
-            </>
+            <SipiConciergeOrb
+              size="lg"
+              active={isLoading || isSpeaking || isListening || isSyncingIdentity}
+              className="group-hover:shadow-[0_0_32px_-2px_rgba(16,185,129,0.55),0_0_28px_-4px_rgba(245,158,11,0.5)]"
+            />
           )}
         </button>
       </div>
@@ -571,9 +643,10 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
           <div className="border-b border-line bg-surface-2/90 px-3.5 py-2.5 backdrop-blur-md shrink-0">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-tr from-amber-700 to-amber-500 text-white shadow-xs">
-                  <Sparkles className="size-4" />
-                </div>
+                <SipiConciergeOrb
+                  size="sm"
+                  active={isLoading || isSpeaking || isListening || isSyncingIdentity}
+                />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h3 className="font-serif text-sm font-semibold tracking-tight truncate">Sipi Concierge</h3>
@@ -594,13 +667,11 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
                   <button
                     type="button"
                     onClick={() => {
-                      setIdForm({
-                        name: identity.name || '',
-                        phone: identity.phone || '',
-                        email: identity.email || '',
-                        bookingCode: identity.bookingCode || '',
-                      });
-                      setShowIdentityForm((p) => !p);
+                      if (showIdentityForm) {
+                        setShowIdentityForm(false);
+                      } else {
+                        openIdentityEditor();
+                      }
                     }}
                     title="Guest Identity & Session Profile"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-fg hover:border-amber-500/60 transition-colors cursor-pointer max-w-[160px]"
@@ -1202,7 +1273,7 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
                         </button>
                         <button
                           type="button"
-                          onClick={() => setShowIdentityForm(true)}
+                          onClick={openIdentityEditor}
                           className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] font-medium text-fg hover:bg-surface-2 cursor-pointer"
                         >
                           Edit Profile
@@ -1338,7 +1409,7 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
                       </span>
                       <button
                         type="button"
-                        onClick={() => setShowIdentityForm(true)}
+                        onClick={openIdentityEditor}
                         className="text-[10.5px] text-amber-600 hover:underline cursor-pointer"
                       >
                         Switch / Edit
@@ -2232,7 +2303,10 @@ function ConciergeCardView({
           <div className="flex items-center justify-between border-b border-line pb-2">
             <div>
               <span className="text-[9.5px] font-semibold uppercase tracking-wider text-fg-muted block">
-                Live Booking Record · {card.guestName}
+                Live Booking Record ·{' '}
+                {guestName && guestName.trim().toLowerCase() !== 'guest'
+                  ? guestName
+                  : card.guestName}
               </span>
               <h4 className="font-mono text-sm font-bold text-fg">{card.code} · {card.roomName}</h4>
             </div>

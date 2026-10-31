@@ -58,13 +58,17 @@ export class ConciergeService {
     const session = this.getOrCreateSession(input.sessionId);
     const mergedIdentity: ConciergeGuestIdentityDTO = {
       name: input.guestName.trim(),
-      phone: input.phone?.trim() || session.identity?.phone,
-      email: input.email?.trim() || session.identity?.email,
-      bookingCode: input.bookingCode?.trim().toUpperCase() || session.identity?.bookingCode,
+      phone: input.phone !== undefined ? input.phone.trim() || undefined : session.identity?.phone,
+      email: input.email !== undefined ? input.email.trim() || undefined : session.identity?.email,
+      bookingCode:
+        input.bookingCode !== undefined
+          ? input.bookingCode.trim().toUpperCase() || undefined
+          : session.identity?.bookingCode,
+      contactId: session.identity?.contactId,
       identifiedAt: new Date().toISOString(),
     };
 
-    const dossier = await this.tools.buildGuestDossier(mergedIdentity);
+    const dossier = await this.tools.buildGuestDossier(mergedIdentity, true);
     session.identity = dossier.identity;
     session.dossier = dossier;
 

@@ -9,7 +9,7 @@ import type {
   ConciergeGuestIdentityDTO,
   LText,
 } from '@reberon/contracts';
-import { referenceCode } from '@reberon/utils';
+import { normalizePhone, referenceCode } from '@reberon/utils';
 import { PrismaService } from '../../common/prisma.service.js';
 import { PricingService } from '../booking/pricing.service.js';
 import { BookingService } from '../booking/booking.service.js';
@@ -60,7 +60,7 @@ export class ConciergeToolsService {
   ) {}
 
   /* ── Build Complete Real-Time Guest Dossier Across Entire System ── */
-  async buildGuestDossier(identity: ConciergeGuestIdentityDTO): Promise<ConciergeGuestDossierDTO> {
+  async buildGuestDossier(identity: ConciergeGuestIdentityDTO, syncContact = false): Promise<ConciergeGuestDossierDTO> {
     const cleanName = (identity.name || '').trim();
     const cleanPhone = (identity.phone || '').trim();
     const cleanEmail = (identity.email || '').trim().toLowerCase();
@@ -71,11 +71,16 @@ export class ConciergeToolsService {
 
     // 1. Find matching Contacts
     const contactOr: Record<string, unknown>[] = [];
+    if (identity.contactId && isUuid(identity.contactId)) {
+      contactOr.push({ id: identity.contactId });
+    }
     if (cleanPhone && cleanPhone.length >= 6) {
       const phoneDigits = cleanPhone.replace(/\D/g, '').slice(-8);
-      contactOr.push({ phone: { contains: phoneDigits } });
+      if (phoneDigits.length >= 6) {
+        contactOr.push({ phone: { contains: phoneDigits } });
+      }
     }
-    if (cleanEmail && cleanEmail.includes('@')) {
+    if (cleanEmail && cleanEmail.includes('@') && !cleanEmail.startsWith('guest@')) {
       contactOr.push({ email: { equals: cleanEmail, mode: 'insensitive' } });
     }
     if (cleanName && cleanName.length >= 3 && cleanName.toLowerCase() !== 'guest') {
@@ -91,7 +96,6 @@ export class ConciergeToolsService {
       : [];
 
     const contactIds = contacts.map((c) => c.id);
-    const primaryContact = contacts[0];
 
     // 2. Find Reservations
     const resOr: Record<string, unknown>[] = [];
@@ -99,7 +103,9 @@ export class ConciergeToolsService {
     if (cleanCode && cleanCode.startsWith('RB-')) resOr.push({ code: cleanCode });
     if (cleanPhone && cleanPhone.length >= 6) {
       const phoneDigits = cleanPhone.replace(/\D/g, '').slice(-8);
-      resOr.push({ contact: { phone: { contains: phoneDigits } } });
+      if (phoneDigits.length >= 6) {
+        resOr.push({ contact: { phone: { contains: phoneDigits } } });
+      }
     }
     if (cleanName && cleanName.length >= 3 && cleanName.toLowerCase() !== 'guest') {
       resOr.push({ contact: { name: { contains: cleanName, mode: 'insensitive' } } });
@@ -113,6 +119,72 @@ export class ConciergeToolsService {
           take: 15,
         })
       : [];
+
+    // Resolve primaryContact from explicit contactId, matching reservation code, or top matched contact
+    const codeReservation = cleanCode ? dbReservations.find((r) => r.code === cleanCode) : undefined;
+    let primaryContact =
+      (identity.contactId ? contacts.find((c) => c.id === identity.contactId) : undefined) ||
+      codeReservation?.contact ||
+      contacts[0] ||
+      dbReservations[0]?.contact;
+
+    if (primaryContact && !contactIds.includes(primaryContact.id)) {
+      contactIds.push(primaryContact.id);
+    }
+
+    // 2b. Synchronize / Update Guest Contact in Database when user updates profile or replaces placeholder "Guest"
+    const isRealUserName = Boolean(cleanName && cleanName.length >= 2 && cleanName.toLowerCase() !== 'guest');
+    const isRealUserEmail = Boolean(cleanEmail && cleanEmail.includes('@') && !cleanEmail.startsWith('guest@'));
+    const normPhone = cleanPhone && cleanPhone.length >= 6 ? normalizePhone(cleanPhone) || cleanPhone : undefined;
+
+    if (primaryContact) {
+      const dbIsPlaceholderName = !primaryContact.name || primaryContact.name.trim().toLowerCase() === 'guest';
+      const dbIsPlaceholderEmail = !primaryContact.email || primaryContact.email.toLowerCase().startsWith('guest@');
+
+      if (syncContact || dbIsPlaceholderName || dbIsPlaceholderEmail) {
+        const contactPatch: { name?: string; phone?: string; email?: string } = {};
+        if (isRealUserName && (syncContact || dbIsPlaceholderName) && cleanName !== primaryContact.name) {
+          contactPatch.name = cleanName;
+        }
+        if (normPhone && (syncContact || !primaryContact.phone) && normPhone !== primaryContact.phone) {
+          contactPatch.phone = normPhone;
+        }
+        if (isRealUserEmail && (syncContact || dbIsPlaceholderEmail) && cleanEmail !== primaryContact.email) {
+          contactPatch.email = cleanEmail;
+        }
+
+        if (Object.keys(contactPatch).length > 0) {
+          try {
+            primaryContact = await this.prisma.contact.update({
+              where: { id: primaryContact.id },
+              data: contactPatch,
+            });
+            for (const r of dbReservations) {
+              if (r.contactId === primaryContact.id) {
+                r.contact = primaryContact;
+              }
+            }
+          } catch (err) {
+            this.log.warn(
+              `Could not update contact ${primaryContact.id}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+      }
+    } else if (syncContact && isRealUserName && (normPhone || isRealUserEmail)) {
+      try {
+        primaryContact = await this.prisma.contact.create({
+          data: {
+            name: cleanName,
+            phone: normPhone ?? null,
+            email: isRealUserEmail ? cleanEmail : null,
+          },
+        });
+        contactIds.push(primaryContact.id);
+      } catch (err) {
+        this.log.warn(`Could not create contact for ${cleanName}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
 
     const roomTypeIds = Array.from(new Set(dbReservations.flatMap((r) => r.rooms.map((rm) => rm.roomTypeId))));
     const roomTypesMap = new Map(
@@ -378,12 +450,42 @@ export class ConciergeToolsService {
     // Sort activities newest first
     activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+    const isRealDbName = Boolean(primaryContact?.name && primaryContact.name.trim().toLowerCase() !== 'guest');
+    const resolvedName = syncContact
+      ? isRealUserName
+        ? cleanName
+        : isRealDbName
+          ? primaryContact!.name
+          : cleanName || 'Guest'
+      : isRealUserName
+        ? cleanName
+        : isRealDbName
+          ? primaryContact!.name
+          : primaryContact?.name || cleanName || 'Guest';
+
+    const isRealDbEmail = Boolean(primaryContact?.email && !primaryContact.email.toLowerCase().startsWith('guest@'));
+    const resolvedEmail = syncContact
+      ? isRealUserEmail
+        ? cleanEmail
+        : isRealDbEmail
+          ? primaryContact!.email!
+          : undefined
+      : isRealUserEmail
+        ? cleanEmail
+        : isRealDbEmail
+          ? primaryContact!.email!
+          : undefined;
+
+    const resolvedPhone = syncContact
+      ? normPhone || cleanPhone || primaryContact?.phone || undefined
+      : primaryContact?.phone || normPhone || cleanPhone || undefined;
+
     const enrichedIdentity: ConciergeGuestIdentityDTO = {
-      name: primaryContact?.name || cleanName || 'Guest',
-      phone: primaryContact?.phone || cleanPhone || undefined,
-      email: primaryContact?.email || cleanEmail || undefined,
+      name: resolvedName,
+      phone: resolvedPhone,
+      email: resolvedEmail,
       bookingCode: cleanCode || reservations[0]?.code || undefined,
-      contactId: primaryContact?.id,
+      contactId: primaryContact?.id || identity.contactId,
       isVip: primaryContact?.isVip || reservations.length >= 2,
       isVerified: Boolean(primaryContact || reservations.length > 0 || documents.length > 0),
       identifiedAt: identity.identifiedAt || new Date().toISOString(),
@@ -1289,11 +1391,18 @@ export class ConciergeToolsService {
       };
     });
 
+    const resolvedGuestName =
+      r.contact.name && r.contact.name.trim().toLowerCase() !== 'guest'
+        ? r.contact.name
+        : guestName && guestName.toLowerCase() !== 'guest'
+          ? guestName
+          : r.contact.name || 'Guest';
+
     const card: ConciergeCardDTO = {
       type: 'lookup',
       code: r.code,
       status: r.status,
-      guestName: r.contact.name,
+      guestName: resolvedGuestName,
       roomName,
       arrival: arrivalStr,
       departure: departureStr,
@@ -1319,7 +1428,7 @@ export class ConciergeToolsService {
         found: true,
         code: r.code,
         status: r.status,
-        guestName: r.contact.name,
+        guestName: resolvedGuestName,
         room: roomName,
         dates: `${arrivalStr} to ${departureStr} (${nights} nights)`,
         total: card.total,
