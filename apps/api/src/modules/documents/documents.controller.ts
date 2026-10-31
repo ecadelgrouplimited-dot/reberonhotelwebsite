@@ -191,7 +191,9 @@ export class PublicDocumentsController {
       : null;
     if (!doc) throw notFound('Document');
 
-    const validByCheck = Boolean(check && this.docs.checkCode(doc.number) === check.trim().toUpperCase());
+    const cleanCheck = check.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const expectedCheck = this.docs.checkCode(doc.number).replace(/[^A-Z0-9]/g, '');
+    const validByCheck = Boolean(cleanCheck && expectedCheck === cleanCheck);
     let validByStayToken = false;
     if (doc.reservationId && code && t) {
       const r = await this.prisma.reservation.findUnique({ where: { id: doc.reservationId }, select: { code: true } });
