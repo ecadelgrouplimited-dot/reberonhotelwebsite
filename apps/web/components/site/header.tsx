@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Menu } from 'lucide-react';
+import { ChevronDown, Menu, Sparkles } from 'lucide-react';
 import { t } from '@reberon/contracts/text';
 import { cn } from '@/lib/cn';
 import { Logo } from './logo';
@@ -88,6 +88,20 @@ export function Header() {
                   </li>
                 );
               })}
+              <li>
+                <Link
+                  href="/concierge"
+                  aria-current={pathname === '/concierge' ? 'page' : undefined}
+                  className={cn(
+                    'relative flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[0.92rem] font-medium transition-opacity',
+                    pathname === '/concierge' ? 'opacity-100' : 'opacity-85 hover:opacity-100',
+                  )}
+                >
+                  <Sparkles className="size-3.5 text-amber-500" aria-hidden />
+                  <span>Sipi Concierge</span>
+                  {pathname === '/concierge' && <span className="absolute inset-x-3.5 -bottom-0.5 h-px bg-current" />}
+                </Link>
+              </li>
             </ul>
           </nav>
 

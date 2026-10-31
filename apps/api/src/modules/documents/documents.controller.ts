@@ -99,13 +99,48 @@ export class PublicDocumentsController {
     return this.docs.verify(number, check);
   }
 
-  /** The guest's own copy, reached from their stay link. Never counts as a print. */
+  /** The guest's own copy, reached from their stay link or verified check code. Never counts as a print. */
+  @Get('quotation/:id')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  async quotation(@Param('id') id: string, @Query('check') check = '', @Query('paper') paper: string | undefined, @Res() res: Response) {
+    const quo = /^[0-9a-f-]{36}$/i.test(id) ? await this.prisma.quotation.findUnique({ where: { id }, select: { id: true, checkCode: true } }) : null;
+    if (!quo || quo.checkCode.toUpperCase() !== check.trim().toUpperCase()) throw notFound('Quotation');
+    sendHtml(res, await this.docs.renderQuotationHtml(id, paperOf(paper), false));
+  }
+
+  /** The guest's own copy, reached from their stay link or check code. Never counts as a print. */
   @Get(':id')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  async one(@Param('id') id: string, @Query('code') code = '', @Query('t') t = '', @Query('paper') paper: string | undefined, @Res() res: Response) {
-    const doc = /^[0-9a-f-]{36}$/i.test(id) ? await this.prisma.issuedDocument.findUnique({ where: { id }, select: { reservationId: true } }) : null;
-    const r = doc?.reservationId ? await this.prisma.reservation.findUnique({ where: { id: doc.reservationId }, select: { code: true } }) : null;
-    if (!r || r.code !== code || t !== stayToken(code)) throw notFound('Document');
-    sendHtml(res, await this.docs.html(id, { paper: paperOf(paper), autoprint: false, countPrint: false, publicToken: { code, t } }));
+  async one(
+    @Param('id') id: string,
+    @Query('code') code = '',
+    @Query('t') t = '',
+    @Query('check') check = '',
+    @Query('paper') paper: string | undefined,
+    @Res() res: Response,
+  ) {
+    const doc = /^[0-9a-f-]{36}$/i.test(id)
+      ? await this.prisma.issuedDocument.findUnique({ where: { id }, select: { id: true, number: true, reservationId: true } })
+      : null;
+    if (!doc) throw notFound('Document');
+
+    const validByCheck = Boolean(check && this.docs.checkCode(doc.number) === check.trim().toUpperCase());
+    let validByStayToken = false;
+    if (doc.reservationId && code && t) {
+      const r = await this.prisma.reservation.findUnique({ where: { id: doc.reservationId }, select: { code: true } });
+      if (r && r.code === code && t === stayToken(code)) {
+        validByStayToken = true;
+      }
+    }
+    if (!validByCheck && !validByStayToken) throw notFound('Document');
+    sendHtml(
+      res,
+      await this.docs.html(id, {
+        paper: paperOf(paper),
+        autoprint: false,
+        countPrint: false,
+        publicToken: validByStayToken ? { code, t } : undefined,
+      }),
+    );
   }
 }

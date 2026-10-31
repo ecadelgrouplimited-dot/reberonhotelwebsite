@@ -347,3 +347,84 @@ export interface DashboardDTO {
   recentActivity: AuditLogDTO[];
   progress: { percent: number | null; milestone: string | null; lastUpdate: string | null };
 }
+
+export interface AdminPulseDTO {
+  generatedAt: string;
+  hotelDate: string;
+  inbox: {
+    newCount: number;
+    openCount: number;
+    enquiries24h: number;
+  };
+  waitlist: {
+    newCount: number;
+    contactedCount: number;
+    totalActive: number;
+  };
+  desk: {
+    arrivalsToday: number;
+    arrivedToday: number;
+    inHouse: number;
+    guestsInHouse: number;
+    departuresToday: number;
+    departedToday: number;
+    lateArrivals: number;
+    pendingGuestRequests: number;
+  };
+  reservations: {
+    heldCount: number;
+    confirmedCount: number;
+    inHouseCount: number;
+    upcoming7d: number;
+  };
+  rooms: {
+    totalActive: number;
+    vacantClean: number;
+    occupied: number;
+    vacantDirty: number;
+    blocked: number;
+    hkTodoCount: number;
+    hkDoneToInspect: number;
+    hkInspectedToday: number;
+  };
+  feedback: {
+    openIssues: number;
+    goodCount: number;
+    totalCount: number;
+  };
+  finance: {
+    clearedTodayCount: number;
+    clearedTodayUgxMinor: string;
+    clearedTodayUsdMinor: string;
+    receiptsIssuedToday: number;
+    pendingQuotations: number;
+    acceptedQuotations: number;
+  };
+  operations: {
+    posOpenOrders: number;
+    posCompletedToday: number;
+    posRevenueTodayUgxMinor: string;
+    healthClubInsideNow: number;
+    healthClubActiveMembers: number;
+    lowStockCount: number;
+    totalInventoryItems: number;
+    pendingRequisitions: number;
+    urgentRequisitions: number;
+    pinnedAnnouncements: number;
+  };
+  hr: {
+    activeStaff: number;
+    departmentsCount: number;
+    shiftsToday: number;
+    checkedInShiftsToday: number;
+    pendingLeaves: number;
+    onLeaveToday: number;
+    draftPayrolls: number;
+  };
+  cms: {
+    unpublishedPages: number;
+    publishedPages: number;
+    failedOutboundMessages24h: number;
+  };
+}
+

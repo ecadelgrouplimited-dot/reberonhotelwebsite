@@ -70,7 +70,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           ) : (
             <ComingSoonGate site={site} rooms={rooms} />
           )}
-          <SipiConciergeWidget />
+          <SipiConciergeWidget initialStaffUser={staffSession ? { name: staffSession.name, email: staffSession.email } : null} />
         </SiteProvider>
       </body>
     </html>

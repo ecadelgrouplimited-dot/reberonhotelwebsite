@@ -48,6 +48,12 @@ export function MobileNav({ open, onClose }: { open: boolean; onClose: () => voi
                 </Link>
               </li>
             ))}
+            <li style={{ ['--i' as string]: site.nav.MOBILE.length }} className="fade-up">
+              <Link href="/concierge" className="flex items-baseline justify-between py-4 font-display text-[1.9rem] leading-tight text-amber-600 dark:text-amber-400" aria-current={pathname === '/concierge' ? 'page' : undefined}>
+                Sipi Concierge AI
+                <span className="font-sans text-xs text-fg-subtle tabular">{String(site.nav.MOBILE.length + 1).padStart(2, '0')}</span>
+              </Link>
+            </li>
           </ul>
           <Link href={site.features.bookingEnabled ? '/book' : '/first-stay'} className="btn btn-lg mt-8 w-full">
             {site.features.bookingEnabled ? 'Book a stay' : 'Claim a first stay'}

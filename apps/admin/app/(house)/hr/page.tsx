@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -59,8 +60,22 @@ export default function HrPage() {
   const can = useCan();
   const me = useMe();
   const isOwner = me.role === 'OWNER';
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
 
-  const [activeTab, setActiveTab] = useState<HrTab>('STAFF');
+  const [activeTab, setActiveTab] = useState<HrTab>(() => {
+    if (tabParam === 'ROSTER' || tabParam === 'LEAVE' || tabParam === 'PAYROLL') return tabParam;
+    return 'STAFF';
+  });
+
+  useEffect(() => {
+    if (tabParam === 'ROSTER' || tabParam === 'LEAVE' || tabParam === 'PAYROLL') {
+      setActiveTab(tabParam);
+    } else if (!tabParam) {
+      setActiveTab('STAFF');
+    }
+  }, [tabParam]);
   const [terminatingStaff, setTerminatingStaff] = useState<StaffProfileDTO | null>(null);
 
   // Staff filters
@@ -356,7 +371,11 @@ export default function HrPage() {
       {/* Tabs Navigation */}
       <Tabs
         value={activeTab}
-        onChange={(t) => setActiveTab(t as HrTab)}
+        onChange={(t) => {
+          const next = t as HrTab;
+          setActiveTab(next);
+          router.replace(next === 'STAFF' ? '/hr' : `/hr?tab=${next}`, { scroll: false });
+        }}
         items={[
           { value: 'STAFF', label: 'Employee Directory', count: staffList?.length },
           { value: 'ROSTER', label: 'Shifts & Attendance', count: shifts?.length },

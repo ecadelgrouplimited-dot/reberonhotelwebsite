@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
-import { zConversationPatch, zMessageCreate, zManualConversationInput, zWaitlistPatch, t, type DashboardDTO } from '@reberon/contracts';
+import { zConversationPatch, zMessageCreate, zManualConversationInput, zWaitlistPatch, t, type DashboardDTO, type AdminPulseDTO } from '@reberon/contracts';
 import { hotelToday, addDays } from '@reberon/utils';
 import type { Prisma, WaitlistEntry } from '@reberon/db';
 import { PrismaService } from '../../common/prisma.service.js';
@@ -162,6 +162,232 @@ export class DashboardController {
     private readonly prisma: PrismaService,
     private readonly inbox: InboxService,
   ) {}
+
+  @Get('pulse')
+  async pulse(@CurrentUser() user: AuthUser): Promise<AdminPulseDTO> {
+    const todayStr = hotelToday();
+    const todayDate = new Date(`${todayStr}T00:00:00.000Z`);
+    const next7Date = new Date(`${addDays(todayStr, 7)}T00:00:00.000Z`);
+    const todayKampalaStart = new Date(`${todayStr}T00:00:00+03:00`);
+    const since24h = new Date(Date.now() - 86_400_000);
+
+    const canInbox = has(user, 'inbox:read');
+    const canWaitlist = has(user, 'waitlist:read');
+    const canDesk = has(user, 'desk:operate') || has(user, 'bookings:read');
+    const canRooms = has(user, 'rooms:status');
+    const canGuests = has(user, 'guests:read');
+    const canFinance = has(user, 'reports:read') || has(user, 'receipts:read') || has(user, 'payments:record');
+    const canQuotes = has(user, 'quotations:manage');
+    const canPos = has(user, 'pos:operate');
+    const canClub = has(user, 'healthclub:operate');
+    const canInv = has(user, 'inventory:manage');
+    const canReq = has(user, 'requisitions:request');
+    const canContent = has(user, 'content:read');
+    const canMessages = has(user, 'messages:read');
+
+    const [
+      inboxNew,
+      inboxOpen,
+      inbox24h,
+      wlNew,
+      wlContacted,
+      arrivalsToday,
+      arrivedToday,
+      inHouseStays,
+      departuresToday,
+      departedToday,
+      lateArrivals,
+      pendingGuestReqs,
+      heldRes,
+      confirmedRes,
+      upcoming7d,
+      roomsList,
+      hkTasksToday,
+      feedbackRows,
+      paymentsToday,
+      receiptsToday,
+      quotesByStatus,
+      posOpen,
+      posCompletedToday,
+      clubInsideNow,
+      clubActiveMembers,
+      invItems,
+      reqPending,
+      reqUrgent,
+      pinnedAnnouncements,
+      activeStaff,
+      deptsCount,
+      shiftsToday,
+      onLeaveToday,
+      pendingLeaves,
+      draftPayrolls,
+      pagesList,
+      failedMessages24h,
+    ] = await Promise.all([
+      canInbox ? this.prisma.conversation.count({ where: { status: 'NEW' } }) : Promise.resolve(0),
+      canInbox ? this.prisma.conversation.count({ where: { status: { in: ['NEW', 'OPEN', 'WAITING_GUEST'] } } }) : Promise.resolve(0),
+      canInbox ? this.prisma.conversation.count({ where: { createdAt: { gte: since24h }, status: { not: 'SPAM' } } }) : Promise.resolve(0),
+      canWaitlist ? this.prisma.waitlistEntry.count({ where: { status: 'NEW' } }) : Promise.resolve(0),
+      canWaitlist ? this.prisma.waitlistEntry.count({ where: { status: 'CONTACTED' } }) : Promise.resolve(0),
+      canDesk ? this.prisma.reservation.count({ where: { arrival: todayDate, status: { in: ['CONFIRMED', 'HELD'] } } }) : Promise.resolve(0),
+      canDesk ? this.prisma.reservation.count({ where: { arrival: todayDate, status: 'IN_HOUSE' } }) : Promise.resolve(0),
+      canDesk ? this.prisma.reservation.findMany({ where: { status: 'IN_HOUSE' }, select: { adults: true, children: true } }) : Promise.resolve([]),
+      canDesk ? this.prisma.reservation.count({ where: { departure: todayDate, status: 'IN_HOUSE' } }) : Promise.resolve(0),
+      canDesk ? this.prisma.reservation.count({ where: { departure: todayDate, status: 'CHECKED_OUT' } }) : Promise.resolve(0),
+      canDesk ? this.prisma.reservation.count({ where: { arrival: { lt: todayDate }, status: 'CONFIRMED' } }) : Promise.resolve(0),
+      canDesk ? this.prisma.guestRequest.count({ where: { status: 'NEW' } }) : Promise.resolve(0),
+      canDesk ? this.prisma.reservation.count({ where: { status: 'HELD' } }) : Promise.resolve(0),
+      canDesk ? this.prisma.reservation.count({ where: { status: 'CONFIRMED' } }) : Promise.resolve(0),
+      canDesk ? this.prisma.reservation.count({ where: { arrival: { gte: todayDate, lte: next7Date }, status: { in: ['CONFIRMED', 'HELD'] } } }) : Promise.resolve(0),
+      canRooms ? this.prisma.room.findMany({ where: { isActive: true }, select: { hkStatus: true } }) : Promise.resolve([]),
+      canRooms ? this.prisma.housekeepingTask.findMany({ where: { date: todayDate }, select: { status: true } }) : Promise.resolve([]),
+      canGuests ? this.prisma.feedback.findMany({ select: { score: true, handledAt: true } }) : Promise.resolve([]),
+      canFinance
+        ? this.prisma.paymentIntent.findMany({
+            where: { status: 'SUCCEEDED', paidAt: { gte: todayKampalaStart } },
+            select: { amountMinor: true, currency: true },
+          })
+        : Promise.resolve([]),
+      canFinance ? this.prisma.issuedDocument.count({ where: { issuedAt: { gte: todayKampalaStart }, voidedAt: null } }) : Promise.resolve(0),
+      canQuotes ? this.prisma.quotation.groupBy({ by: ['status'], _count: true }) : Promise.resolve([]),
+      canPos ? this.prisma.posOrder.count({ where: { status: { in: ['PENDING', 'PREPARING', 'READY'] } } }) : Promise.resolve(0),
+      canPos
+        ? this.prisma.posOrder.findMany({
+            where: { createdAt: { gte: todayKampalaStart }, status: 'COMPLETED' },
+            select: { totalMinor: true, currency: true },
+          })
+        : Promise.resolve([]),
+      canClub ? this.prisma.healthClubAccessLog.count({ where: { checkedOutAt: null } }) : Promise.resolve(0),
+      canClub ? this.prisma.healthClubMembership.count({ where: { isActive: true, endDate: { gte: todayDate } } }) : Promise.resolve(0),
+      canInv ? this.prisma.inventoryItem.findMany({ select: { onHand: true, parLevel: true } }) : Promise.resolve([]),
+      canReq ? this.prisma.requisition.count({ where: { status: { in: ['PENDING', 'MANAGER_APPROVED'] } } }) : Promise.resolve(0),
+      canReq ? this.prisma.requisition.count({ where: { status: { in: ['PENDING', 'MANAGER_APPROVED'] }, priority: 'URGENT' } }) : Promise.resolve(0),
+      this.prisma.staffAnnouncement.count({ where: { isPinned: true } }),
+      canInv ? this.prisma.staffProfile.count({ where: { status: 'ACTIVE' } }) : Promise.resolve(0),
+      canInv ? this.prisma.hotelDepartment.count({ where: { isActive: true } }) : Promise.resolve(0),
+      canInv ? this.prisma.staffShift.findMany({ where: { date: todayDate }, select: { attendanceStatus: true } }) : Promise.resolve([]),
+      canInv ? this.prisma.staffProfile.count({ where: { status: 'ON_LEAVE' } }) : Promise.resolve(0),
+      canInv ? this.prisma.staffLeaveRequest.count({ where: { status: 'PENDING' } }) : Promise.resolve(0),
+      canInv ? this.prisma.staffPayrollRecord.count({ where: { paymentStatus: 'DRAFT' } }) : Promise.resolve(0),
+      canContent ? this.prisma.page.findMany({ where: { deletedAt: null }, include: { publishedVersion: true } }) : Promise.resolve([]),
+      canMessages ? this.prisma.outboundMessage.count({ where: { status: 'FAILED', createdAt: { gte: since24h } } }) : Promise.resolve(0),
+    ]);
+
+    const guestsInHouse = inHouseStays.reduce((s, r) => s + r.adults + r.children, 0);
+    const vacantClean = roomsList.filter((r) => r.hkStatus === 'VACANT_CLEAN' || r.hkStatus === 'INSPECTED').length;
+    const occupied = roomsList.filter((r) => r.hkStatus === 'OCCUPIED').length;
+    const vacantDirty = roomsList.filter((r) => r.hkStatus === 'VACANT_DIRTY').length;
+    const blocked = roomsList.filter((r) => r.hkStatus === 'BLOCKED' || r.hkStatus === 'OUT_OF_ORDER').length;
+
+    const hkTodoCount = hkTasksToday.filter((t) => t.status === 'TODO' || t.status === 'IN_PROGRESS').length;
+    const hkDoneToInspect = hkTasksToday.filter((t) => t.status === 'DONE').length;
+    const hkInspectedToday = hkTasksToday.filter((t) => t.status === 'INSPECTED').length;
+
+    const openIssues = feedbackRows.filter((f) => f.score !== 'GOOD' && !f.handledAt).length;
+    const goodCount = feedbackRows.filter((f) => f.score === 'GOOD').length;
+
+    let clearedUgx = 0n;
+    let clearedUsd = 0n;
+    for (const p of paymentsToday) {
+      if (p.currency === 'USD') clearedUsd += p.amountMinor;
+      else clearedUgx += p.amountMinor;
+    }
+
+    const qCount = (st: string) => quotesByStatus.find((q) => q.status === st)?._count ?? 0;
+    const pendingQuotations = qCount('DRAFT') + qCount('SENT');
+    const acceptedQuotations = qCount('ACCEPTED') + qCount('CONVERTED');
+
+    let posRevUgx = 0n;
+    for (const o of posCompletedToday) {
+      if (o.currency === 'UGX') posRevUgx += o.totalMinor;
+    }
+
+    const lowStockCount = invItems.filter((i) => i.onHand <= i.parLevel).length;
+    const unpublishedPages = pagesList.filter(
+      (p) => p.status !== 'SCHEDULED' && (!p.publishedVersion || JSON.stringify(p.publishedVersion.blocks) !== JSON.stringify(p.draftBlocks)),
+    ).length;
+    const publishedPages = pagesList.filter((p) => p.status === 'PUBLISHED').length;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      hotelDate: todayStr,
+      inbox: {
+        newCount: inboxNew,
+        openCount: inboxOpen,
+        enquiries24h: inbox24h,
+      },
+      waitlist: {
+        newCount: wlNew,
+        contactedCount: wlContacted,
+        totalActive: wlNew + wlContacted,
+      },
+      desk: {
+        arrivalsToday,
+        arrivedToday,
+        inHouse: inHouseStays.length,
+        guestsInHouse,
+        departuresToday,
+        departedToday,
+        lateArrivals,
+        pendingGuestRequests: pendingGuestReqs,
+      },
+      reservations: {
+        heldCount: heldRes,
+        confirmedCount: confirmedRes,
+        inHouseCount: inHouseStays.length,
+        upcoming7d,
+      },
+      rooms: {
+        totalActive: roomsList.length,
+        vacantClean,
+        occupied,
+        vacantDirty,
+        blocked,
+        hkTodoCount,
+        hkDoneToInspect,
+        hkInspectedToday,
+      },
+      feedback: {
+        openIssues,
+        goodCount,
+        totalCount: feedbackRows.length,
+      },
+      finance: {
+        clearedTodayCount: paymentsToday.length,
+        clearedTodayUgxMinor: clearedUgx.toString(),
+        clearedTodayUsdMinor: clearedUsd.toString(),
+        receiptsIssuedToday: receiptsToday,
+        pendingQuotations,
+        acceptedQuotations,
+      },
+      operations: {
+        posOpenOrders: posOpen,
+        posCompletedToday: posCompletedToday.length,
+        posRevenueTodayUgxMinor: posRevUgx.toString(),
+        healthClubInsideNow: clubInsideNow,
+        healthClubActiveMembers: clubActiveMembers,
+        lowStockCount,
+        totalInventoryItems: invItems.length,
+        pendingRequisitions: reqPending,
+        urgentRequisitions: reqUrgent,
+        pinnedAnnouncements,
+      },
+      hr: {
+        activeStaff,
+        departmentsCount: deptsCount,
+        shiftsToday: shiftsToday.length,
+        checkedInShiftsToday: shiftsToday.filter((s) => s.attendanceStatus === 'PRESENT' || s.attendanceStatus === 'CHECKED_IN').length,
+        pendingLeaves,
+        onLeaveToday,
+        draftPayrolls,
+      },
+      cms: {
+        unpublishedPages,
+        publishedPages,
+        failedOutboundMessages24h: failedMessages24h,
+      },
+    };
+  }
 
   @Get('dashboard')
   @Requires('dashboard:view')

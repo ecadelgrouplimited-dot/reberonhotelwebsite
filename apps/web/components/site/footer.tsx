@@ -27,6 +27,9 @@ export function Footer({ site }: { site: SiteDTO }) {
               <Link className="btn btn-secondary" href="/first-stay">
                 Claim a first stay
               </Link>
+              <Link className="btn btn-secondary" href="/concierge">
+                Sipi Concierge AI
+              </Link>
               <Link className="btn btn-secondary" href="/verify">
                 Verify receipt / quote
               </Link>

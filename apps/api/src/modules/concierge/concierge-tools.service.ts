@@ -1,18 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Currency, Prisma } from '@reberon/db';
+import type { GuestRequestKind } from '@reberon/db';
 import { t } from '@reberon/contracts';
-import type { ConciergeCardDTO, LText, BookingInput } from '@reberon/contracts';
+import type {
+  ConciergeActivityItemDTO,
+  ConciergeCardDTO,
+  ConciergeDocumentItemDTO,
+  ConciergeGuestDossierDTO,
+  ConciergeGuestIdentityDTO,
+  LText,
+} from '@reberon/contracts';
 import { referenceCode } from '@reberon/utils';
 import { PrismaService } from '../../common/prisma.service.js';
 import { PricingService } from '../booking/pricing.service.js';
 import { BookingService } from '../booking/booking.service.js';
+import { DocumentsService } from '../documents/documents.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { env } from '../../config.js';
 import { DeepSeekToolDefinition } from './deepseek.client.js';
 
 const toLText = (v: unknown): LText => (v && typeof v === 'object' ? (v as LText) : {});
 const tr = (v: unknown, fallback = ''): string => t(toLText(v)) || fallback;
-const getMediaUrl = (id?: string | null) => (id ? `${env.MEDIA_PUBLIC_URL || 'https://reberonhotel.com/media'}/i/${id}/1280.webp` : undefined);
+const getMediaUrl = (id?: string | null) =>
+  id ? `${env.MEDIA_PUBLIC_URL || 'https://reberonhotel.com/media'}/i/${id}/1280.webp` : undefined;
 
 const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
@@ -20,13 +29,14 @@ function roomTypeWhere(raw: string) {
   const trimmed = (raw || '').trim();
   if (!trimmed) return { id: '00000000-0000-0000-0000-000000000000' };
   if (isUuid(trimmed)) return { id: trimmed };
-  const clean = trimmed.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const clean = trimmed
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
   const prefix = clean.replace(/-suite|-king|-family|-twin/g, '');
   return {
-    OR: [
-      { slug: clean },
-      ...(prefix && prefix.length >= 3 ? [{ slug: { contains: prefix } }] : []),
-    ],
+    OR: [{ slug: clean }, ...(prefix && prefix.length >= 3 ? [{ slug: { contains: prefix } }] : [])],
   };
 }
 
@@ -45,8 +55,353 @@ export class ConciergeToolsService {
     private readonly prisma: PrismaService,
     private readonly pricing: PricingService,
     private readonly booking: BookingService,
+    private readonly documents: DocumentsService,
     private readonly notifications: NotificationsService,
   ) {}
+
+  /* ── Build Complete Real-Time Guest Dossier Across Entire System ── */
+  async buildGuestDossier(identity: ConciergeGuestIdentityDTO): Promise<ConciergeGuestDossierDTO> {
+    const cleanName = (identity.name || '').trim();
+    const cleanPhone = (identity.phone || '').trim();
+    const cleanEmail = (identity.email || '').trim().toLowerCase();
+    const cleanCode = (identity.bookingCode || '').trim().toUpperCase();
+
+    const webBase = env.WEB_URL || 'https://reberonhotel.com';
+    const apiBase = env.API_URL || 'https://reberonhotel.com/api';
+
+    // 1. Find matching Contacts
+    const contactOr: Record<string, unknown>[] = [];
+    if (cleanPhone && cleanPhone.length >= 6) {
+      const phoneDigits = cleanPhone.replace(/\D/g, '').slice(-8);
+      contactOr.push({ phone: { contains: phoneDigits } });
+    }
+    if (cleanEmail && cleanEmail.includes('@')) {
+      contactOr.push({ email: { equals: cleanEmail, mode: 'insensitive' } });
+    }
+    if (cleanName && cleanName.length >= 3 && cleanName.toLowerCase() !== 'guest') {
+      contactOr.push({ name: { equals: cleanName, mode: 'insensitive' } });
+    }
+
+    const contacts = contactOr.length
+      ? await this.prisma.contact.findMany({
+          where: { OR: contactOr },
+          orderBy: { updatedAt: 'desc' },
+          take: 10,
+        })
+      : [];
+
+    const contactIds = contacts.map((c) => c.id);
+    const primaryContact = contacts[0];
+
+    // 2. Find Reservations
+    const resOr: Record<string, unknown>[] = [];
+    if (contactIds.length) resOr.push({ contactId: { in: contactIds } });
+    if (cleanCode && cleanCode.startsWith('RB-')) resOr.push({ code: cleanCode });
+    if (cleanPhone && cleanPhone.length >= 6) {
+      const phoneDigits = cleanPhone.replace(/\D/g, '').slice(-8);
+      resOr.push({ contact: { phone: { contains: phoneDigits } } });
+    }
+    if (cleanName && cleanName.length >= 3 && cleanName.toLowerCase() !== 'guest') {
+      resOr.push({ contact: { name: { contains: cleanName, mode: 'insensitive' } } });
+    }
+
+    const dbReservations = resOr.length
+      ? await this.prisma.reservation.findMany({
+          where: { OR: resOr },
+          include: { contact: true, rooms: true, requests: true },
+          orderBy: { createdAt: 'desc' },
+          take: 15,
+        })
+      : [];
+
+    const roomTypeIds = Array.from(new Set(dbReservations.flatMap((r) => r.rooms.map((rm) => rm.roomTypeId))));
+    const roomTypesMap = new Map(
+      (
+        await this.prisma.roomType.findMany({
+          where: { id: { in: roomTypeIds } },
+          select: { id: true, name: true },
+        })
+      ).map((rt) => [rt.id, tr(rt.name)]),
+    );
+
+    const reservations = dbReservations.map((r) => {
+      const token = this.booking.accessToken(r.code);
+      const stayUrl = `${webBase}/stay?code=${r.code}&t=${encodeURIComponent(token)}`;
+      const balanceMinor = r.totalMinor - r.paidMinor;
+      const paymentUrl =
+        balanceMinor > 0n ? `${webBase}/book/return?code=${r.code}&t=${encodeURIComponent(token)}` : undefined;
+      const roomName = r.rooms[0] ? roomTypesMap.get(r.rooms[0].roomTypeId) || 'Highland Suite' : 'Highland Suite';
+      const nights = Math.max(1, Math.round((r.departure.getTime() - r.arrival.getTime()) / 86_400_000));
+      return {
+        id: r.id,
+        code: r.code,
+        status: r.status,
+        roomName,
+        arrival: r.arrival.toISOString().slice(0, 10),
+        departure: r.departure.toISOString().slice(0, 10),
+        nights,
+        total: `${Number(r.totalMinor).toLocaleString()} ${r.currency}`,
+        paid: `${Number(r.paidMinor).toLocaleString()} ${r.currency}`,
+        balance: `${Number(balanceMinor).toLocaleString()} ${r.currency}`,
+        currency: r.currency,
+        stayUrl,
+        paymentUrl,
+        createdAt: r.createdAt,
+        requests: r.requests,
+      };
+    });
+
+    const reservationIds = dbReservations.map((r) => r.id);
+    const resCodeById = new Map(dbReservations.map((r) => [r.id, r.code]));
+
+    // 3. Find Issued Documents (Receipts, Invoices, Refund Notes)
+    const docOr: Record<string, unknown>[] = [];
+    if (reservationIds.length) docOr.push({ reservationId: { in: reservationIds } });
+    if (cleanCode && (cleanCode.startsWith('RCT-') || cleanCode.startsWith('INV-') || cleanCode.startsWith('RFD-'))) {
+      docOr.push({ number: cleanCode });
+    }
+    if (cleanName && cleanName.length >= 3 && cleanName.toLowerCase() !== 'guest') {
+      docOr.push({ issuedTo: { path: ['name'], string_contains: cleanName } });
+    }
+    if (cleanPhone && cleanPhone.length >= 6) {
+      docOr.push({ issuedTo: { path: ['phone'], string_contains: cleanPhone.slice(-8) } });
+    }
+
+    const dbDocs = docOr.length
+      ? await this.prisma.issuedDocument.findMany({
+          where: { OR: docOr },
+          orderBy: { issuedAt: 'desc' },
+          take: 25,
+        })
+      : [];
+
+    // Also find Quotations
+    const quoOr: Record<string, unknown>[] = [];
+    if (cleanCode && cleanCode.startsWith('QUO-')) quoOr.push({ number: cleanCode });
+    if (cleanPhone && cleanPhone.length >= 6) {
+      quoOr.push({ clientPhone: { contains: cleanPhone.replace(/\D/g, '').slice(-8) } });
+    }
+    if (cleanEmail && cleanEmail.includes('@')) {
+      quoOr.push({ clientEmail: { equals: cleanEmail, mode: 'insensitive' } });
+    }
+    if (cleanName && cleanName.length >= 3 && cleanName.toLowerCase() !== 'guest') {
+      quoOr.push({ clientName: { contains: cleanName, mode: 'insensitive' } });
+    }
+
+    const dbQuotations = quoOr.length
+      ? await this.prisma.quotation.findMany({
+          where: { OR: quoOr },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        })
+      : [];
+
+    const documents: ConciergeDocumentItemDTO[] = [
+      ...dbDocs.map((d) => {
+        const check = this.documents.checkCode(d.number);
+        const resCode = d.reservationId ? resCodeById.get(d.reservationId) : undefined;
+        const printUrl = resCode
+          ? this.documents.publicUrl(d, resCode)
+          : `${apiBase}/v1/public/documents/${d.id}?check=${encodeURIComponent(check)}`;
+        return {
+          id: d.id,
+          kind: d.kind as 'RECEIPT' | 'INVOICE' | 'REFUND',
+          number: d.number,
+          amount: `${Number(d.amountMinor).toLocaleString()} ${d.currency}`,
+          currency: d.currency,
+          issuedAt: d.issuedAt.toISOString(),
+          checkCode: check,
+          reservationCode: resCode,
+          status: d.voidedAt ? 'VOIDED' : 'VALID',
+          printUrl,
+          verifyUrl: `${webBase}/verify?number=${encodeURIComponent(d.number)}&check=${encodeURIComponent(check)}`,
+        };
+      }),
+      ...dbQuotations.map((q) => ({
+        id: q.id,
+        kind: 'QUOTATION' as const,
+        number: q.number,
+        amount: `${Number(q.totalMinor).toLocaleString()} ${q.currency}`,
+        currency: q.currency,
+        issuedAt: q.createdAt.toISOString(),
+        checkCode: q.checkCode,
+        status: q.status,
+        printUrl: `${apiBase}/v1/public/documents/quotation/${q.id}?check=${encodeURIComponent(q.checkCode)}`,
+        verifyUrl: `${webBase}/verify?number=${encodeURIComponent(q.number)}&check=${encodeURIComponent(q.checkCode)}`,
+      })),
+    ];
+
+    // 4. Find Recent Activities across POS, Health Club, Waitlist, Inquiries, and Guest Requests
+    const activities: ConciergeActivityItemDTO[] = [];
+
+    for (const r of reservations) {
+      activities.push({
+        id: `res-${r.code}`,
+        kind: 'RESERVATION',
+        title: `Suite Reservation · ${r.roomName}`,
+        subtitle: `${r.arrival} → ${r.departure} (${r.nights} night${r.nights > 1 ? 's' : ''})`,
+        reference: r.code,
+        status: r.status,
+        amount: r.total,
+        timestamp: r.createdAt.toISOString(),
+        actionUrl: r.stayUrl,
+        actionLabel: 'Open Stay Voucher',
+      });
+
+      for (const req of r.requests || []) {
+        activities.push({
+          id: `req-${req.id}`,
+          kind: 'GUEST_REQUEST',
+          title: `Guest Request · ${req.kind.replace(/_/g, ' ')}`,
+          subtitle: req.note || `Request for booking ${r.code}`,
+          reference: r.code,
+          status: req.status,
+          timestamp: req.createdAt.toISOString(),
+          actionUrl: r.stayUrl,
+          actionLabel: 'View Stay',
+        });
+      }
+    }
+
+    for (const doc of documents) {
+      activities.push({
+        id: `doc-${doc.id}`,
+        kind: doc.kind === 'QUOTATION' ? 'QUOTATION' : 'DOCUMENT',
+        title: `${doc.kind === 'RECEIPT' ? 'Official Receipt' : doc.kind === 'INVOICE' ? 'Tax Invoice' : doc.kind === 'QUOTATION' ? 'Event Quotation' : 'Refund Note'}`,
+        subtitle: `Check Code: ${doc.checkCode}${doc.reservationCode ? ` · Stay ${doc.reservationCode}` : ''}`,
+        reference: doc.number,
+        status: doc.status,
+        amount: doc.amount,
+        timestamp: doc.issuedAt,
+        actionUrl: doc.printUrl,
+        actionLabel: 'View & Print',
+      });
+    }
+
+    // POS Orders (Dining / Bar / Health Club)
+    const posOr: Record<string, unknown>[] = [];
+    if (reservationIds.length) posOr.push({ reservationId: { in: reservationIds } });
+    if (cleanPhone && cleanPhone.length >= 6) {
+      posOr.push({ customerPhone: { contains: cleanPhone.replace(/\D/g, '').slice(-8) } });
+    }
+    if (cleanName && cleanName.length >= 3 && cleanName.toLowerCase() !== 'guest') {
+      posOr.push({ customerName: { contains: cleanName, mode: 'insensitive' } });
+    }
+
+    if (posOr.length) {
+      const posOrders = await this.prisma.posOrder.findMany({
+        where: { OR: posOr },
+        include: { outlet: true, items: true },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      });
+      for (const po of posOrders) {
+        const itemsSummary = po.items.map((i) => `${i.quantity}× ${i.itemName}`).join(', ');
+        activities.push({
+          id: `pos-${po.id}`,
+          kind: 'POS_ORDER',
+          title: `${po.outlet.name} Order`,
+          subtitle: itemsSummary || po.tableOrRoom || 'Highland Dining & Bar',
+          reference: po.orderNumber,
+          status: po.status,
+          amount: `${Number(po.totalMinor).toLocaleString()} ${po.currency}`,
+          timestamp: po.createdAt.toISOString(),
+        });
+      }
+    }
+
+    // Health Club Memberships & Access Logs
+    const hcOr: Record<string, unknown>[] = [];
+    if (cleanPhone && cleanPhone.length >= 6) {
+      hcOr.push({ memberPhone: { contains: cleanPhone.replace(/\D/g, '').slice(-8) } });
+    }
+    if (cleanName && cleanName.length >= 3 && cleanName.toLowerCase() !== 'guest') {
+      hcOr.push({ memberName: { contains: cleanName, mode: 'insensitive' } });
+    }
+    if (hcOr.length) {
+      const memberships = await this.prisma.healthClubMembership.findMany({
+        where: { OR: hcOr },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+      for (const m of memberships) {
+        activities.push({
+          id: `hc-${m.id}`,
+          kind: 'HEALTH_CLUB',
+          title: `Athletic Club · ${m.tier.replace(/_/g, ' ')} (${m.service.replace(/_/g, ' ')})`,
+          subtitle: `Valid until ${m.endDate.toISOString().slice(0, 10)}`,
+          reference: m.membershipNo,
+          status: m.isActive ? 'ACTIVE' : 'EXPIRED',
+          amount: `${Number(m.amountMinor).toLocaleString()} ${m.currency}`,
+          timestamp: m.createdAt.toISOString(),
+        });
+      }
+    }
+
+    // Priority Waitlist & Inquiries
+    if (contactIds.length) {
+      const waitlists = await this.prisma.waitlistEntry.findMany({
+        where: { contactId: { in: contactIds } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+      for (const w of waitlists) {
+        activities.push({
+          id: `wl-${w.id}`,
+          kind: 'WAITLIST',
+          title: `Priority Waitlist Registration`,
+          subtitle: w.note || 'First-stay priority claim',
+          reference: w.reference,
+          status: w.status,
+          timestamp: w.createdAt.toISOString(),
+        });
+      }
+
+      const convos = await this.prisma.conversation.findMany({
+        where: { contactId: { in: contactIds } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+      for (const c of convos) {
+        activities.push({
+          id: `cn-${c.id}`,
+          kind: 'INQUIRY',
+          title: c.subject || `Concierge Desk Inquiry (${c.intent})`,
+          subtitle: `Channel: ${c.channel}`,
+          reference: c.reference,
+          status: c.status,
+          timestamp: c.createdAt.toISOString(),
+        });
+      }
+    }
+
+    // Sort activities newest first
+    activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const enrichedIdentity: ConciergeGuestIdentityDTO = {
+      name: primaryContact?.name || cleanName || 'Guest',
+      phone: primaryContact?.phone || cleanPhone || undefined,
+      email: primaryContact?.email || cleanEmail || undefined,
+      bookingCode: cleanCode || reservations[0]?.code || undefined,
+      contactId: primaryContact?.id,
+      isVip: primaryContact?.isVip || reservations.length >= 2,
+      isVerified: Boolean(primaryContact || reservations.length > 0 || documents.length > 0),
+      identifiedAt: identity.identifiedAt || new Date().toISOString(),
+    };
+
+    return {
+      identity: enrichedIdentity,
+      summary: {
+        reservationsCount: reservations.length,
+        documentsCount: documents.length,
+        activitiesCount: activities.length,
+        activeStayCode: reservations.find((r) => ['CONFIRMED', 'IN_HOUSE', 'HELD'].includes(r.status))?.code,
+      },
+      reservations: reservations.map(({ id: _id, createdAt: _c, requests: _req, ...rest }) => rest),
+      documents,
+      recentActivities: activities.slice(0, 20),
+    };
+  }
 
   getToolDefinitions(): DeepSeekToolDefinition[] {
     return [
@@ -55,7 +410,7 @@ export class ConciergeToolsService {
         function: {
           name: 'check_room_availability',
           description:
-            'Check real-time room availability, capacity, and nightly rates for requested stay dates at Reberon Hotel (Kapchorwa, 1,900 m).',
+            'Check real-time suite availability, capacity, and nightly rates for requested stay dates at Reberon Hotel (Kapchorwa, 1,900 m).',
           parameters: {
             type: 'object',
             properties: {
@@ -112,21 +467,109 @@ export class ConciergeToolsService {
         function: {
           name: 'create_booking_hold',
           description:
-            'Hold a reservation for the guest in the PMS and generate a direct checkout/payment link. Only call when the guest has provided their full name and phone or email.',
+            'Place an instant 48-hour complimentary reservation hold in the Reberon PMS and generate an official stay voucher & payment link. Uses the active guest identity automatically if name/phone are already known.',
           parameters: {
             type: 'object',
             properties: {
-              roomSlug: { type: 'string', description: 'Slug of the room to book.' },
+              roomSlug: { type: 'string', description: 'Slug of the suite to book.' },
               arrival: { type: 'string', description: 'Check-in date YYYY-MM-DD.' },
               departure: { type: 'string', description: 'Check-out date YYYY-MM-DD.' },
               adults: { type: 'number', description: 'Number of adults (default: 2).' },
               children: { type: 'number', description: 'Number of children (default: 0).' },
-              guestName: { type: 'string', description: 'Full name of the primary guest.' },
-              phone: { type: 'string', description: 'Contact phone number (WhatsApp preferred with country code).' },
+              guestName: { type: 'string', description: 'Full name of the guest (optional if session identity is set).' },
+              phone: { type: 'string', description: 'Contact phone number (WhatsApp preferred).' },
               email: { type: 'string', description: 'Contact email address.' },
               specialRequests: { type: 'string', description: 'Special requests, dietary preferences, or arrival notes.' },
             },
-            required: ['roomSlug', 'arrival', 'departure', 'guestName', 'phone'],
+            required: ['roomSlug', 'arrival', 'departure'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'lookup_reservation',
+          description:
+            'Look up an existing reservation by booking code (e.g. RB-XXXXX), phone, email, or the active guest session identity to check live status, room assignment, balance, and printable receipts.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Reservation reference code, e.g. "RB-JKHD5".' },
+              phone: { type: 'string', description: 'Guest phone number.' },
+              email: { type: 'string', description: 'Guest email address.' },
+              guestName: { type: 'string', description: 'Guest name.' },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_my_receipts_and_invoices',
+          description:
+            'Fetch all official Reberon Hotel receipts (RCT-...), tax invoices (INV-...), refund notes (RFD-...), and event quotations (QUO-...) for the guest, with direct printable A4/80mm links and verification codes.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Optional booking code (RB-...) or document number (RCT-..., INV-..., QUO-...).' },
+              phone: { type: 'string', description: 'Optional guest phone number.' },
+              email: { type: 'string', description: 'Optional guest email.' },
+              guestName: { type: 'string', description: 'Optional guest name.' },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_my_recent_activity',
+          description:
+            'Check the guest\'s most recent actions, bookings, POS restaurant orders, athletic gym visits, guest requests, waitlist entries, and documents across the entire Reberon Hotel system.',
+          parameters: {
+            type: 'object',
+            properties: {
+              guestName: { type: 'string', description: 'Guest name (optional if already identified).' },
+              phone: { type: 'string', description: 'Guest phone number.' },
+              email: { type: 'string', description: 'Guest email.' },
+              bookingCode: { type: 'string', description: 'Optional booking or document code.' },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'verify_hotel_document',
+          description:
+            'Verify the authenticity of any official Reberon Hotel receipt (RCT-...), invoice (INV-...), refund note (RFD-...), or quotation (QUO-...) using its document number and optional check code.',
+          parameters: {
+            type: 'object',
+            properties: {
+              number: { type: 'string', description: 'Document number, e.g. "RCT-2026-00001", "INV-2026-00001", or "QUO-2026-00001".' },
+              checkCode: { type: 'string', description: '8-character check code printed on the document, e.g. "AB12-CD34" (optional if looking up from system).' },
+            },
+            required: ['number'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'submit_guest_request',
+          description:
+            'Submit a live in-stay or pre-arrival request (Late Checkout, Mountain Guide, Airport Transfer, Extra Bed, Room Service, Add Night, or Special Request) directly into the PMS for a reservation.',
+          parameters: {
+            type: 'object',
+            properties: {
+              reservationCode: { type: 'string', description: 'Reservation code (e.g. RB-XXXXX). Optional if guest has an active reservation in session.' },
+              kind: {
+                type: 'string',
+                enum: ['LATE_CHECKOUT', 'GUIDE', 'TRANSFER', 'EXTRA', 'ADD_NIGHT', 'OTHER'],
+                description: 'Category of request.',
+              },
+              note: { type: 'string', description: 'Specific details of what the guest is requesting (e.g. "Late check-out at 14:00", "Private Sipi Falls ranger at 08:00").' },
+            },
+            required: ['kind', 'note'],
           },
         },
       },
@@ -135,18 +578,17 @@ export class ConciergeToolsService {
         function: {
           name: 'claim_priority_waitlist',
           description:
-            'Register a guest for the 2027 opening season VIP waitlist or for dates when suites are currently sold out.',
+            'Register a guest for the priority first-stay list or for dates when suites are sold out.',
           parameters: {
             type: 'object',
             properties: {
               guestName: { type: 'string', description: 'Guest full name.' },
               phone: { type: 'string', description: 'Guest phone or WhatsApp.' },
               email: { type: 'string', description: 'Guest email address (optional).' },
-              preferredDates: { type: 'string', description: 'Desired stay dates or month (e.g. "Early July 2027" or "2027-04-10").' },
-              roomTypePreference: { type: 'string', description: 'Preferred suite, e.g. "Elgon View King" or "Any".' },
-              notes: { type: 'string', description: 'Any special notes, party size, or occasion.' },
+              preferredDates: { type: 'string', description: 'Desired stay dates or month.' },
+              roomTypePreference: { type: 'string', description: 'Preferred suite, e.g. "Elgon View King".' },
+              notes: { type: 'string', description: 'Any special notes or party size.' },
             },
-            required: ['guestName', 'phone'],
           },
         },
       },
@@ -155,7 +597,7 @@ export class ConciergeToolsService {
         function: {
           name: 'get_hotel_facilities',
           description:
-            'Get authoritative details about Reberon Hotel facilities: Gym & Athletic Health Club, Restaurant & Mountain Trout, The Hall, Solar/Water resilience, and Wi-Fi.',
+            'Get live details on Reberon Hotel facilities: High-Altitude Athletic Gym & Health Club (steam/sauna/memberships), Highland Restaurant, The Hall (conferences/events), and Solar/Water systems.',
           parameters: {
             type: 'object',
             properties: {
@@ -173,7 +615,7 @@ export class ConciergeToolsService {
         function: {
           name: 'get_local_activities',
           description:
-            'Get expert local travel intelligence for Sipi Falls hikes, Mount Elgon climbing, Arabica coffee tours, and championship trail running camps.',
+            'Get trail guides and arrangements for Sipi Falls hikes, Mount Elgon trekking, Arabica coffee roasting tours, and championship altitude running routes.',
           parameters: {
             type: 'object',
             properties: {
@@ -191,7 +633,7 @@ export class ConciergeToolsService {
         function: {
           name: 'get_weather_and_directions',
           description:
-            'Get Mount Elgon altitude weather guidance (1,900 m, cool evenings, clothing advice) and paved road driving directions from Kampala/Entebbe.',
+            'Get Mount Elgon altitude weather (1,900 m ASL) and paved tarmac driving directions from Kampala/Entebbe.',
           parameters: {
             type: 'object',
             properties: {},
@@ -201,52 +643,20 @@ export class ConciergeToolsService {
       {
         type: 'function',
         function: {
-          name: 'human_handover',
-          description:
-            'Connect the guest with the human concierge team on WhatsApp (+256 760 512 691) and record an inquiry ticket for the Front Desk.',
-          parameters: {
-            type: 'object',
-            properties: {
-              guestName: { type: 'string', description: 'Guest name.' },
-              phone: { type: 'string', description: 'Guest phone or contact method.' },
-              summary: { type: 'string', description: 'Brief summary of what the guest needs assistance with.' },
-            },
-            required: ['guestName', 'summary'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'lookup_reservation',
-          description:
-            'Look up an existing reservation by code (e.g. RB-XXXXX) or guest contact phone to check live status, room assignments, balance, and printable receipt link.',
-          parameters: {
-            type: 'object',
-            properties: {
-              code: { type: 'string', description: 'Reservation reference code, e.g. "RB-JKHD5" or "RB-XXXXX".' },
-              phone: { type: 'string', description: 'Guest contact phone number if code is not remembered.' },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
           name: 'request_airport_transfer',
           description:
-            'Arrange private 4x4 sanctuary airport transfers between Entebbe International Airport (EBB) or Kampala and Reberon Hotel Kapchorwa.',
+            'Arrange private 4x4 sanctuary transfers between Entebbe International Airport (EBB), Kampala, or Mbale and Reberon Hotel Kapchorwa.',
           parameters: {
             type: 'object',
             properties: {
-              pickupLocation: { type: 'string', description: 'Pickup location (e.g. "Entebbe Airport (EBB)", "Kampala", "Jinja", "Mbale").' },
+              pickupLocation: { type: 'string', description: 'Pickup location (e.g. "Entebbe Airport (EBB)", "Kampala", "Mbale").' },
               date: { type: 'string', description: 'Desired transfer date in YYYY-MM-DD format.' },
               passengers: { type: 'number', description: 'Number of passengers (1-6).' },
               guestName: { type: 'string', description: 'Guest name.' },
               phone: { type: 'string', description: 'Guest WhatsApp or mobile phone.' },
               flightNumber: { type: 'string', description: 'Flight number if arriving at Entebbe Airport.' },
             },
-            required: ['pickupLocation', 'guestName'],
+            required: ['pickupLocation'],
           },
         },
       },
@@ -255,13 +665,13 @@ export class ConciergeToolsService {
         function: {
           name: 'get_dining_and_dietary',
           description:
-            'Get details on highland dining, Mount Elgon fresh trout, farm-to-table breakfast, Arabica coffee ceremony, and dietary accommodations (vegetarian, vegan, halal).',
+            'Get live restaurant POS menu items, Mount Elgon river trout specials, highland breakfast, Arabica coffee ceremony, and dietary accommodations.',
           parameters: {
             type: 'object',
             properties: {
               interest: {
                 type: 'string',
-                enum: ['trout', 'breakfast', 'coffee', 'dietary', 'all'],
+                enum: ['trout', 'breakfast', 'coffee', 'dietary', 'menu', 'all'],
                 description: 'Dining topic of interest.',
               },
             },
@@ -273,7 +683,7 @@ export class ConciergeToolsService {
         function: {
           name: 'get_weather_and_packing_guide',
           description:
-            'Get Mount Elgon altitude packing recommendations, microclimate advice (1,900 m ASL), daytime vs evening temperatures, and road highway navigation.',
+            'Get Mount Elgon altitude packing checklist, microclimate temperatures (1,900 m ASL), and road highway conditions.',
           parameters: {
             type: 'object',
             properties: {
@@ -282,38 +692,74 @@ export class ConciergeToolsService {
           },
         },
       },
+      {
+        type: 'function',
+        function: {
+          name: 'human_handover',
+          description:
+            'Connect the guest directly with Denis Mayamba & Front Desk on WhatsApp (+256 760 512 691) and log a priority desk ticket.',
+          parameters: {
+            type: 'object',
+            properties: {
+              guestName: { type: 'string', description: 'Guest name.' },
+              phone: { type: 'string', description: 'Guest phone.' },
+              summary: { type: 'string', description: 'Brief summary of what the guest needs.' },
+            },
+            required: ['summary'],
+          },
+        },
+      },
     ];
   }
 
-  async executeTool(toolCall: { id: string; name: string; args: Record<string, unknown> }): Promise<ToolExecutionResult> {
+  async executeTool(
+    toolCall: { id: string; name: string; args: Record<string, unknown> },
+    identity?: ConciergeGuestIdentityDTO,
+  ): Promise<ToolExecutionResult> {
+    const mergedArgs: Record<string, unknown> = {
+      ...toolCall.args,
+      guestName: toolCall.args.guestName || identity?.name,
+      phone: toolCall.args.phone || identity?.phone,
+      email: toolCall.args.email || identity?.email,
+      bookingCode: toolCall.args.bookingCode || toolCall.args.code || identity?.bookingCode,
+    };
+
     try {
       switch (toolCall.name) {
         case 'check_room_availability':
-          return await this.handleCheckAvailability(toolCall.id, toolCall.args);
+          return await this.handleCheckAvailability(toolCall.id, mergedArgs);
         case 'get_room_details':
-          return await this.handleGetRoomDetails(toolCall.id, toolCall.args);
+          return await this.handleGetRoomDetails(toolCall.id, mergedArgs);
         case 'calculate_quote':
-          return await this.handleCalculateQuote(toolCall.id, toolCall.args);
+          return await this.handleCalculateQuote(toolCall.id, mergedArgs);
         case 'create_booking_hold':
-          return await this.handleCreateBookingHold(toolCall.id, toolCall.args);
+          return await this.handleCreateBookingHold(toolCall.id, mergedArgs);
         case 'lookup_reservation':
-          return await this.handleLookupReservation(toolCall.id, toolCall.args);
+          return await this.handleLookupReservation(toolCall.id, mergedArgs, identity);
+        case 'get_my_receipts_and_invoices':
+          return await this.handleGetReceiptsAndInvoices(toolCall.id, mergedArgs, identity);
+        case 'get_my_recent_activity':
+          return await this.handleGetRecentActivity(toolCall.id, mergedArgs, identity);
+        case 'verify_hotel_document':
+          return await this.handleVerifyDocument(toolCall.id, mergedArgs);
+        case 'submit_guest_request':
+          return await this.handleSubmitGuestRequest(toolCall.id, mergedArgs, identity);
         case 'request_airport_transfer':
-          return await this.handleRequestTransfer(toolCall.id, toolCall.args);
+          return await this.handleRequestTransfer(toolCall.id, mergedArgs);
         case 'get_dining_and_dietary':
-          return await this.handleGetDining(toolCall.id, toolCall.args);
+          return await this.handleGetDining(toolCall.id, mergedArgs);
         case 'get_weather_and_packing_guide':
-          return await this.handleGetWeatherAndPacking(toolCall.id, toolCall.args);
+          return await this.handleGetWeatherAndPacking(toolCall.id, mergedArgs);
         case 'claim_priority_waitlist':
-          return await this.handleClaimWaitlist(toolCall.id, toolCall.args);
+          return await this.handleClaimWaitlist(toolCall.id, mergedArgs);
         case 'get_hotel_facilities':
-          return await this.handleGetFacilities(toolCall.id, toolCall.args);
+          return await this.handleGetFacilities(toolCall.id, mergedArgs);
         case 'get_local_activities':
-          return await this.handleGetActivities(toolCall.id, toolCall.args);
+          return await this.handleGetActivities(toolCall.id, mergedArgs);
         case 'get_weather_and_directions':
           return await this.handleGetWeatherAndDirections(toolCall.id);
         case 'human_handover':
-          return await this.handleHumanHandover(toolCall.id, toolCall.args);
+          return await this.handleHumanHandover(toolCall.id, mergedArgs);
         default:
           return {
             toolCallId: toolCall.id,
@@ -366,7 +812,7 @@ export class ConciergeToolsService {
         rateBoth: `${fromUgx} / ${fromUsd}`,
         tagline: tr(rt.tagline),
         viewAspect: tr(rt.view, 'Panoramic Mount Elgon & Valley View'),
-        status: 'Available for reservation hold & priority claim',
+        status: 'Available for instant 48h hold',
       };
     });
 
@@ -382,8 +828,8 @@ export class ConciergeToolsService {
           galleryUrls: (first.galleryIds || []).slice(0, 3).map((gid: string) => getMediaUrl(gid)).filter(Boolean) as string[],
           viewAspect: tr(first.view, 'Mount Elgon Ridge View'),
           actionUrl: `/rooms/${first.slug}`,
-          actionLabel: `Reserve ${tr(first.name)}`,
-          secondaryActionUrl: `/book?room=${first.slug}`,
+          actionLabel: `Inspect ${tr(first.name)}`,
+          secondaryActionUrl: `/book?room=${first.slug}&arrival=${arrival}&departure=${departure}`,
           secondaryActionLabel: 'Instant 48h Hold',
         }
       : undefined;
@@ -397,7 +843,7 @@ export class ConciergeToolsService {
         adults,
         children,
         availableSuites: results,
-        bookingNote: 'All suites face the mountain. Online hold is available now; bookings include fresh highland breakfast.',
+        bookingNote: 'All suites include highland breakfast & Arabica coffee. Complimentary 48-hour holds available.',
       }),
       card,
     };
@@ -451,7 +897,7 @@ export class ConciergeToolsService {
       actionUrl: `/book?room=${rt.slug}`,
       actionLabel: `Book ${tr(rt.name)}`,
       secondaryActionUrl: `/rooms/${rt.slug}`,
-      secondaryActionLabel: 'View Floor Plan & Photos',
+      secondaryActionLabel: 'Floor Plan & Photos',
     };
 
     return {
@@ -492,7 +938,10 @@ export class ConciergeToolsService {
 
     if (!rt) {
       const allRooms = await this.prisma.roomType.findMany({ where: { status: 'PUBLISHED', deletedAt: null } });
-      rt = allRooms.find((r) => r.slug.toLowerCase().includes(slug.toLowerCase()) || tr(r.name).toLowerCase().includes(slug.toLowerCase())) || null;
+      rt =
+        allRooms.find(
+          (r) => r.slug.toLowerCase().includes(slug.toLowerCase()) || tr(r.name).toLowerCase().includes(slug.toLowerCase()),
+        ) || null;
     }
 
     const d1 = new Date(`${arrival}T00:00:00Z`);
@@ -521,9 +970,9 @@ export class ConciergeToolsService {
       currency,
       inclusions: [
         'Farm-fresh Mount Elgon breakfast & Arabica coffee',
-        '24/7 continuous solar hot water & high-altitude tea station',
-        'Access to high-altitude recovery gym & pine running trails',
-        'All regional local taxes included — no hidden charges',
+        '24/7 solar hot water & high-altitude tea station',
+        'High-altitude athletic gym & pine running trails',
+        'All regional taxes included — zero hidden charges',
       ],
       actionUrl: `/book?room=${rt?.slug || ''}&arrival=${arrival}&departure=${departure}`,
       actionLabel: 'Hold Suite at This Rate',
@@ -540,7 +989,6 @@ export class ConciergeToolsService {
         total: totalStr,
         depositRequired: depositStr,
         inclusions: card.inclusions,
-        cancellationPolicy: 'Full refund up to 7 days before arrival; free date rescheduling.',
       }),
       card,
     };
@@ -569,7 +1017,10 @@ export class ConciergeToolsService {
 
     if (!rt) {
       const allRooms = await this.prisma.roomType.findMany({ where: { status: 'PUBLISHED', deletedAt: null } });
-      rt = allRooms.find((r) => r.slug.toLowerCase().includes(slug.toLowerCase()) || tr(r.name).toLowerCase().includes(slug.toLowerCase())) || null;
+      rt =
+        allRooms.find(
+          (r) => r.slug.toLowerCase().includes(slug.toLowerCase()) || tr(r.name).toLowerCase().includes(slug.toLowerCase()),
+        ) || null;
     }
 
     if (!rt) {
@@ -595,9 +1046,10 @@ export class ConciergeToolsService {
       };
     }
 
-    const guestEmail = email && email.includes('@')
-      ? email
-      : `${guestName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'guest'}@guest.reberonhotel.com`;
+    const guestEmail =
+      email && email.includes('@')
+        ? email
+        : `${guestName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'guest'}@guest.reberonhotel.com`;
     const guestPhone = phone || '+256760512691';
 
     try {
@@ -629,7 +1081,6 @@ export class ConciergeToolsService {
       const stayUrl = `${webBase}/stay?code=${bookingResult.code}&t=${encodeURIComponent(token)}`;
       const paymentUrl = `${webBase}/book/return?code=${bookingResult.code}&t=${encodeURIComponent(token)}`;
 
-      // Register unread Conversation in PMS inbox for front desk team (Denis Mayamba)
       try {
         const contact = await this.prisma.contact.findFirst({
           where: { OR: [{ phone: guestPhone }, ...(email ? [{ email }] : [])] },
@@ -660,9 +1111,11 @@ export class ConciergeToolsService {
         this.log.warn(`Could not create inbox conversation for concierge booking: ${err}`);
       }
 
-      // Send direct staff email notification
       try {
-        const staffEmails = ((await this.prisma.setting.findUnique({ where: { key: 'notifications.staffEmails' } }))?.value as string[] | undefined) ?? [];
+        const staffEmails =
+          ((await this.prisma.setting.findUnique({ where: { key: 'notifications.staffEmails' } }))?.value as
+            | string[]
+            | undefined) ?? [];
         for (const staffTo of staffEmails) {
           await this.notifications.email({
             to: staffTo,
@@ -689,9 +1142,10 @@ export class ConciergeToolsService {
         this.log.warn(`Could not send staff notification email: ${err}`);
       }
 
-      // Fetch the created reservation total
       const resRecord = await this.prisma.reservation.findUnique({ where: { code: bookingResult.code } });
-      const totalStr = resRecord ? `${Number(resRecord.totalMinor).toLocaleString()} ${resRecord.currency}` : `${currency === 'USD' ? '$' : ''}Confirmed`;
+      const totalStr = resRecord
+        ? `${Number(resRecord.totalMinor).toLocaleString()} ${resRecord.currency}`
+        : `${currency === 'USD' ? '$' : ''}Confirmed`;
 
       const card: ConciergeCardDTO = {
         type: 'reservation',
@@ -706,7 +1160,7 @@ export class ConciergeToolsService {
         receiptUrl: stayUrl,
         paymentUrl,
         actionUrl: stayUrl,
-        actionLabel: 'View & Print Stay Receipt',
+        actionLabel: 'View & Print Stay Voucher',
         secondaryActionUrl: paymentUrl,
         secondaryActionLabel: 'Pay Deposit Online',
       };
@@ -722,10 +1176,7 @@ export class ConciergeToolsService {
           stayDates: `${arrivalStr} to ${departureStr}`,
           status: 'Confirmed & held in Reberon PMS',
           stayUrl,
-          receiptUrl: stayUrl,
           paymentUrl,
-          instructions:
-            'Reservation is confirmed and secured in the PMS. The guest can view and print their official stay receipt and tax invoice using the stay link, or pay their deposit online. Staff have been alerted.',
         }),
         card,
       };
@@ -739,18 +1190,384 @@ export class ConciergeToolsService {
           error: errMsg,
           guestName,
           room: tr(rt.name),
-          guidance: 'Inform the guest of the issue or offer an alternative room / dates.',
         }),
       };
     }
   }
 
-  /* ── 5. Claim Priority Waitlist ── */
+  /* ── 5. Lookup Reservation (By Code, Phone, Email, or Guest Identity) ── */
+  private async handleLookupReservation(
+    id: string,
+    args: Record<string, unknown>,
+    identity?: ConciergeGuestIdentityDTO,
+  ): Promise<ToolExecutionResult> {
+    const rawCode = String(args.code || args.bookingCode || '').trim().toUpperCase();
+    const phone = String(args.phone || identity?.phone || '').trim();
+    const email = String(args.email || identity?.email || '').trim().toLowerCase();
+    const guestName = String(args.guestName || identity?.name || '').trim();
+
+    let reservation = null;
+    if (rawCode && rawCode.startsWith('RB-')) {
+      reservation = await this.prisma.reservation.findFirst({
+        where: { code: rawCode },
+        include: { contact: true, rooms: true, ratePlan: true },
+      });
+    }
+    if (!reservation && phone && phone.length >= 6) {
+      const digits = phone.replace(/\D/g, '').slice(-8);
+      reservation = await this.prisma.reservation.findFirst({
+        where: { contact: { phone: { contains: digits } } },
+        include: { contact: true, rooms: true, ratePlan: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    if (!reservation && email && email.includes('@')) {
+      reservation = await this.prisma.reservation.findFirst({
+        where: { contact: { email: { equals: email, mode: 'insensitive' } } },
+        include: { contact: true, rooms: true, ratePlan: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    if (!reservation && guestName && guestName.length >= 3 && guestName.toLowerCase() !== 'guest') {
+      reservation = await this.prisma.reservation.findFirst({
+        where: { contact: { name: { contains: guestName, mode: 'insensitive' } } },
+        include: { contact: true, rooms: true, ratePlan: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (!reservation) {
+      return {
+        toolCallId: id,
+        name: 'lookup_reservation',
+        output: JSON.stringify({
+          found: false,
+          message: `No reservation found matching "${rawCode || phone || guestName}". Provide a booking code (RB-XXXXX) or phone number.`,
+        }),
+      };
+    }
+
+    const r = reservation;
+    const token = this.booking.accessToken(r.code);
+    const webBase = env.WEB_URL || 'https://reberonhotel.com';
+    const stayUrl = `${webBase}/stay?code=${r.code}&t=${encodeURIComponent(token)}`;
+    const balanceMinor = r.totalMinor - r.paidMinor;
+    const paymentUrl =
+      balanceMinor > 0n ? `${webBase}/book/return?code=${r.code}&t=${encodeURIComponent(token)}` : undefined;
+
+    const firstRoom = r.rooms[0];
+    let roomName = 'Mount Elgon Suite';
+    if (firstRoom) {
+      const rt = await this.prisma.roomType.findUnique({ where: { id: firstRoom.roomTypeId } });
+      if (rt) roomName = tr(rt.name);
+    }
+
+    const nights = Math.max(1, Math.round((r.departure.getTime() - r.arrival.getTime()) / 86_400_000));
+    const arrivalStr = r.arrival.toISOString().slice(0, 10);
+    const departureStr = r.departure.toISOString().slice(0, 10);
+
+    // Also fetch any official IssuedDocuments for this reservation
+    const dbDocs = await this.prisma.issuedDocument.findMany({
+      where: { reservationId: r.id, voidedAt: null },
+      orderBy: { issuedAt: 'desc' },
+    });
+
+    const attachedDocs: ConciergeDocumentItemDTO[] = dbDocs.map((d) => {
+      const check = this.documents.checkCode(d.number);
+      return {
+        id: d.id,
+        kind: d.kind as 'RECEIPT' | 'INVOICE' | 'REFUND',
+        number: d.number,
+        amount: `${Number(d.amountMinor).toLocaleString()} ${d.currency}`,
+        currency: d.currency,
+        issuedAt: d.issuedAt.toISOString(),
+        checkCode: check,
+        reservationCode: r.code,
+        status: 'VALID',
+        printUrl: this.documents.publicUrl(d, r.code),
+        verifyUrl: `${webBase}/verify?number=${encodeURIComponent(d.number)}&check=${encodeURIComponent(check)}`,
+      };
+    });
+
+    const card: ConciergeCardDTO = {
+      type: 'lookup',
+      code: r.code,
+      status: r.status,
+      guestName: r.contact.name,
+      roomName,
+      arrival: arrivalStr,
+      departure: departureStr,
+      nights,
+      total: `${Number(r.totalMinor).toLocaleString()} ${r.currency}`,
+      paid: `${Number(r.paidMinor).toLocaleString()} ${r.currency}`,
+      balance: `${Number(balanceMinor).toLocaleString()} ${r.currency}`,
+      currency: r.currency,
+      stayUrl,
+      receiptUrl: attachedDocs[0]?.printUrl || stayUrl,
+      paymentUrl,
+      documents: attachedDocs,
+      actionUrl: stayUrl,
+      actionLabel: 'Open Stay Voucher & Receipts',
+      secondaryActionUrl: paymentUrl,
+      secondaryActionLabel: balanceMinor > 0n ? 'Pay Balance Online' : undefined,
+    };
+
+    return {
+      toolCallId: id,
+      name: 'lookup_reservation',
+      output: JSON.stringify({
+        found: true,
+        code: r.code,
+        status: r.status,
+        guestName: r.contact.name,
+        room: roomName,
+        dates: `${arrivalStr} to ${departureStr} (${nights} nights)`,
+        total: card.total,
+        paid: card.paid,
+        balanceDue: card.balance,
+        documentsIssued: attachedDocs.map((d) => ({ number: d.number, kind: d.kind, amount: d.amount, checkCode: d.checkCode })),
+        stayUrl,
+      }),
+      card,
+    };
+  }
+
+  /* ── 6. Fetch All Guest Receipts, Invoices, Refund Notes & Quotations ── */
+  private async handleGetReceiptsAndInvoices(
+    id: string,
+    args: Record<string, unknown>,
+    identity?: ConciergeGuestIdentityDTO,
+  ): Promise<ToolExecutionResult> {
+    const dossier = await this.buildGuestDossier({
+      name: String(args.guestName || identity?.name || 'Guest'),
+      phone: String(args.phone || identity?.phone || ''),
+      email: String(args.email || identity?.email || ''),
+      bookingCode: String(args.code || args.bookingCode || identity?.bookingCode || ''),
+    });
+
+    const card: ConciergeCardDTO = {
+      type: 'documents',
+      guestName: dossier.identity.name,
+      documents: dossier.documents,
+      actionUrl: dossier.reservations[0]?.stayUrl || '/verify',
+      actionLabel: dossier.reservations[0] ? 'Open Full Stay Portal' : 'Verify a Document',
+    };
+
+    return {
+      toolCallId: id,
+      name: 'get_my_receipts_and_invoices',
+      output: JSON.stringify({
+        guestName: dossier.identity.name,
+        documentsFound: dossier.documents.length,
+        documents: dossier.documents.map((d) => ({
+          kind: d.kind,
+          number: d.number,
+          amount: d.amount,
+          issuedAt: d.issuedAt.slice(0, 10),
+          checkCode: d.checkCode,
+          reservationCode: d.reservationCode,
+          status: d.status,
+        })),
+        reservationsFound: dossier.reservations.map((r) => ({
+          code: r.code,
+          status: r.status,
+          roomName: r.roomName,
+          total: r.total,
+          paid: r.paid,
+          balance: r.balance,
+        })),
+      }),
+      card,
+    };
+  }
+
+  /* ── 7. Fetch Guest's Recent Actions & Activities Across Reberon Hotel ── */
+  private async handleGetRecentActivity(
+    id: string,
+    args: Record<string, unknown>,
+    identity?: ConciergeGuestIdentityDTO,
+  ): Promise<ToolExecutionResult> {
+    const dossier = await this.buildGuestDossier({
+      name: String(args.guestName || identity?.name || 'Guest'),
+      phone: String(args.phone || identity?.phone || ''),
+      email: String(args.email || identity?.email || ''),
+      bookingCode: String(args.bookingCode || args.code || identity?.bookingCode || ''),
+    });
+
+    const card: ConciergeCardDTO = {
+      type: 'activity_log',
+      guestName: dossier.identity.name,
+      summary: {
+        reservationsCount: dossier.summary.reservationsCount,
+        documentsCount: dossier.summary.documentsCount,
+        activitiesCount: dossier.summary.activitiesCount,
+      },
+      activities: dossier.recentActivities.slice(0, 8),
+      documents: dossier.documents.slice(0, 5),
+    };
+
+    return {
+      toolCallId: id,
+      name: 'get_my_recent_activity',
+      output: JSON.stringify({
+        guestName: dossier.identity.name,
+        isVerifiedGuest: dossier.identity.isVerified,
+        summary: dossier.summary,
+        recentActivities: dossier.recentActivities.slice(0, 10),
+        documents: dossier.documents.slice(0, 5),
+      }),
+      card,
+    };
+  }
+
+  /* ── 8. Verify Any Official Hotel Document (Receipt, Invoice, Quotation) ── */
+  private async handleVerifyDocument(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
+    const number = String(args.number || '').trim().toUpperCase();
+    let checkCode = String(args.checkCode || '').trim().toUpperCase();
+    const webBase = env.WEB_URL || 'https://reberonhotel.com';
+
+    if (!number) {
+      return {
+        toolCallId: id,
+        name: 'verify_hotel_document',
+        output: JSON.stringify({ error: 'Please provide a document number (e.g. RCT-2026-00001 or QUO-2026-00001).' }),
+      };
+    }
+
+    // If user didn't provide checkCode, look up the document in DB to verify its existence
+    if (!checkCode) {
+      if (number.startsWith('QUO-')) {
+        const q = await this.prisma.quotation.findUnique({ where: { number } });
+        if (q) checkCode = q.checkCode;
+      } else {
+        const d = await this.prisma.issuedDocument.findUnique({ where: { number } });
+        if (d) checkCode = this.documents.checkCode(d.number);
+      }
+    }
+
+    const res = checkCode ? await this.documents.verify(number, checkCode) : { valid: false as const };
+
+    const card: ConciergeCardDTO = res.valid
+      ? {
+          type: 'document_verify',
+          valid: true,
+          kind: res.kind,
+          number: res.number,
+          checkCode,
+          amount: `${Number(res.amountMinor).toLocaleString()} ${res.currency}`,
+          issuedAt: res.issuedAt.slice(0, 10),
+          voided: res.voided,
+          verifyUrl: `${webBase}/verify?number=${encodeURIComponent(res.number)}&check=${encodeURIComponent(checkCode)}`,
+        }
+      : {
+          type: 'document_verify',
+          valid: false,
+          number,
+          checkCode: checkCode || undefined,
+          verifyUrl: `${webBase}/verify`,
+        };
+
+    return {
+      toolCallId: id,
+      name: 'verify_hotel_document',
+      output: JSON.stringify(card),
+      card,
+    };
+  }
+
+  /* ── 9. Submit Live In-Stay / Pre-Arrival Guest Request ── */
+  private async handleSubmitGuestRequest(
+    id: string,
+    args: Record<string, unknown>,
+    identity?: ConciergeGuestIdentityDTO,
+  ): Promise<ToolExecutionResult> {
+    const rawCode = String(args.reservationCode || args.bookingCode || identity?.bookingCode || '').trim().toUpperCase();
+    const kindRaw = String(args.kind || 'OTHER').toUpperCase();
+    const validKinds: GuestRequestKind[] = ['EXTRA', 'LATE_CHECKOUT', 'GUIDE', 'TRANSFER', 'ADD_NIGHT', 'OTHER'];
+    const kind: GuestRequestKind = validKinds.includes(kindRaw as GuestRequestKind)
+      ? (kindRaw as GuestRequestKind)
+      : 'OTHER';
+    const note = String(args.note || 'Guest service request via Sipi Concierge').trim();
+
+    let reservation = null;
+    if (rawCode && rawCode.startsWith('RB-')) {
+      reservation = await this.prisma.reservation.findUnique({
+        where: { code: rawCode },
+        include: { contact: true },
+      });
+    }
+    if (!reservation && identity?.phone) {
+      const digits = identity.phone.replace(/\D/g, '').slice(-8);
+      reservation = await this.prisma.reservation.findFirst({
+        where: { contact: { phone: { contains: digits } } },
+        include: { contact: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    if (!reservation && identity?.name && identity.name.toLowerCase() !== 'guest') {
+      reservation = await this.prisma.reservation.findFirst({
+        where: { contact: { name: { contains: identity.name, mode: 'insensitive' } } },
+        include: { contact: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (!reservation) {
+      return {
+        toolCallId: id,
+        name: 'submit_guest_request',
+        output: JSON.stringify({
+          success: false,
+          message: 'Could not find an active reservation to attach this request to. Please provide your booking code (RB-XXXXX) or place a reservation hold first.',
+        }),
+      };
+    }
+
+    const created = await this.prisma.guestRequest.create({
+      data: {
+        reservationId: reservation.id,
+        kind,
+        note: `[Sipi Concierge] ${note}`,
+        status: 'NEW',
+      },
+    });
+
+    const token = this.booking.accessToken(reservation.code);
+    const webBase = env.WEB_URL || 'https://reberonhotel.com';
+    const stayUrl = `${webBase}/stay?code=${reservation.code}&t=${encodeURIComponent(token)}`;
+
+    const card: ConciergeCardDTO = {
+      type: 'guest_request',
+      requestId: created.id,
+      reservationCode: reservation.code,
+      guestName: reservation.contact.name,
+      kind: kind.replace(/_/g, ' '),
+      status: 'NEW · SENT TO FRONT DESK',
+      note,
+      createdAt: created.createdAt.toISOString(),
+      stayUrl,
+    };
+
+    return {
+      toolCallId: id,
+      name: 'submit_guest_request',
+      output: JSON.stringify({
+        success: true,
+        reservationCode: reservation.code,
+        requestKind: kind,
+        status: 'Logged in Reberon PMS for Front Desk action',
+        note,
+      }),
+      card,
+    };
+  }
+
+  /* ── 10. Claim Priority Waitlist ── */
   private async handleClaimWaitlist(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
-    const guestName = String(args.guestName || '').trim();
-    const phone = String(args.phone || '').trim();
+    const guestName = String(args.guestName || 'Valued Guest').trim();
+    const phone = String(args.phone || '+256760512691').trim();
     const email = String(args.email || '').trim().toLowerCase();
-    const preferredDates = String(args.preferredDates || '');
+    const preferredDates = String(args.preferredDates || 'Upcoming Season');
     const roomTypePreference = String(args.roomTypePreference || 'Any Suite');
     const notes = String(args.notes || '');
 
@@ -792,13 +1609,12 @@ export class ConciergeToolsService {
         waitlistReference: ref,
         guestName,
         preferredDates,
-        message: 'Successfully registered on Reberon Hotel priority first-stay list. You will be notified ahead of public calendar opening.',
       }),
       card,
     };
   }
 
-  /* ── 6. Hotel Facilities ── */
+  /* ── 11. Hotel Facilities ── */
   private async handleGetFacilities(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
     const category = String(args.category || 'all');
     const dbFacilities = await this.prisma.facility.findMany({
@@ -806,9 +1622,10 @@ export class ConciergeToolsService {
       orderBy: { order: 'asc' },
     });
 
-    const matched = category === 'all'
-      ? dbFacilities
-      : dbFacilities.filter((f) => f.slug.toLowerCase().includes(category.toLowerCase()));
+    const matched =
+      category === 'all'
+        ? dbFacilities
+        : dbFacilities.filter((f) => f.slug.toLowerCase().includes(category.toLowerCase()));
 
     const target = matched[0] || dbFacilities[0];
     const card: ConciergeCardDTO | undefined = target
@@ -841,7 +1658,7 @@ export class ConciergeToolsService {
     };
   }
 
-  /* ── 7. Local Activities ── */
+  /* ── 12. Local Activities ── */
   private async handleGetActivities(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
     const activity = String(args.activity || 'all');
     const dbDestinations = await this.prisma.destination.findMany({
@@ -849,7 +1666,7 @@ export class ConciergeToolsService {
       orderBy: { order: 'asc' },
     });
 
-    const targetDest = dbDestinations.find((d) => d.slug.includes(activity)) || dbDestinations[0];
+    const targetDest = dbDestinations.find((d) => d.slug.includes(activity.replace(/_/g, '-'))) || dbDestinations[0];
 
     const card: ConciergeCardDTO | undefined = targetDest
       ? {
@@ -863,7 +1680,7 @@ export class ConciergeToolsService {
           imageUrl: getMediaUrl(targetDest.heroMediaId),
           galleryUrls: (targetDest.galleryIds || []).slice(0, 3).map((gid: string) => getMediaUrl(gid)).filter(Boolean) as string[],
           actionUrl: `/kapchorwa/${targetDest.slug}`,
-          actionLabel: `Read ${tr(targetDest.name)} Trail Guide`,
+          actionLabel: `Read ${tr(targetDest.name)} Guide`,
         }
       : undefined;
 
@@ -877,13 +1694,12 @@ export class ConciergeToolsService {
           tagline: tr(d.tagline),
           url: `/kapchorwa/${d.slug}`,
         })),
-        hotelAssistance: 'Reberon concierge arranges trusted community guides and trail transport on request.',
       }),
       card,
     };
   }
 
-  /* ── 8. Weather & Directions ── */
+  /* ── 13. Weather & Directions ── */
   private async handleGetWeatherAndDirections(id: string): Promise<ToolExecutionResult> {
     const card: ConciergeCardDTO = {
       type: 'activity',
@@ -892,31 +1708,25 @@ export class ConciergeToolsService {
       difficulty: 'Smooth Tarmac Highway (No 4x4 needed)',
       duration: '6 to 7 hours driving time',
       bestTime: 'Daytime driving for escarpment views',
-      notes: 'Route: Kampala → Jinja (Nile Bridge) → Iganga → Mbale → Kapchorwa. Gated compound with overnight security and lit vehicle bays.',
+      notes: 'Route: Kampala → Jinja (Nile Bridge) → Iganga → Mbale → Kapchorwa. Gated compound with 24/7 security.',
       actionUrl: 'https://maps.google.com/?q=Reberon+Hotel+Kapchorwa',
-      actionLabel: 'Open Google Maps Navigation',
+      actionLabel: 'Open Google Maps Route',
     };
 
     return {
       toolCallId: id,
       name: 'get_weather_and_directions',
       output: JSON.stringify({
-        altitude: '1,900 m ASL (Kapchorwa northern shoulder of Mount Elgon)',
-        climate: 'Microclimate is 5°C to 8°C cooler than Kampala and Jinja.',
-        daytime: '21°C to 25°C with crisp highland mountain breeze.',
-        evening: '12°C to 15°C — bring a warm fleece or knit jacket for the terrace at night.',
-        drivingDirections: {
-          route: 'Kampala → Jinja (Nile Bridge) → Iganga → Mbale → Kapchorwa.',
-          roadCondition: 'Fully tarmac, smoothly paved all the way up the mountain escarpment.',
-          travelTime: '6 to 7 hours driving time from Kampala (295 km). We advise daytime driving to enjoy the escarpment views.',
-          parking: 'Secure gated compound with overnight security and lit vehicle bays.',
-        },
+        altitude: '1,900 m ASL',
+        daytime: '21°C to 25°C',
+        evening: '12°C to 15°C (fleece advised)',
+        route: 'Kampala → Jinja → Iganga → Mbale → Kapchorwa (295 km paved tarmac).',
       }),
       card,
     };
   }
 
-  /* ── 9. Human Handover ── */
+  /* ── 14. Human Handover ── */
   private async handleHumanHandover(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
     const guestName = String(args.guestName || 'Guest');
     const phone = String(args.phone || '');
@@ -926,7 +1736,6 @@ export class ConciergeToolsService {
     const textMsg = encodeURIComponent(`Hello Denis & Reberon Concierge, I am ${guestName}. ${summary}`);
     const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${textMsg}`;
 
-    // Record an inquiry conversation in PMS if phone provided
     if (phone) {
       let contact = await this.prisma.contact.findFirst({ where: { phone } });
       if (!contact) {
@@ -949,9 +1758,9 @@ export class ConciergeToolsService {
       type: 'handover',
       phone: '+256 760 512 691',
       whatsappUrl,
-      message: `Connect directly with Denis Mayamba and the highland team on WhatsApp for bespoke arrangements.`,
+      message: `Direct priority line to Denis Mayamba & Reberon Front Desk.`,
       actionUrl: whatsappUrl,
-      actionLabel: 'Chat with Denis Mayamba',
+      actionLabel: 'Open WhatsApp with Denis Mayamba',
     };
 
     return {
@@ -960,107 +1769,12 @@ export class ConciergeToolsService {
       output: JSON.stringify({
         whatsappUrl,
         conciergeNumber: '+256 760 512 691',
-        instructions: 'Click the WhatsApp link to chat directly with our front desk and management.',
       }),
       card,
     };
   }
 
-  /* ── 10. Lookup Existing Reservation ── */
-  private async handleLookupReservation(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
-    const rawCode = String(args.code || '').trim().toUpperCase();
-    const phone = String(args.phone || '').trim();
-
-    let reservation = null;
-    if (rawCode) {
-      reservation = await this.prisma.reservation.findFirst({
-        where: { code: rawCode },
-        include: { contact: true, rooms: true, ratePlan: true },
-      });
-    }
-    if (!reservation && phone) {
-      reservation = await this.prisma.reservation.findFirst({
-        where: { contact: { phone } },
-        include: { contact: true, rooms: true, ratePlan: true },
-        orderBy: { createdAt: 'desc' },
-      });
-    }
-
-    if (!reservation) {
-      return {
-        toolCallId: id,
-        name: 'lookup_reservation',
-        output: JSON.stringify({
-          found: false,
-          message: `No reservation found matching code "${rawCode || phone}". Please verify your code or connect with front desk on WhatsApp.`,
-        }),
-      };
-    }
-
-    const r = reservation;
-    const token = this.booking.accessToken(r.code);
-    const webBase = env.WEB_URL || 'https://reberonhotel.com';
-    const stayUrl = `${webBase}/stay?code=${r.code}&t=${encodeURIComponent(token)}`;
-    const balanceMinor = r.totalMinor - r.paidMinor;
-    const paymentUrl = balanceMinor > 0n ? `${webBase}/book/return?code=${r.code}&t=${encodeURIComponent(token)}` : undefined;
-
-    const firstRoom = r.rooms[0];
-    let roomName = 'Mount Elgon Suite';
-    if (firstRoom) {
-      const rt = await this.prisma.roomType.findUnique({ where: { id: firstRoom.roomTypeId } });
-      if (rt) roomName = tr(rt.name);
-    }
-
-    const nights = Math.max(1, Math.round((r.departure.getTime() - r.arrival.getTime()) / (1000 * 60 * 60 * 24)));
-    const arrivalStr = r.arrival.toISOString().slice(0, 10);
-    const departureStr = r.departure.toISOString().slice(0, 10);
-
-    const card: ConciergeCardDTO = {
-      type: 'lookup',
-      code: r.code,
-      status: r.status,
-      guestName: r.contact.name,
-      roomName,
-      arrival: arrivalStr,
-      departure: departureStr,
-      nights,
-      total: `${Number(r.totalMinor).toLocaleString()} ${r.currency}`,
-      paid: `${Number(r.paidMinor).toLocaleString()} ${r.currency}`,
-      balance: `${Number(balanceMinor).toLocaleString()} ${r.currency}`,
-      currency: r.currency,
-      stayUrl,
-      receiptUrl: stayUrl,
-      paymentUrl,
-      actionUrl: stayUrl,
-      actionLabel: 'View & Print Official Receipt',
-      secondaryActionUrl: paymentUrl,
-      secondaryActionLabel: balanceMinor > 0n ? 'Pay Balance Online' : undefined,
-    };
-
-    return {
-      toolCallId: id,
-      name: 'lookup_reservation',
-      output: JSON.stringify({
-        found: true,
-        code: r.code,
-        status: r.status,
-        guestName: r.contact.name,
-        room: roomName,
-        dates: `${arrivalStr} to ${departureStr} (${nights} nights)`,
-        total: `${Number(r.totalMinor).toLocaleString()} ${r.currency}`,
-        paid: `${Number(r.paidMinor).toLocaleString()} ${r.currency}`,
-        balanceDue: `${Number(balanceMinor).toLocaleString()} ${r.currency}`,
-        stayUrl,
-        receiptUrl: stayUrl,
-        paymentUrl,
-        checkInTime: '14:00',
-        checkOutTime: '10:30',
-      }),
-      card,
-    };
-  }
-
-  /* ── 11. Request Airport / Sanctuary Transfer ── */
+  /* ── 15. Request Airport / Sanctuary Transfer ── */
   private async handleRequestTransfer(id: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
     const pickupLocation = String(args.pickupLocation || 'Entebbe Airport (EBB)').trim();
     const date = String(args.date || '').trim() || new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -1107,26 +1821,25 @@ export class ConciergeToolsService {
     }
 
     const whatsappUrl = `https://wa.me/256760512691?text=${encodeURIComponent(
-      `Hello Denis, I would like to confirm my private 4x4 transfer from ${pickupLocation} to Reberon Hotel for ${guestName} on ${date} (${passengers} passengers).`
+      `Hello Denis, I would like to confirm my private 4x4 transfer from ${pickupLocation} to Reberon Hotel for ${guestName} on ${date} (${passengers} passengers).`,
     )}`;
 
     const card: ConciergeCardDTO = {
       type: 'transfer',
       pickupLocation,
       destination: 'Reberon Hotel, Kapchorwa (1,900 m ASL)',
-      vehicleType: 'Executive 4x4 Safari SUV / Land Cruiser Prado',
+      vehicleType: 'Executive 4x4 Land Cruiser Prado',
       travelTime,
       estimatedCost: costUgx,
       currency: 'UGX',
       inclusions: [
-        'Dedicated professional licensed mountain driver',
-        'Chilled spring water & Mount Elgon dried fruits / Arabica roast flask',
-        'Tarmac highway toll fees & luggage handling included',
-        'Scenic stops at River Nile Bridge (Jinja) & Tororo rock vistas on request',
+        'Dedicated licensed mountain driver',
+        'Chilled spring water & Kapchorwa Arabica flask',
+        'Highway tolls & luggage handling included',
       ],
-      notes: `Pickup on ${date} for ${passengers} passenger(s)${flightNumber ? ` · Flight: ${flightNumber}` : ''}. Concierge desk notified.`,
+      notes: `Pickup on ${date} for ${passengers} passenger(s)${flightNumber ? ` · Flight: ${flightNumber}` : ''}.`,
       actionUrl: whatsappUrl,
-      actionLabel: 'Confirm Transfer with Denis Mayamba',
+      actionLabel: 'Confirm Transfer with Denis',
     };
 
     return {
@@ -1135,41 +1848,43 @@ export class ConciergeToolsService {
       output: JSON.stringify({
         confirmedInquiry: true,
         pickupLocation,
-        destination: 'Reberon Hotel, Kapchorwa',
         travelTime,
-        vehicle: 'Executive 4x4 SUV',
         cost: costUgx,
-        inclusions: card.inclusions,
-        whatsappConfirmation: whatsappUrl,
-        message: 'Transfer request logged with Front Desk. Click to confirm directly with Denis on WhatsApp.',
       }),
       card,
     };
   }
 
-  /* ── 12. Dining & Dietary Intelligence ── */
+  /* ── 16. Dining & Live POS Menu Intelligence ── */
   private async handleGetDining(id: string, _args: Record<string, unknown>): Promise<ToolExecutionResult> {
+    const posItems = await this.prisma.posItem.findMany({
+      where: { isAvailable: true },
+      include: { category: true },
+      orderBy: { priceMinorUGX: 'desc' },
+      take: 8,
+    });
+
+    const menuItems = posItems.map((item) => ({
+      name: item.name,
+      category: item.category.name,
+      price: `${Number(item.priceMinorUGX).toLocaleString()} UGX`,
+    }));
+
     const card: ConciergeCardDTO = {
       type: 'dining',
-      venue: 'The Highland Dining Room & Arabica Coffee Terrace',
+      venue: 'Highland Restaurant & Arabica Coffee Terrace',
       cuisine: 'High-Altitude Ugandan & Mountain Trout Fusion',
-      hours: 'Breakfast 06:30 – 10:30 · Lunch 12:30 – 15:30 · Dinner 18:30 – 22:00',
+      hours: '06:30 – 22:00 Daily',
       highlights: [
-        'Fresh Mount Elgon River Trout pan-seared with wild mountain herbs and lemon beurre blanc',
-        'Farm-fresh highland eggs, smoked beef bacon, and organic yellow corn cakes',
-        'Hand-pulled single-origin Kapchorwa Arabica coffee roasted daily on premise',
-        'Crisp terrace fire pit dining overlooking the northern escarpment valley',
+        'Pan-seared Mount Elgon River Trout with mountain herbs & lemon beurre blanc',
+        'Single-origin Kapchorwa Arabica coffee roasted daily at 1,900 m',
+        'Highland farm eggs, organic millet crumbles & endurance athlete plates',
       ],
-      dietaryOptions: [
-        '100% Halal certified meats and preparation',
-        'Dedicated vegetarian & vegan farm-to-plate selections',
-        'Gluten-free sorghum and millet breakfast crumbles',
-        'High-protein endurance athlete nutrition plans for mountain runners',
-      ],
-      coffeeExperience:
-        'Kapchorwa volcanic soils produce some of East Africa\'s finest specialty Arabica (grown at 1,800–2,200 m). We offer pour-over, Chemex, and live bean roasting sessions on the terrace.',
+      dietaryOptions: ['Halal Certified', 'Vegetarian & Vegan', 'Gluten-Free', 'Athlete Nutrition'],
+      menuItems: menuItems.length > 0 ? menuItems : undefined,
+      coffeeExperience: 'Single-origin specialty Arabica (1,800–2,200 m) — pour-over, Chemex & terrace roasting.',
       actionUrl: '/facilities/restaurant',
-      actionLabel: 'View Restaurant & Terrace Menu',
+      actionLabel: 'Explore Dining & Terrace',
     };
 
     return {
@@ -1177,48 +1892,37 @@ export class ConciergeToolsService {
       name: 'get_dining_and_dietary',
       output: JSON.stringify({
         venue: card.venue,
-        cuisine: card.cuisine,
         hours: card.hours,
         highlights: card.highlights,
-        dietary: card.dietaryOptions,
-        coffee: card.coffeeExperience,
+        liveMenuSample: menuItems,
       }),
       card,
     };
   }
 
-  /* ── 13. Weather & Packing Guidance ── */
+  /* ── 17. Weather & Packing Guidance ── */
   private async handleGetWeatherAndPacking(id: string, _args: Record<string, unknown>): Promise<ToolExecutionResult> {
     const card: ConciergeCardDTO = {
       type: 'weather',
       altitude: '1,900 m ASL (Kapchorwa Northern Escarpment)',
-      temperatureRange: 'Daytime 21°C–25°C · Evenings 12°C–15°C',
-      dayClimate: 'Crisp mountain sunshine with refreshing alpine breeze',
+      temperatureRange: 'Day 21°C–25°C · Night 12°C–15°C',
+      dayClimate: 'Crisp mountain sunshine & alpine breeze',
       nightClimate: 'Cool highland air — terrace fire bowls lit nightly',
       packingChecklist: [
-        'Warm fleece, lightweight knit sweater, or down gilet for cool evenings',
-        'Sturdy trail running shoes or ankle-support hiking boots for Sipi Falls trails',
-        'Lightweight waterproof shell or rain jacket for waterfall spray and mist',
-        'UV sunglasses, broad-brim hat, and SPF sunscreen (high altitude sun is strong)',
-        'Camera or binoculars for valley birdwatching (crested cranes, turacos, eagles)',
-        'Universal travel plug adapter (Uganda uses UK Type G 240V)',
+        'Warm fleece or knit sweater for 12°C evenings',
+        'Trail running shoes or hiking boots for Sipi Falls',
+        'Lightweight waterproof rain shell for waterfall mist',
+        'UV sunglasses & SPF sunscreen (high-altitude sun)',
       ],
-      routeStatus: '100% paved tarmac highway from Kampala / Jinja / Mbale to hotel entrance. No 4x4 strictly required.',
+      routeStatus: '100% paved tarmac highway from Kampala / Jinja / Mbale to hotel gate.',
       actionUrl: '/kapchorwa/the-road',
-      actionLabel: 'Read Highway Travel Guide',
+      actionLabel: 'Highway Route Guide',
     };
 
     return {
       toolCallId: id,
       name: 'get_weather_and_packing_guide',
-      output: JSON.stringify({
-        altitude: card.altitude,
-        temperatures: card.temperatureRange,
-        day: card.dayClimate,
-        night: card.nightClimate,
-        packingList: card.packingChecklist,
-        road: card.routeStatus,
-      }),
+      output: JSON.stringify(card),
       card,
     };
   }

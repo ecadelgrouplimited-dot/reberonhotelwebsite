@@ -1,97 +1,190 @@
 import type { Permission } from '@reberon/contracts';
 import {
-  BedDouble, BookOpenText, CalendarRange, CircleHelp, ConciergeBell, FileText, Hammer, Home, Image, Inbox, KeyRound, ListChecks, Map, Navigation, ScrollText,
-  Settings, Shuffle, SprayCan, Building2, Users, Rocket, Gift, Sunset, LayoutGrid, Contact, MessageCircleHeart, ChartColumnBig, Send, PlugZap, MessagesSquare, Rotate3d, ReceiptText,
-  UtensilsCrossed, Dumbbell, FileSpreadsheet, Boxes, ClipboardCheck, Clock, CalendarDays, DollarSign, type LucideIcon,
+  BedDouble,
+  BookOpenText,
+  Boxes,
+  Building2,
+  CalendarDays,
+  CalendarRange,
+  ChartColumnBig,
+  CircleHelp,
+  ClipboardCheck,
+  Clock,
+  ConciergeBell,
+  Contact,
+  DollarSign,
+  Dumbbell,
+  FileSpreadsheet,
+  FileText,
+  Gift,
+  Globe,
+  Hammer,
+  Home,
+  Image,
+  Inbox,
+  LayoutGrid,
+  ListChecks,
+  Map,
+  MessageCircleHeart,
+  MessagesSquare,
+  Navigation,
+  PlugZap,
+  Radio,
+  ReceiptText,
+  Rocket,
+  Rotate3d,
+  ScrollText,
+  Send,
+  Settings,
+  ShieldCheck,
+  Shuffle,
+  SprayCan,
+  Sunset,
+  Tags,
+  Users,
+  UtensilsCrossed,
+  Wallet,
+  type LucideIcon,
 } from 'lucide-react';
+
+export type NavBadgeKey =
+  | 'today'
+  | 'inbox'
+  | 'waitlist'
+  | 'messages'
+  | 'desk'
+  | 'reservations'
+  | 'rack'
+  | 'housekeeping'
+  | 'feedback'
+  | 'brief'
+  | 'receipts'
+  | 'quotations'
+  | 'pos'
+  | 'healthclub'
+  | 'inventory'
+  | 'requisitions'
+  | 'staff'
+  | 'departments'
+  | 'shifts'
+  | 'leave'
+  | 'payroll'
+  | 'publishing';
 
 export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
   perm?: Permission;
-  badge?: 'inbox' | 'waitlist' | 'publishing';
+  badge?: NavBadgeKey;
   later?: string;
 }
+
 export interface NavGroup {
-  label?: string;
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  defaultOpen?: boolean;
   items: NavItem[];
 }
 
 export const NAV: NavGroup[] = [
   {
+    id: 'command',
+    label: 'Command & Comms',
+    icon: Radio,
+    defaultOpen: true,
     items: [
-      { label: 'Today', href: '/', icon: Home },
-      { label: 'Inbox', href: '/inbox', icon: Inbox, perm: 'inbox:read', badge: 'inbox' },
-      { label: 'First-stay list', href: '/waitlist', icon: ListChecks, perm: 'waitlist:read', badge: 'waitlist' },
-      { label: 'Sent messages', href: '/messages', icon: Send, perm: 'messages:read' },
+      { label: 'Today Overview', href: '/', icon: Home, badge: 'today' },
+      { label: 'Inbox & Enquiries', href: '/inbox', icon: Inbox, perm: 'inbox:read', badge: 'inbox' },
+      { label: 'First-Stay Waitlist', href: '/waitlist', icon: ListChecks, perm: 'waitlist:read', badge: 'waitlist' },
+      { label: 'Sent Messages', href: '/messages', icon: Send, perm: 'messages:read', badge: 'messages' },
     ],
   },
   {
-    label: 'Bookings',
+    id: 'stays',
+    label: 'Front Desk & Stays',
+    icon: ConciergeBell,
+    defaultOpen: true,
     items: [
-      { label: 'Reservations', href: '/reservations', icon: BookOpenText, perm: 'bookings:read' },
-      { label: 'Calendar & rates', href: '/calendar', icon: CalendarRange, perm: 'rates:read' },
-      { label: 'Extras & packages', href: '/sellables', icon: Gift, perm: 'rates:read' },
-      { label: 'Receipts', href: '/receipts', icon: ReceiptText, perm: 'receipts:read' },
-      { label: 'Owner brief', href: '/brief', icon: Sunset, perm: 'bookings:read' },
+      { label: 'Front Desk', href: '/desk', icon: ConciergeBell, perm: 'desk:operate', badge: 'desk' },
+      { label: 'Reservations', href: '/reservations', icon: BookOpenText, perm: 'bookings:read', badge: 'reservations' },
+      { label: 'Room Rack', href: '/rack', icon: LayoutGrid, perm: 'rooms:status', badge: 'rack' },
+      { label: 'Housekeeping', href: '/housekeeping', icon: SprayCan, perm: 'rooms:status', badge: 'housekeeping' },
+      { label: 'Guests & Profiles', href: '/guests', icon: Contact, perm: 'guests:read' },
+      { label: 'Guest Feedback', href: '/feedback', icon: MessageCircleHeart, perm: 'guests:read', badge: 'feedback' },
     ],
   },
   {
-    label: 'The house',
+    id: 'finance',
+    label: 'Revenue & Billing',
+    icon: Wallet,
+    defaultOpen: true,
     items: [
-      { label: 'Front desk', href: '/desk', icon: ConciergeBell, perm: 'desk:operate' },
-      { label: 'Room rack', href: '/rack', icon: LayoutGrid, perm: 'rooms:status' },
-      { label: 'Housekeeping', href: '/housekeeping', icon: SprayCan, perm: 'rooms:status' },
-      { label: 'Guests', href: '/guests', icon: Contact, perm: 'guests:read' },
-      { label: 'Feedback', href: '/feedback', icon: MessageCircleHeart, perm: 'guests:read' },
-      { label: 'Reports', href: '/reports', icon: ChartColumnBig, perm: 'reports:read' },
+      { label: 'Owner Brief', href: '/brief', icon: Sunset, perm: 'bookings:read', badge: 'brief' },
+      { label: 'Receipts & Folios', href: '/receipts', icon: ReceiptText, perm: 'receipts:read', badge: 'receipts' },
+      { label: 'Quotations & Events', href: '/quotations', icon: FileSpreadsheet, perm: 'quotations:manage', badge: 'quotations' },
+      { label: 'Calendar & Rates', href: '/calendar', icon: CalendarRange, perm: 'rates:read' },
+      { label: 'Extras & Packages', href: '/sellables', icon: Gift, perm: 'rates:read' },
+      { label: 'Financial Reports', href: '/reports', icon: ChartColumnBig, perm: 'reports:read' },
     ],
   },
   {
+    id: 'operations',
     label: 'Operations & POS',
+    icon: UtensilsCrossed,
+    defaultOpen: true,
     items: [
-      { label: 'POS: Kitchen & Bar', href: '/pos', icon: UtensilsCrossed, perm: 'pos:operate' },
-      { label: 'Health Club & Spa', href: '/health-club', icon: Dumbbell, perm: 'healthclub:operate' },
-      { label: 'Quotations & Events', href: '/quotations', icon: FileSpreadsheet, perm: 'quotations:manage' },
-      { label: 'Inventory & Linen', href: '/inventory', icon: Boxes, perm: 'inventory:manage' },
-      { label: 'Requisitions & Comms', href: '/requisitions', icon: ClipboardCheck, perm: 'requisitions:request' },
+      { label: 'POS: Kitchen & Bar', href: '/pos', icon: UtensilsCrossed, perm: 'pos:operate', badge: 'pos' },
+      { label: 'Health Club & Spa', href: '/health-club', icon: Dumbbell, perm: 'healthclub:operate', badge: 'healthclub' },
+      { label: 'Inventory & Linen', href: '/inventory', icon: Boxes, perm: 'inventory:manage', badge: 'inventory' },
+      { label: 'Item Categories', href: '/inventory/categories', icon: Tags, perm: 'inventory:manage' },
+      { label: 'Requisitions & Comms', href: '/requisitions', icon: ClipboardCheck, perm: 'requisitions:request', badge: 'requisitions' },
     ],
   },
   {
-    label: 'Human Resources (HRM)',
+    id: 'hr',
+    label: 'Human Resources',
+    icon: Users,
+    defaultOpen: true,
     items: [
-      { label: 'Staff directory', href: '/hr', icon: Users, perm: 'inventory:manage' },
-      { label: 'Departments', href: '/departments', icon: Building2, perm: 'inventory:manage' },
-      { label: 'Shift rosters', href: '/hr?tab=ROSTER', icon: Clock, perm: 'inventory:manage' },
-      { label: 'Leave requests', href: '/hr?tab=LEAVE', icon: CalendarDays, perm: 'inventory:manage' },
-      { label: 'Payroll & taxes', href: '/hr?tab=PAYROLL', icon: DollarSign, perm: 'inventory:manage' },
+      { label: 'Staff Directory', href: '/hr', icon: Users, perm: 'inventory:manage', badge: 'staff' },
+      { label: 'Departments', href: '/departments', icon: Building2, perm: 'inventory:manage', badge: 'departments' },
+      { label: 'Shift Rosters', href: '/hr?tab=ROSTER', icon: Clock, perm: 'inventory:manage', badge: 'shifts' },
+      { label: 'Leave Requests', href: '/hr?tab=LEAVE', icon: CalendarDays, perm: 'inventory:manage', badge: 'leave' },
+      { label: 'Payroll & Taxes', href: '/hr?tab=PAYROLL', icon: DollarSign, perm: 'inventory:manage', badge: 'payroll' },
     ],
   },
   {
-    label: 'Website CMS',
+    id: 'cms',
+    label: 'Website & Concierge',
+    icon: Globe,
+    defaultOpen: false,
     items: [
       { label: 'Publishing', href: '/website/publishing', icon: Rocket, perm: 'content:read', badge: 'publishing' },
       { label: 'Pages', href: '/website/pages', icon: FileText, perm: 'content:read' },
       { label: 'Rooms', href: '/website/rooms', icon: BedDouble, perm: 'content:read' },
       { label: 'Facilities', href: '/website/facilities', icon: Building2, perm: 'content:read' },
-      { label: 'Virtual tours', href: '/website/tours', icon: Rotate3d, perm: 'content:read' },
-      { label: 'Kapchorwa', href: '/website/destinations', icon: Map, perm: 'content:read' },
-      { label: 'Hotel rising', href: '/website/rising', icon: Hammer, perm: 'content:read' },
-      { label: 'Questions', href: '/website/faqs', icon: CircleHelp, perm: 'content:read' },
+      { label: 'Virtual Tours', href: '/website/tours', icon: Rotate3d, perm: 'content:read' },
+      { label: 'Kapchorwa Guide', href: '/website/destinations', icon: Map, perm: 'content:read' },
+      { label: 'Hotel Rising', href: '/website/rising', icon: Hammer, perm: 'content:read' },
+      { label: 'Questions & FAQ', href: '/website/faqs', icon: CircleHelp, perm: 'content:read' },
       { label: 'Navigation', href: '/website/navigation', icon: Navigation, perm: 'content:read' },
       { label: 'Redirects', href: '/website/redirects', icon: Shuffle, perm: 'content:read' },
-      { label: 'Media', href: '/media', icon: Image, perm: 'media:read' },
+      { label: 'Media Library', href: '/media', icon: Image, perm: 'media:read' },
     ],
   },
   {
-    label: 'Admin',
+    id: 'system',
+    label: 'System & Security',
+    icon: ShieldCheck,
+    defaultOpen: false,
     items: [
-      { label: 'Settings', href: '/settings', icon: Settings, perm: 'settings:read' },
-      { label: 'Messages', href: '/settings/messages', icon: MessagesSquare, perm: 'settings:read' },
-      { label: 'Integrations', href: '/settings/integrations', icon: PlugZap, perm: 'vault:manage' },
-      { label: 'People and access', href: '/settings/users', icon: Users, perm: 'users:manage' },
-      { label: 'Audit log', href: '/settings/audit', icon: ScrollText, perm: 'audit:read' },
+      { label: 'Hotel Settings', href: '/settings', icon: Settings, perm: 'settings:read' },
+      { label: 'Message Templates', href: '/settings/messages', icon: MessagesSquare, perm: 'settings:read' },
+      { label: 'Integrations & Vault', href: '/settings/integrations', icon: PlugZap, perm: 'vault:manage' },
+      { label: 'People & Access', href: '/settings/users', icon: Users, perm: 'users:manage' },
+      { label: 'Audit Log', href: '/settings/audit', icon: ScrollText, perm: 'audit:read' },
     ],
   },
 ];

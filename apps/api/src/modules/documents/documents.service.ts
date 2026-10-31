@@ -311,12 +311,15 @@ export class DocumentsService {
     }
     const nonce = randomBytes(12).toString('base64');
     const other = o.paper === '80MM' ? 'A4' : '80MM';
-    const altPaperUrl = o.publicToken ? `?code=${encodeURIComponent(o.publicToken.code)}&t=${encodeURIComponent(o.publicToken.t)}&paper=${other}` : `?paper=${other}`;
+    const check = this.checkCode(doc.number);
+    const altPaperUrl = o.publicToken
+      ? `?code=${encodeURIComponent(o.publicToken.code)}&t=${encodeURIComponent(o.publicToken.t)}&paper=${other}`
+      : `?check=${encodeURIComponent(check)}&paper=${other}`;
     return {
       nonce,
       html: renderDocument({
         kind: doc.kind, number: doc.number, issuedAt: doc.issuedAt.toISOString(), currency: doc.currency, amountMinor: doc.amountMinor.toString(),
-        issuedTo: doc.issuedTo as IssuedDocumentDTO['issuedTo'], data: doc.data as unknown as DocumentData, checkCode: this.checkCode(doc.number),
+        issuedTo: doc.issuedTo as IssuedDocumentDTO['issuedTo'], data: doc.data as unknown as DocumentData, checkCode: check,
         voided: doc.voidedAt ? { at: doc.voidedAt.toISOString(), reason: doc.voidReason ?? '' } : null,
         copy: o.countPrint ? copy : 0, paper: o.paper, autoprint: o.autoprint, nonce, verifyUrl: `${env.WEB_URL.replace(/^https?:\/\//, '')}/verify`, altPaperUrl,
       }),

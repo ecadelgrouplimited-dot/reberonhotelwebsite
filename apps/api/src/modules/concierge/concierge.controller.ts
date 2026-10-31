@@ -6,12 +6,16 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   zConciergeChatInput,
+  zConciergeIdentifyInput,
   type ConciergeChatInput,
   type ConciergeChatResponseDTO,
+  type ConciergeGuestDossierDTO,
+  type ConciergeIdentifyInput,
 } from '@reberon/contracts';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import { ConciergeService } from './concierge.service.js';
@@ -27,7 +31,6 @@ export class ConciergeController {
   @Get('status')
   async status() {
     const isConfigured = await this.deepseek.isConfigured();
-    const config = await this.deepseek.getConfig();
     return {
       name: 'Sipi Concierge',
       title: 'Highland Sanctuary AI Host',
@@ -37,9 +40,31 @@ export class ConciergeController {
     };
   }
 
+  @Post('identify')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  async identify(
+    @Body(new ZodPipe(zConciergeIdentifyInput)) body: ConciergeIdentifyInput,
+  ): Promise<ConciergeGuestDossierDTO> {
+    return this.concierge.identifyGuest(body);
+  }
+
+  @Get('dossier/:sessionId')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  async getDossier(
+    @Param('sessionId') sessionId: string,
+    @Query('name') name?: string,
+    @Query('phone') phone?: string,
+    @Query('email') email?: string,
+    @Query('code') code?: string,
+  ) {
+    const dossier = await this.concierge.getDossier(sessionId, { name, phone, email, code });
+    return { sessionId, dossier };
+  }
+
   @Post('chat')
   @HttpCode(200)
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({ default: { limit: 25, ttl: 60_000 } })
   async chat(
     @Body(new ZodPipe(zConciergeChatInput)) body: ConciergeChatInput,
   ): Promise<ConciergeChatResponseDTO> {
@@ -48,8 +73,13 @@ export class ConciergeController {
 
   @Get('session/:sessionId')
   async getSession(@Param('sessionId') sessionId: string) {
-    const messages = this.concierge.getSessionHistory(sessionId);
-    return { sessionId, messages };
+    const state = this.concierge.getSessionHistory(sessionId);
+    return {
+      sessionId,
+      messages: state.messages,
+      identity: state.identity,
+      dossier: state.dossier,
+    };
   }
 
   @Delete('session/:sessionId')
