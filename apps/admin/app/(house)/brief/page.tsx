@@ -237,10 +237,10 @@ export default function BriefPage() {
         ['Executive Summary', 'TODAY POS', `${fp?.today.posOrdersCount ?? 0} settled orders`, 'F&B / BAR', b.date, fp ? money(fp.today.posUGX, 'UGX') : 'UGX 0'],
         ['Executive Summary', 'TODAY HEALTH CLUB', `${fp?.today.healthClubPassesCount ?? 0} passes`, 'SPA / GYM', b.date, fp ? money(fp.today.healthClubUGX, 'UGX') : 'UGX 0'],
         ['Executive Summary', 'MTD GROSS COLLECTED', 'Month-to-Date Total', 'MTD', b.date.slice(0, 7), fp ? money(fp.mtd.totalUGX, 'UGX') : ''],
-        ...inHouseList.map((g) => ['In-House Tonight', g.code, g.name, 'IN_HOUSE', `${g.rooms} (Rm ${g.assignedRooms.join(', ') || 'TBD'}) · Departs ${g.departure}`, g.balance]),
-        ...todayArrivals.map((a) => ['Today Arrival', a.code, a.name, a.status, `${a.rooms} (Rm ${a.assignedRooms.join(', ') || 'Unassigned'})${a.eta ? ` · ETA ${a.eta}` : ''}`, a.balance]),
-        ...b.arrivals.map((a) => ['Tomorrow Arrival', a.code, a.name, a.status, `${a.rooms} (Rm ${a.assignedRooms?.join(', ') || 'Unassigned'})${a.eta ? ` · ETA ${a.eta}` : ''}`, a.balance]),
-        ...b.promised.map((p) => ['Receivable (7d)', p.code, p.name, p.status, `Arrives ${p.arrival}`, p.balance]),
+        ...inHouseList.map((g) => ['In-House Tonight', g.code, g.name, 'IN_HOUSE', `${g.rooms} (Rm ${(g.assignedRooms ?? []).join(', ') || 'TBD'}) · Departs ${g.departure}`, g.balance]),
+        ...todayArrivals.map((a) => ['Today Arrival', a.code, a.name, a.status, `${a.rooms} (Rm ${(a.assignedRooms ?? []).join(', ') || 'Unassigned'})${a.eta ? ` · ETA ${a.eta}` : ''}`, a.balance]),
+        ...(b.arrivals ?? []).map((a) => ['Tomorrow Arrival', a.code, a.name, a.status, `${a.rooms} (Rm ${(a.assignedRooms ?? []).join(', ') || 'Unassigned'})${a.eta ? ` · ETA ${a.eta}` : ''}`, a.balance]),
+        ...(b.promised ?? []).map((p) => ['Receivable (7d)', p.code, p.name, p.status, `Arrives ${p.arrival}`, p.balance]),
       ],
     );
   };
@@ -470,10 +470,10 @@ export default function BriefPage() {
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3.5 py-2.5 text-xs">
               <span className="font-semibold text-fg-muted">Room Collections by Payment Method (Today):</span>
               <div className="flex flex-wrap items-center gap-3 font-mono">
-                <span>MoMo: <b>{money(fp.today.byMethod.MOBILE_MONEY ?? '0', 'UGX')}</b></span>
-                <span>Cash: <b>{money(fp.today.byMethod.CASH ?? '0', 'UGX')}</b></span>
-                <span>Card: <b>{money(fp.today.byMethod.CARD ?? '0', 'UGX')}</b></span>
-                <span>Bank: <b>{money(fp.today.byMethod.BANK ?? '0', 'UGX')}</b></span>
+                <span>MoMo: <b>{money(fp.today.byMethod?.MOBILE_MONEY ?? '0', 'UGX')}</b></span>
+                <span>Cash: <b>{money(fp.today.byMethod?.CASH ?? '0', 'UGX')}</b></span>
+                <span>Card: <b>{money(fp.today.byMethod?.CARD ?? '0', 'UGX')}</b></span>
+                <span>Bank: <b>{money(fp.today.byMethod?.BANK ?? '0', 'UGX')}</b></span>
               </div>
             </div>
           </Section>
@@ -498,14 +498,14 @@ export default function BriefPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {hr.roomTypes.map((rt) => (
+                  {(hr.roomTypes ?? []).map((rt) => (
                     <tr key={rt.id}>
                       <td className="py-2 font-semibold text-fg">{rt.name}</td>
                       <td className="py-2 text-center font-mono tabular text-fg-muted">{rt.total}</td>
                       <td className="py-2 text-center font-mono font-semibold tabular text-info">{rt.occupied}</td>
                       <td className="py-2 text-center font-mono font-semibold tabular text-success">{rt.ready}</td>
                       <td className="py-2 text-center font-mono font-semibold tabular text-warning">{rt.dirty}</td>
-                      <td className="py-2 text-right font-mono tabular text-fg-muted">{rt.outOfOrder}</td>
+                      <td className="py-2 text-right font-mono tabular text-fg-muted">{rt.outOfOrder ?? 0}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -547,8 +547,8 @@ export default function BriefPage() {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <span className="font-mono font-semibold tabular">{money(req.totalAmountMinor, req.currency)}</span>
-                        <Pill tone={req.priority === 'URGENT' ? 'red' : 'amber'}>{req.status.replace(/_/g, ' ')}</Pill>
+                        <span className="font-mono font-semibold tabular">{money(req.totalAmountMinor ?? '0', req.currency ?? 'UGX')}</span>
+                        <Pill tone={req.priority === 'URGENT' ? 'red' : 'amber'}>{(req.status ?? 'PENDING').replace(/_/g, ' ')}</Pill>
                       </div>
                     </li>
                   ))}
@@ -573,7 +573,7 @@ export default function BriefPage() {
                   </div>
                   <p className="mt-1 font-mono text-base font-bold tabular">{aa.unhandledFeedbackCount} open</p>
                 </Link>
-                <Link href="/staff" className="rounded-xl border border-line p-2.5 hover:border-line-strong">
+                <Link href="/hr" className="rounded-xl border border-line p-2.5 hover:border-line-strong">
                   <div className="flex items-center justify-between text-[11px] text-fg-muted">
                     <span>Active Staff</span>
                     <Users className="size-3.5 text-info" />
@@ -697,39 +697,42 @@ export default function BriefPage() {
             <Empty title="No guests checked in for tonight yet" />
           ) : (
             <ul className="-my-1 divide-y divide-line text-xs">
-              {inHouseList.map((g) => (
-                <li key={g.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {g.assignedRooms.length > 0 && (
-                        <span className="rounded border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-bold">
-                          Rm {g.assignedRooms.join(', ')}
+                  {inHouseList.map((g) => {
+                    const rmNums = g.assignedRooms ?? [];
+                    return (
+                    <li key={g.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {rmNums.length > 0 && (
+                            <span className="rounded border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-bold">
+                              Rm {rmNums.join(', ')}
+                            </span>
+                          )}
+                          <Link href={`/reservations/${g.id}`} className="font-semibold text-fg hover:underline">
+                            {g.name}
+                          </Link>
+                          {g.isVip && (
+                            <Pill tone="dark">
+                              <Star className="size-2.5 fill-current text-warning" /> VIP
+                            </Pill>
+                          )}
+                          <span className="font-mono text-[11px] text-fg-muted">{g.code}</span>
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-fg-muted">
+                          {g.rooms} · {g.guests ?? 1} pax · Departs {dateShort(g.departure)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={cn('font-mono font-semibold tabular', BigInt(g.balanceMinor ?? '0') > 0n ? 'text-warning' : 'text-success')}>
+                          {BigInt(g.balanceMinor ?? '0') > 0n ? `${g.balance} due` : 'Settled'}
                         </span>
-                      )}
-                      <Link href={`/reservations/${g.id}`} className="font-semibold text-fg hover:underline">
-                        {g.name}
-                      </Link>
-                      {g.isVip && (
-                        <Pill tone="dark">
-                          <Star className="size-2.5 fill-current text-warning" /> VIP
-                        </Pill>
-                      )}
-                      <span className="font-mono text-[11px] text-fg-muted">{g.code}</span>
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-fg-muted">
-                      {g.rooms} · {g.guests} pax · Departs {dateShort(g.departure)}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={cn('font-mono font-semibold tabular', BigInt(g.balanceMinor) > 0n ? 'text-warning' : 'text-success')}>
-                      {BigInt(g.balanceMinor) > 0n ? `${g.balance} due` : 'Settled'}
-                    </span>
-                    <Button size="sm" variant="ghost" href={`/reservations/${g.id}`}>
-                      <ExternalLink className="size-3.5" />
-                    </Button>
-                  </div>
-                </li>
-              ))}
+                        <Button size="sm" variant="ghost" href={`/reservations/${g.id}`}>
+                          <ExternalLink className="size-3.5" />
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                  })}
             </ul>
           )}
         </Section>

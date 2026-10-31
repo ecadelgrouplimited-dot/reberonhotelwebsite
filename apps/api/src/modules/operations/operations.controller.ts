@@ -221,6 +221,22 @@ export class OperationsController {
     return this.ops.createQuotation(body, user);
   }
 
+  @Patch('quotations/:id')
+  @Requires('quotations:manage')
+  updateQuotation(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zCreateQuotationInput)) body: z.infer<typeof zCreateQuotationInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.updateQuotation(id, body, user);
+  }
+
+  @Delete('quotations/:id')
+  @Requires('quotations:manage')
+  deleteQuotation(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ops.deleteQuotation(id, user);
+  }
+
   @Patch('quotations/:id/status')
   @Requires('quotations:manage')
   updateQuotationStatus(
@@ -262,6 +278,12 @@ export class OperationsController {
   }
 
   /* ───── Inventory, Segregated Linen & Fixed Assets ───── */
+
+  @Get('operations/inventory')
+  @Requires('rooms:status')
+  operationsInventory(@Query('category') category?: string) {
+    return this.ops.listInventoryByCategory(category);
+  }
 
   @Get('inventory')
   @Requires('inventory:manage')

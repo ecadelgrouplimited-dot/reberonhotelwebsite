@@ -332,7 +332,24 @@ export class DocumentsService {
     const nonce = randomBytes(12).toString('base64');
     return {
       nonce,
-      html: renderDocument({ kind: 'STATEMENT', number: c.r.code, issuedAt: new Date().toISOString(), currency: c.r.currency, amountMinor: data.totals.chargesMinor, issuedTo: c.issuedTo, data, checkCode: null, voided: null, copy: 0, paper, autoprint: false, nonce, verifyUrl: null, altPaperUrl: `?paper=${paper === '80MM' ? 'A4' : '80MM'}` }),
+      html: renderDocument({
+        kind: 'STATEMENT',
+        number: c.r.code,
+        issuedAt: new Date().toISOString(),
+        currency: c.r.currency,
+        amountMinor: data.totals.chargesMinor,
+        issuedTo: c.issuedTo,
+        data,
+        checkCode: null,
+        voided: null,
+        copy: 0,
+        paper,
+        autoprint: false,
+        nonce,
+        verifyUrl: null,
+        qrUrlOverride: `${env.WEB_URL}/stay?code=${encodeURIComponent(c.r.code)}`,
+        altPaperUrl: `?paper=${paper === '80MM' ? 'A4' : '80MM'}`,
+      }),
     };
   }
 
@@ -371,15 +388,33 @@ export class DocumentsService {
         valid: true as const,
         kind: 'Quotation',
         number: quo.number,
+        checkCode: quo.checkCode,
+        issuedToName: quo.clientOrganization ? `${quo.clientName} (${quo.clientOrganization})` : quo.clientName,
+        summary: quo.eventTitle,
         issuedAt: quo.createdAt.toISOString(),
         currency: quo.currency,
         amountMinor: quo.totalMinor.toString(),
         voided: quo.status === 'DECLINED' || quo.status === 'EXPIRED',
+        publicPrintUrl: `${env.API_URL}/v1/public/documents/quotation/${quo.id}?check=${encodeURIComponent(quo.checkCode)}`,
       };
     }
     const doc = await this.prisma.issuedDocument.findUnique({ where: { number: cleanNo } });
     if (!doc || this.checkCode(doc.number) !== cleanCheck) return { valid: false as const };
-    return { valid: true as const, kind: DOCUMENT_LABEL[doc.kind], number: doc.number, issuedAt: doc.issuedAt.toISOString(), currency: doc.currency, amountMinor: doc.amountMinor.toString(), voided: !!doc.voidedAt };
+    const issuedTo = doc.issuedTo as IssuedDocumentDTO['issuedTo'];
+    const docData = doc.data as unknown as DocumentData;
+    return {
+      valid: true as const,
+      kind: DOCUMENT_LABEL[doc.kind],
+      number: doc.number,
+      checkCode: cleanCheck,
+      issuedToName: issuedTo?.name ?? 'Guest',
+      summary: docData?.payment?.purpose ?? docData?.reservation?.room ?? docData?.note ?? DOCUMENT_LABEL[doc.kind],
+      issuedAt: doc.issuedAt.toISOString(),
+      currency: doc.currency,
+      amountMinor: doc.amountMinor.toString(),
+      voided: !!doc.voidedAt,
+      publicPrintUrl: `${env.API_URL}/v1/public/documents/${doc.id}?check=${encodeURIComponent(cleanCheck)}`,
+    };
   }
 
   /** Issue a numbered receipt or invoice directly for POS, Health Club or Converted Quotations. */

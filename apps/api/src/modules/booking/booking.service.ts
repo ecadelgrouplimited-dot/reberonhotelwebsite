@@ -763,38 +763,40 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
 
     const unpaid = holds.filter((r) => r.totalMinor - r.paidMinor > 0n);
 
-    const mapStayRow = (r: (typeof todayArrivals)[number]) => ({
-      id: r.id,
-      code: r.code,
-      name: r.contact.name,
-      phone: r.contact.phone,
-      isVip: r.contact.isVip,
-      status: r.status,
-      arrival: iso(r.arrival),
-      departure: iso(r.departure),
-      adults: r.adults,
-      children: r.children,
-      eta: r.eta,
-      rooms: r.rooms.map((x) => `${x.quantity} × ${names.get(x.roomTypeId) ?? 'Suite'}`).join(', '),
-      roomNumbers: r.assignments.map((a) => a.room.number),
-      total: this.money(r.totalMinor, r.currency),
-      paid: this.money(r.paidMinor, r.currency),
-      balance: this.money(r.totalMinor - r.paidMinor, r.currency),
-      balanceMinor: (r.totalMinor - r.paidMinor).toString(),
-      currency: r.currency,
-    });
+    const mapStayRow = (r: (typeof todayArrivals)[number]) => {
+      const assignedRooms = r.assignments.map((a) => a.room.number);
+      return {
+        id: r.id,
+        code: r.code,
+        name: r.contact.name,
+        phone: r.contact.phone,
+        isVip: r.contact.isVip,
+        status: r.status,
+        arrival: iso(r.arrival),
+        departure: iso(r.departure),
+        nights: nightsOf(iso(r.arrival), iso(r.departure)).length,
+        guests: r.adults + r.children,
+        adults: r.adults,
+        children: r.children,
+        eta: r.eta,
+        rooms: r.rooms.map((x) => `${x.quantity} × ${names.get(x.roomTypeId) ?? 'Suite'}`).join(', '),
+        assignedRooms,
+        roomNumbers: assignedRooms,
+        total: this.money(r.totalMinor, r.currency),
+        paid: this.money(r.paidMinor, r.currency),
+        balance: this.money(r.totalMinor - r.paidMinor, r.currency),
+        balanceMinor: (r.totalMinor - r.paidMinor).toString(),
+        currency: r.currency,
+      };
+    };
 
     // Payment methods breakdown today
     const methodKeys = ['MOBILE_MONEY', 'CASH', 'CARD', 'BANK'] as const;
-    const byMethod = methodKeys.map((m) => {
+    const byMethod: Record<string, string> = {};
+    for (const m of methodKeys) {
       const mRows = cleared.filter((p) => p.method === m);
-      return {
-        method: m,
-        UGX: sum(mRows, 'UGX').toString(),
-        USD: sum(mRows, 'USD').toString(),
-        count: mRows.length,
-      };
-    });
+      byMethod[m] = sum(mRows, 'UGX').toString();
+    }
 
     const roomTodayUgx = sum(cleared, 'UGX');
     const roomTodayUsd = sum(cleared, 'USD');
@@ -807,14 +809,17 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     const rtIds = [...new Set(roomsList.map((r) => r.roomTypeId))];
     const roomTypesReadiness = rtIds.map((rtId) => {
       const rtRooms = roomsList.filter((r) => r.roomTypeId === rtId);
+      const outOfOrder = rtRooms.filter((r) => r.hkStatus === 'BLOCKED' || r.hkStatus === 'OUT_OF_ORDER').length;
       return {
         id: rtId,
+        code: rtId.slice(0, 6).toUpperCase(),
         name: names.get(rtId) ?? 'Suite',
         total: rtRooms.length,
         occupied: rtRooms.filter((r) => r.hkStatus === 'OCCUPIED').length,
         ready: rtRooms.filter((r) => r.hkStatus === 'INSPECTED' || r.hkStatus === 'VACANT_CLEAN').length,
         dirty: rtRooms.filter((r) => r.hkStatus === 'VACANT_DIRTY').length,
-        blocked: rtRooms.filter((r) => r.hkStatus === 'BLOCKED' || r.hkStatus === 'OUT_OF_ORDER').length,
+        blocked: outOfOrder,
+        outOfOrder,
       };
     });
 
@@ -826,18 +831,28 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       const bookedRooms = staying.reduce((acc, r) => acc + r.rooms.reduce((s, rm) => s + rm.quantity, 0), 0);
       const arrCount = upcoming7dRes.filter((r) => iso(r.arrival) === dStr).length;
       const depCount = upcoming7dRes.filter((r) => iso(r.departure) === dStr).length;
+      const pct = totalRooms ? Math.min(100, Math.round((bookedRooms / totalRooms) * 100)) : 0;
       return {
         date: dStr,
+        occupied: bookedRooms,
         bookedRooms,
+        total: totalRooms,
         totalRooms,
-        occupancyPct: totalRooms ? Math.min(100, Math.round((bookedRooms / totalRooms) * 100)) : 0,
+        percent: pct,
+        occupancyPct: pct,
+        arrivals: arrCount,
         arrivalsCount: arrCount,
+        departures: depCount,
         departuresCount: depCount,
       };
     });
 
     const guestsInHouse = inHouseTonight.reduce((acc, r) => acc + r.adults + r.children, 0);
     const vipsInHouse = inHouseTonight.filter((r) => r.contact.isVip).length;
+    const inspectedCount = roomsList.filter((r) => r.hkStatus === 'INSPECTED').length;
+    const vacantCleanCount = roomsList.filter((r) => r.hkStatus === 'VACANT_CLEAN').length;
+    const dirtyCount = roomsList.filter((r) => r.hkStatus === 'VACANT_DIRTY').length;
+    const blockedCount = roomsList.filter((r) => r.hkStatus === 'BLOCKED' || r.hkStatus === 'OUT_OF_ORDER').length;
 
     return {
       date: forDate,
@@ -860,31 +875,37 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       },
       financialPulse: {
         today: {
-          roomPayments: { UGX: roomTodayUgx.toString(), USD: roomTodayUsd.toString(), count: cleared.length },
-          posSales: { UGX: posTodayUgx.toString(), USD: posTodayUsd.toString(), ordersCount: posToday.length },
-          healthClubSales: { UGX: hcTodayUgx.toString(), USD: hcTodayUsd.toString(), count: hcToday.length },
-          totalInflow: {
-            UGX: (roomTodayUgx + posTodayUgx + hcTodayUgx).toString(),
-            USD: (roomTodayUsd + posTodayUsd + hcTodayUsd).toString(),
-          },
+          roomsUGX: roomTodayUgx.toString(),
+          roomsUSD: roomTodayUsd.toString(),
+          roomPaymentsCount: cleared.length,
+          posUGX: posTodayUgx.toString(),
+          posOrdersCount: posToday.length,
+          posOpenTabsUGX: '0',
+          posOpenTabsCount: 0,
+          healthClubUGX: hcTodayUgx.toString(),
+          healthClubPassesCount: hcToday.length,
+          totalUGX: (roomTodayUgx + posTodayUgx + hcTodayUgx).toString(),
+          totalUSD: (roomTodayUsd + posTodayUsd + hcTodayUsd).toString(),
           byMethod,
         },
         mtd: {
-          collected: { UGX: sum(mtdPayments, 'UGX').toString(), USD: sum(mtdPayments, 'USD').toString(), count: mtdPayments.length },
-          posSales: { UGX: sumPos(posMtd, 'UGX').toString(), USD: sumPos(posMtd, 'USD').toString(), ordersCount: posMtd.length },
-          totalCollected: {
-            UGX: (sum(mtdPayments, 'UGX') + sumPos(posMtd, 'UGX')).toString(),
-            USD: (sum(mtdPayments, 'USD') + sumPos(posMtd, 'USD')).toString(),
-          },
+          roomsUGX: sum(mtdPayments, 'UGX').toString(),
+          roomsUSD: sum(mtdPayments, 'USD').toString(),
+          posUGX: sumPos(posMtd, 'UGX').toString(),
+          totalUGX: (sum(mtdPayments, 'UGX') + sumPos(posMtd, 'UGX')).toString(),
         },
       },
       houseReadiness: {
         totalRooms,
         occupied: roomsList.filter((r) => r.hkStatus === 'OCCUPIED').length,
-        inspected: roomsList.filter((r) => r.hkStatus === 'INSPECTED').length,
-        vacantClean: roomsList.filter((r) => r.hkStatus === 'VACANT_CLEAN').length,
-        vacantDirty: roomsList.filter((r) => r.hkStatus === 'VACANT_DIRTY').length,
-        blocked: roomsList.filter((r) => r.hkStatus === 'BLOCKED' || r.hkStatus === 'OUT_OF_ORDER').length,
+        inspected: inspectedCount,
+        vacantClean: vacantCleanCount,
+        ready: inspectedCount + vacantCleanCount,
+        dirty: dirtyCount,
+        vacantDirty: dirtyCount,
+        blocked: blockedCount,
+        outOfOrder: blockedCount,
+        pendingTasks: dirtyCount,
         roomTypes: roomTypesReadiness,
       },
       forecast7d,
@@ -897,8 +918,11 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
           department: req.department,
           priority: req.priority,
           status: req.status,
+          totalAmountMinor: req.totalEstimatedMinor.toString(),
+          currency: req.currency,
           amount: this.money(req.totalEstimatedMinor, req.currency),
           requestedBy: req.requestedByName,
+          createdAt: req.createdAt.toISOString(),
         })),
         pendingGuestRequests: pendingGuestRequests.map((gr) => ({
           id: gr.id,
@@ -906,6 +930,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
           code: gr.reservation.code,
           guestName: gr.reservation.contact.name,
           kind: gr.kind,
+          status: gr.status,
           note: gr.note,
           createdAt: gr.createdAt.toISOString(),
         })),

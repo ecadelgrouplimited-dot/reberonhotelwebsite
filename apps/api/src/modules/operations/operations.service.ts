@@ -49,7 +49,9 @@ import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
 import { has, type AuthUser } from '../../common/auth.js';
 import { badRequest, forbidden, notFound } from '../../common/errors.js';
+import { env } from '../../config.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { renderQrSvg } from '../documents/qr.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 
 @Injectable()
@@ -783,6 +785,18 @@ export class OperationsService {
 
     const isKot = kind === 'KOT';
     const title = isKot ? `KITCHEN / BAR ORDER TICKET` : `GUEST BILL CHECK`;
+    let qrHtml = '';
+    if (!isKot) {
+      let qrTarget = `${env.WEB_URL}`;
+      if (order.documentId) {
+        const doc = await this.prisma.issuedDocument.findUnique({ where: { id: order.documentId }, select: { number: true } });
+        if (doc) {
+          const chk = this.docs.checkCode(doc.number);
+          qrTarget = `${env.WEB_URL}/verify?number=${encodeURIComponent(doc.number)}&check=${encodeURIComponent(chk)}`;
+        }
+      }
+      qrHtml = `<div style="margin: 8px auto 0; text-align: center;">${renderQrSvg(qrTarget, 84)}<div style="font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px;">Scan to Verify</div></div>`;
+    }
     const rowsHtml = order.items
       .map(
         (it) => `
@@ -873,6 +887,7 @@ export class OperationsService {
         <div class="ftr">
           Thank you for dining at Reberon Hotel<br/>
           Mount Elgon · reberonhotel.com
+          ${qrHtml}
         </div>`
       : `<div class="ftr">Prepared for ${esc(order.outlet.deviceStation || order.outlet.name)}</div>`
   }
@@ -1283,6 +1298,84 @@ export class OperationsService {
     return this.mapQuotation(created);
   }
 
+  async updateQuotation(id: string, input: z.infer<typeof zCreateQuotationInput>, actor: AuthUser): Promise<QuotationDTO> {
+    const existing = await this.prisma.quotation.findUnique({ where: { id } });
+    if (!existing) throw notFound('Quotation');
+    let subtotal = 0n;
+    const lines = input.lines.map((l, idx) => {
+      const unitPrice = BigInt(l.unitPriceMinor);
+      const total = unitPrice * BigInt(l.quantity);
+      subtotal += total;
+      return {
+        category: l.category,
+        description: l.description,
+        quantity: l.quantity,
+        unit: l.unit,
+        unitPriceMinor: unitPrice,
+        totalMinor: total,
+        sortOrder: idx + 1,
+      };
+    });
+    const discount = BigInt(input.discountMinor || '0');
+    const total = subtotal > discount ? subtotal - discount : 0n;
+    const validUntil = new Date(Date.now() + input.validDays * 86_400_000);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.quotationLine.deleteMany({ where: { quotationId: id } });
+      return tx.quotation.update({
+        where: { id },
+        data: {
+          clientName: input.clientName,
+          clientOrganization: input.clientOrganization ?? null,
+          clientPhone: input.clientPhone,
+          clientEmail: input.clientEmail || null,
+          eventType: input.eventType,
+          eventTitle: input.eventTitle,
+          eventDate: input.eventDate ? new Date(`${input.eventDate}T12:00:00Z`) : null,
+          endDate: input.endDate ? new Date(`${input.endDate}T12:00:00Z`) : null,
+          attendees: input.attendees ?? null,
+          hallSetup: input.hallSetup ?? null,
+          validUntil,
+          currency: input.currency,
+          subtotalMinor: subtotal,
+          discountMinor: discount,
+          totalMinor: total,
+          notes: input.notes ?? null,
+          ...(input.terms ? { terms: input.terms } : {}),
+          lines: { create: lines },
+        },
+        include: { lines: { orderBy: { sortOrder: 'asc' } } },
+      });
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'quotation.update',
+      entityType: 'Quotation',
+      entityId: id,
+      summary: `Updated quotation ${updated.number} (${updated.eventTitle})`,
+    });
+
+    return this.mapQuotation(updated);
+  }
+
+  async deleteQuotation(id: string, actor: AuthUser) {
+    if (actor.role !== 'OWNER' && actor.role !== 'MANAGER') {
+      throw forbidden('Only the hotel owner or manager can delete quotations');
+    }
+    const existing = await this.prisma.quotation.findUnique({ where: { id } });
+    if (!existing) throw notFound('Quotation');
+    await this.prisma.quotation.delete({ where: { id } });
+    await this.audit.record({
+      actor,
+      action: 'quotation.delete',
+      entityType: 'Quotation',
+      entityId: id,
+      summary: `Deleted quotation ${existing.number} (${existing.clientName} — ${existing.eventTitle})`,
+    });
+    return { ok: true, number: existing.number };
+  }
+
   async updateQuotationStatus(id: string, status: QuotationDTO['status'], actor: AuthUser): Promise<QuotationDTO> {
     const q = await this.prisma.quotation.update({
       where: { id },
@@ -1405,6 +1498,23 @@ export class OperationsService {
   }
 
   /* ───────────────────────── 4. Inventory, Segregated Linen & Fixed Assets ───────────────────────── */
+
+  async listInventoryByCategory(category?: string) {
+    const items = await this.prisma.inventoryItem.findMany({
+      where: category ? { category: category as any } : undefined,
+      orderBy: { name: 'asc' },
+    });
+    return items.map((i) => ({
+      id: i.id,
+      sku: i.sku,
+      name: i.name,
+      category: i.category,
+      onHand: i.onHand,
+      inLaundry: i.inUseOrLaundry,
+      inUseOrLaundry: i.inUseOrLaundry,
+      parLevel: i.parLevel,
+    }));
+  }
 
   async inventoryDashboard(): Promise<InventoryDashboardDTO> {
     const [items, movements] = await Promise.all([

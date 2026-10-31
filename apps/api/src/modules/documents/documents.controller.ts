@@ -83,6 +83,73 @@ export class DocumentsAdminController {
   backfill(@CurrentUser() user: AuthUser) {
     return this.docs.backfill(user);
   }
+
+  /** Issue an official numbered standalone receipt or invoice directly from the Receipts & Invoices register. */
+  @Post('documents/direct')
+  @HttpCode(201)
+  @Requires('receipts:issue')
+  async issueDirect(
+    @Body(
+      new ZodPipe(
+        z.object({
+          kind: z.enum(['RECEIPT', 'INVOICE']),
+          currency: z.enum(['UGX', 'USD']).default('UGX'),
+          issuedToName: z.string().trim().min(2).max(160),
+          issuedToPhone: z.string().trim().max(40).optional(),
+          issuedToEmail: z.string().trim().email().max(160).optional().or(z.literal('')),
+          description: z.string().trim().min(2).max(240),
+          amountMinor: z.string().regex(/^\d+$/),
+          paymentMethod: z.string().trim().max(40).optional(),
+          paymentReference: z.string().trim().max(80).optional(),
+          note: z.string().trim().max(300).optional(),
+        }),
+      ),
+    )
+    body: {
+      kind: 'RECEIPT' | 'INVOICE';
+      currency: 'UGX' | 'USD';
+      issuedToName: string;
+      issuedToPhone?: string;
+      issuedToEmail?: string;
+      description: string;
+      amountMinor: string;
+      paymentMethod?: string;
+      paymentReference?: string;
+      note?: string;
+    },
+    @CurrentUser() user: AuthUser,
+  ) {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const amount = BigInt(body.amountMinor);
+    const doc = await this.docs.issueDirectDocument({
+      kind: body.kind,
+      currency: body.currency,
+      amountMinor: amount,
+      issuedTo: {
+        name: body.issuedToName,
+        phone: body.issuedToPhone || null,
+        email: body.issuedToEmail || null,
+      },
+      lines: [
+        {
+          date: todayIso,
+          description: body.description,
+          amountMinor: amount.toString(),
+        },
+      ],
+      payment:
+        body.kind === 'RECEIPT'
+          ? {
+              method: (body.paymentMethod || 'CASH').replace(/_/g, ' '),
+              reference: body.paymentReference || null,
+              purpose: body.description,
+            }
+          : null,
+      note: body.note || null,
+      actor: { id: user.id, name: user.name },
+    });
+    return (await this.docs.dtos([doc]))[0];
+  }
 }
 
 @Controller('v1/public/documents')
