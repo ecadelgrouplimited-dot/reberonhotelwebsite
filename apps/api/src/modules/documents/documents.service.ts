@@ -380,10 +380,10 @@ export class DocumentsService {
   /** Public check: is this receipt real? Only confirms what the holder already has. */
   async verify(number: string, check: string) {
     const cleanNo = number.trim().toUpperCase();
-    const cleanCheck = check.trim().toUpperCase();
+    const cleanCheck = check.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (cleanNo.startsWith('QUO-')) {
       const quo = await this.prisma.quotation.findUnique({ where: { number: cleanNo } });
-      if (!quo || quo.checkCode.toUpperCase() !== cleanCheck) return { valid: false as const };
+      if (!quo || quo.checkCode.toUpperCase().replace(/[^A-Z0-9]/g, '') !== cleanCheck) return { valid: false as const };
       return {
         valid: true as const,
         kind: 'Quotation',
@@ -399,14 +399,15 @@ export class DocumentsService {
       };
     }
     const doc = await this.prisma.issuedDocument.findUnique({ where: { number: cleanNo } });
-    if (!doc || this.checkCode(doc.number) !== cleanCheck) return { valid: false as const };
+    const expectedCheck = this.checkCode(doc?.number ?? '');
+    if (!doc || expectedCheck.replace(/[^A-Z0-9]/g, '') !== cleanCheck) return { valid: false as const };
     const issuedTo = doc.issuedTo as IssuedDocumentDTO['issuedTo'];
     const docData = doc.data as unknown as DocumentData;
     return {
       valid: true as const,
       kind: DOCUMENT_LABEL[doc.kind],
       number: doc.number,
-      checkCode: cleanCheck,
+      checkCode: expectedCheck,
       issuedToName: issuedTo?.name ?? 'Guest',
       summary: docData?.payment?.purpose ?? docData?.reservation?.room ?? docData?.note ?? DOCUMENT_LABEL[doc.kind],
       issuedAt: doc.issuedAt.toISOString(),
