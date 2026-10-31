@@ -646,24 +646,273 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   async ownerBrief(forDate = hotelToday()) {
     const tomorrow = iso(new Date(day(forDate).getTime() + 86_400_000));
     const start = new Date(`${forDate}T00:00:00+03:00`);
-    const [arrivals, inHouseTonight, totalRooms, cleared, holds, names] = await Promise.all([
-      this.prisma.reservation.findMany({ where: { arrival: day(tomorrow), status: { in: ['CONFIRMED', 'HELD'] } }, include: { contact: true, rooms: true }, orderBy: { createdAt: 'asc' } }),
-      this.prisma.reservation.findMany({ where: { arrival: { lte: day(forDate) }, departure: { gt: day(forDate) }, status: { in: ['CONFIRMED', 'IN_HOUSE'] } }, include: { rooms: true } }),
-      this.prisma.room.count({ where: { isActive: true } }),
-      this.prisma.paymentIntent.findMany({ where: { status: 'SUCCEEDED', paidAt: { gte: start, lt: new Date(start.getTime() + 86_400_000) } } }),
-      this.prisma.reservation.findMany({ where: { OR: [{ status: 'HELD' }, { status: 'CONFIRMED', arrival: { lte: day(iso(new Date(day(forDate).getTime() + 7 * 86_400_000))) } }] }, include: { contact: true } }),
+    const end = new Date(start.getTime() + 86_400_000);
+    const monthStartStr = `${forDate.slice(0, 8)}01`;
+    const monthStart = new Date(`${monthStartStr}T00:00:00+03:00`);
+    const next7Date = day(iso(new Date(day(forDate).getTime() + 7 * 86_400_000)));
+
+    const stayInc = {
+      contact: true,
+      rooms: true,
+      assignments: { where: { releasedAt: null }, include: { room: { select: { number: true } } } },
+    } as const;
+
+    const [
+      todayArrivals,
+      todayDepartures,
+      arrivals,
+      inHouseTonight,
+      roomsList,
+      cleared,
+      mtdPayments,
+      posToday,
+      posMtd,
+      hcToday,
+      holds,
+      upcoming7dRes,
+      pendingRequisitions,
+      pendingGuestRequests,
+      invItems,
+      unhandledFeedbackCount,
+      activeStaffCount,
+      names,
+    ] = await Promise.all([
+      this.prisma.reservation.findMany({
+        where: { arrival: day(forDate), status: { in: ['CONFIRMED', 'HELD', 'IN_HOUSE', 'CHECKED_OUT'] } },
+        include: stayInc,
+        orderBy: [{ eta: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
+      }),
+      this.prisma.reservation.findMany({
+        where: { departure: day(forDate), status: { in: ['IN_HOUSE', 'CHECKED_OUT'] } },
+        include: stayInc,
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.reservation.findMany({
+        where: { arrival: day(tomorrow), status: { in: ['CONFIRMED', 'HELD'] } },
+        include: stayInc,
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.reservation.findMany({
+        where: { arrival: { lte: day(forDate) }, departure: { gt: day(forDate) }, status: { in: ['CONFIRMED', 'IN_HOUSE'] } },
+        include: stayInc,
+        orderBy: { departure: 'asc' },
+      }),
+      this.prisma.room.findMany({
+        where: { isActive: true },
+        orderBy: [{ floor: 'asc' }, { number: 'asc' }],
+      }),
+      this.prisma.paymentIntent.findMany({
+        where: { status: 'SUCCEEDED', paidAt: { gte: start, lt: end } },
+      }),
+      this.prisma.paymentIntent.findMany({
+        where: { status: 'SUCCEEDED', paidAt: { gte: monthStart, lt: end } },
+      }),
+      this.prisma.posOrder.findMany({
+        where: { status: 'COMPLETED', createdAt: { gte: start, lt: end } },
+      }),
+      this.prisma.posOrder.findMany({
+        where: { status: 'COMPLETED', createdAt: { gte: monthStart, lt: end } },
+      }),
+      this.prisma.healthClubAccessLog.findMany({
+        where: { checkedInAt: { gte: start, lt: end } },
+      }),
+      this.prisma.reservation.findMany({
+        where: {
+          OR: [
+            { status: 'HELD' },
+            { status: 'IN_HOUSE' },
+            { status: 'CONFIRMED', arrival: { lte: next7Date } },
+          ],
+        },
+        include: stayInc,
+        orderBy: { arrival: 'asc' },
+      }),
+      this.prisma.reservation.findMany({
+        where: {
+          status: { in: ['CONFIRMED', 'IN_HOUSE', 'HELD'] },
+          arrival: { lt: next7Date },
+          departure: { gt: day(forDate) },
+        },
+        include: { rooms: true },
+      }),
+      this.prisma.requisition.findMany({
+        where: { status: { in: ['PENDING', 'MANAGER_APPROVED'] } },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.guestRequest.findMany({
+        where: { status: { in: ['NEW', 'ACCEPTED'] } },
+        include: { reservation: { include: { contact: { select: { name: true } } } } },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.inventoryItem.findMany({ select: { onHand: true, parLevel: true } }),
+      this.prisma.feedback.count({ where: { score: { not: 'GOOD' }, handledAt: null } }),
+      this.prisma.staffProfile.count({ where: { status: 'ACTIVE' } }),
       this.roomTypeNames(),
     ]);
+
+    const totalRooms = roomsList.length;
     const occupiedTonight = inHouseTonight.reduce((a, r) => a + r.rooms.reduce((b, x) => b + x.quantity, 0), 0);
-    const sum = (list: { amountMinor: bigint; currency: string }[], cur: string) => list.filter((p) => p.currency === cur).reduce((a, p) => a + p.amountMinor, 0n);
+    const sum = (list: { amountMinor: bigint; currency: string }[], cur: string) =>
+      list.filter((p) => p.currency === cur).reduce((a, p) => a + p.amountMinor, 0n);
+    const sumPos = (list: { totalMinor: bigint; currency: string }[], cur: string) =>
+      list.filter((p) => p.currency === cur).reduce((a, p) => a + p.totalMinor, 0n);
+    const sumHc = (list: { amountPaidMinor: bigint; currency: string }[], cur: string) =>
+      list.filter((p) => p.currency === cur).reduce((a, p) => a + p.amountPaidMinor, 0n);
+
     const unpaid = holds.filter((r) => r.totalMinor - r.paidMinor > 0n);
+
+    const mapStayRow = (r: (typeof todayArrivals)[number]) => ({
+      id: r.id,
+      code: r.code,
+      name: r.contact.name,
+      phone: r.contact.phone,
+      isVip: r.contact.isVip,
+      status: r.status,
+      arrival: iso(r.arrival),
+      departure: iso(r.departure),
+      adults: r.adults,
+      children: r.children,
+      eta: r.eta,
+      rooms: r.rooms.map((x) => `${x.quantity} × ${names.get(x.roomTypeId) ?? 'Suite'}`).join(', '),
+      roomNumbers: r.assignments.map((a) => a.room.number),
+      total: this.money(r.totalMinor, r.currency),
+      paid: this.money(r.paidMinor, r.currency),
+      balance: this.money(r.totalMinor - r.paidMinor, r.currency),
+      balanceMinor: (r.totalMinor - r.paidMinor).toString(),
+      currency: r.currency,
+    });
+
+    // Payment methods breakdown today
+    const methodKeys = ['MOBILE_MONEY', 'CASH', 'CARD', 'BANK'] as const;
+    const byMethod = methodKeys.map((m) => {
+      const mRows = cleared.filter((p) => p.method === m);
+      return {
+        method: m,
+        UGX: sum(mRows, 'UGX').toString(),
+        USD: sum(mRows, 'USD').toString(),
+        count: mRows.length,
+      };
+    });
+
+    const roomTodayUgx = sum(cleared, 'UGX');
+    const roomTodayUsd = sum(cleared, 'USD');
+    const posTodayUgx = sumPos(posToday, 'UGX');
+    const posTodayUsd = sumPos(posToday, 'USD');
+    const hcTodayUgx = sumHc(hcToday, 'UGX');
+    const hcTodayUsd = sumHc(hcToday, 'USD');
+
+    // House readiness by room type
+    const rtIds = [...new Set(roomsList.map((r) => r.roomTypeId))];
+    const roomTypesReadiness = rtIds.map((rtId) => {
+      const rtRooms = roomsList.filter((r) => r.roomTypeId === rtId);
+      return {
+        id: rtId,
+        name: names.get(rtId) ?? 'Suite',
+        total: rtRooms.length,
+        occupied: rtRooms.filter((r) => r.hkStatus === 'OCCUPIED').length,
+        ready: rtRooms.filter((r) => r.hkStatus === 'INSPECTED' || r.hkStatus === 'VACANT_CLEAN').length,
+        dirty: rtRooms.filter((r) => r.hkStatus === 'VACANT_DIRTY').length,
+        blocked: rtRooms.filter((r) => r.hkStatus === 'BLOCKED' || r.hkStatus === 'OUT_OF_ORDER').length,
+      };
+    });
+
+    // 7-day forecast strip
+    const forecast7d = Array.from({ length: 7 }, (_, i) => {
+      const dObj = new Date(day(forDate).getTime() + i * 86_400_000);
+      const dStr = iso(dObj);
+      const staying = upcoming7dRes.filter((r) => iso(r.arrival) <= dStr && iso(r.departure) > dStr);
+      const bookedRooms = staying.reduce((acc, r) => acc + r.rooms.reduce((s, rm) => s + rm.quantity, 0), 0);
+      const arrCount = upcoming7dRes.filter((r) => iso(r.arrival) === dStr).length;
+      const depCount = upcoming7dRes.filter((r) => iso(r.departure) === dStr).length;
+      return {
+        date: dStr,
+        bookedRooms,
+        totalRooms,
+        occupancyPct: totalRooms ? Math.min(100, Math.round((bookedRooms / totalRooms) * 100)) : 0,
+        arrivalsCount: arrCount,
+        departuresCount: depCount,
+      };
+    });
+
+    const guestsInHouse = inHouseTonight.reduce((acc, r) => acc + r.adults + r.children, 0);
+    const vipsInHouse = inHouseTonight.filter((r) => r.contact.isVip).length;
+
     return {
       date: forDate,
       tomorrow,
-      arrivals: arrivals.map((r) => ({ id: r.id, code: r.code, name: r.contact.name, status: r.status, eta: r.eta, rooms: r.rooms.map((x) => `${x.quantity} × ${names.get(x.roomTypeId)}`).join(', '), balance: this.money(r.totalMinor - r.paidMinor, r.currency) })),
-      occupancy: { tonight: occupiedTonight, total: totalRooms, percent: totalRooms ? Math.round((occupiedTonight / totalRooms) * 100) : 0 },
-      clearedToday: { UGX: sum(cleared, 'UGX').toString(), USD: sum(cleared, 'USD').toString(), count: cleared.length },
-      promised: unpaid.map((r) => ({ id: r.id, code: r.code, name: r.contact.name, status: r.status, arrival: iso(r.arrival), balance: this.money(r.totalMinor - r.paidMinor, r.currency) })),
+      arrivals: arrivals.map(mapStayRow),
+      todayArrivals: todayArrivals.map(mapStayRow),
+      todayDepartures: todayDepartures.map(mapStayRow),
+      inHouseList: inHouseTonight.map(mapStayRow),
+      occupancy: {
+        tonight: occupiedTonight,
+        total: totalRooms,
+        percent: totalRooms ? Math.round((occupiedTonight / totalRooms) * 100) : 0,
+        guestsInHouse,
+        vipsInHouse,
+      },
+      clearedToday: {
+        UGX: roomTodayUgx.toString(),
+        USD: roomTodayUsd.toString(),
+        count: cleared.length,
+      },
+      financialPulse: {
+        today: {
+          roomPayments: { UGX: roomTodayUgx.toString(), USD: roomTodayUsd.toString(), count: cleared.length },
+          posSales: { UGX: posTodayUgx.toString(), USD: posTodayUsd.toString(), ordersCount: posToday.length },
+          healthClubSales: { UGX: hcTodayUgx.toString(), USD: hcTodayUsd.toString(), count: hcToday.length },
+          totalInflow: {
+            UGX: (roomTodayUgx + posTodayUgx + hcTodayUgx).toString(),
+            USD: (roomTodayUsd + posTodayUsd + hcTodayUsd).toString(),
+          },
+          byMethod,
+        },
+        mtd: {
+          collected: { UGX: sum(mtdPayments, 'UGX').toString(), USD: sum(mtdPayments, 'USD').toString(), count: mtdPayments.length },
+          posSales: { UGX: sumPos(posMtd, 'UGX').toString(), USD: sumPos(posMtd, 'USD').toString(), ordersCount: posMtd.length },
+          totalCollected: {
+            UGX: (sum(mtdPayments, 'UGX') + sumPos(posMtd, 'UGX')).toString(),
+            USD: (sum(mtdPayments, 'USD') + sumPos(posMtd, 'USD')).toString(),
+          },
+        },
+      },
+      houseReadiness: {
+        totalRooms,
+        occupied: roomsList.filter((r) => r.hkStatus === 'OCCUPIED').length,
+        inspected: roomsList.filter((r) => r.hkStatus === 'INSPECTED').length,
+        vacantClean: roomsList.filter((r) => r.hkStatus === 'VACANT_CLEAN').length,
+        vacantDirty: roomsList.filter((r) => r.hkStatus === 'VACANT_DIRTY').length,
+        blocked: roomsList.filter((r) => r.hkStatus === 'BLOCKED' || r.hkStatus === 'OUT_OF_ORDER').length,
+        roomTypes: roomTypesReadiness,
+      },
+      forecast7d,
+      promised: unpaid.map(mapStayRow),
+      alertsAndApprovals: {
+        pendingRequisitions: pendingRequisitions.map((req) => ({
+          id: req.id,
+          number: req.number,
+          title: req.title,
+          department: req.department,
+          priority: req.priority,
+          status: req.status,
+          amount: this.money(req.totalEstimatedMinor, req.currency),
+          requestedBy: req.requestedByName,
+        })),
+        pendingGuestRequests: pendingGuestRequests.map((gr) => ({
+          id: gr.id,
+          reservationId: gr.reservationId,
+          code: gr.reservation.code,
+          guestName: gr.reservation.contact.name,
+          kind: gr.kind,
+          note: gr.note,
+          createdAt: gr.createdAt.toISOString(),
+        })),
+        lowStockCount: invItems.filter((i) => i.onHand <= i.parLevel).length,
+        unhandledFeedbackCount,
+        activeStaffCount,
+      },
     };
   }
 

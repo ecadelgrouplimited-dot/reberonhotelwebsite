@@ -1,7 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import type { z } from 'zod';
-import type { HkBoardDTO, HkStatus, HkTaskDTO, HkTaskStatus, RackRoomDTO, zHkTaskPatch, zRoomBlockInput } from '@reberon/contracts';
+import type {
+  HkBoardDTO,
+  HkStatus,
+  HkTaskDTO,
+  HkTaskStatus,
+  RackRoomDTO,
+  zHkTaskCreateInput,
+  zHkTaskPatch,
+  zRoomBlockInput,
+  zRoomCreateInput,
+  zRoomUpdateInput,
+} from '@reberon/contracts';
 import { HK_TASK_STATUSES } from '@reberon/contracts';
 import { hotelToday } from '@reberon/utils';
 import type { Prisma } from '@reberon/db';
@@ -143,16 +154,171 @@ export class RackService {
     });
   }
 
+  /* ───────── physical room units (room numbers) ───────── */
+
+  async roomTypes() {
+    const [rts, names] = await Promise.all([
+      this.prisma.roomType.findMany({
+        where: { deletedAt: null },
+        orderBy: { order: 'asc' },
+        include: {
+          _count: { select: { rooms: { where: { isActive: true } } } },
+          rooms: { orderBy: [{ floor: 'asc' }, { number: 'asc' }], select: { id: true, number: true, floor: true, isActive: true, hkStatus: true } },
+        },
+      }),
+      this.booking.roomTypeNames(),
+    ]);
+    return rts.map((rt) => ({
+      id: rt.id,
+      slug: rt.slug,
+      name: names.get(rt.id) ?? rt.slug,
+      activeRoomsCount: rt._count.rooms,
+      rooms: rt.rooms,
+    }));
+  }
+
+  private async syncRoomTypeInventory(tx: Tx, roomTypeId: string) {
+    const activeCount = await tx.room.count({ where: { roomTypeId, isActive: true } });
+    const today = day(hotelToday());
+    await tx.inventoryDay.updateMany({
+      where: {
+        roomTypeId,
+        date: { gte: today },
+      },
+      data: { totalRooms: activeCount },
+    });
+  }
+
+  async createRoom(input: z.infer<typeof zRoomCreateInput>, actor: AuthUser) {
+    const cleanNum = input.number.trim().toUpperCase();
+    const exists = await this.prisma.room.findUnique({ where: { number: cleanNum } });
+    if (exists) throw conflict(`Room number "${cleanNum}" already exists.`);
+    const rt = await this.prisma.roomType.findUnique({ where: { id: input.roomTypeId } });
+    if (!rt || rt.deletedAt) throw notFound('Room type');
+
+    const room = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.room.create({
+        data: {
+          number: cleanNum,
+          floor: input.floor,
+          roomTypeId: input.roomTypeId,
+          hkStatus: input.hkStatus,
+          isActive: input.isActive,
+          notes: input.notes ?? null,
+        },
+      });
+      await this.syncRoomTypeInventory(tx, input.roomTypeId);
+      if (input.hkStatus === 'VACANT_DIRTY') {
+        await this.ensureTask(created.id, hotelToday(), 'DEPARTURE', tx);
+      }
+      return created;
+    });
+
+    const names = await this.booking.roomTypeNames();
+    await this.audit.record({
+      actor,
+      action: 'room.create',
+      entityType: 'Room',
+      entityId: room.id,
+      summary: `Created physical Room ${room.number} (Floor ${room.floor}, ${names.get(room.roomTypeId) ?? 'Suite'})`,
+      after: { number: room.number, floor: room.floor, roomTypeId: room.roomTypeId, hkStatus: room.hkStatus, isActive: room.isActive },
+    });
+    return room;
+  }
+
+  async updateRoom(id: string, input: z.infer<typeof zRoomUpdateInput>, actor: AuthUser) {
+    const existing = await this.prisma.room.findUnique({ where: { id } });
+    if (!existing) throw notFound('Room');
+
+    const cleanNum = input.number ? input.number.trim().toUpperCase() : undefined;
+    if (cleanNum && cleanNum !== existing.number) {
+      const clash = await this.prisma.room.findUnique({ where: { number: cleanNum } });
+      if (clash) throw conflict(`Room number "${cleanNum}" is already used by another room.`);
+    }
+    if (input.roomTypeId && input.roomTypeId !== existing.roomTypeId) {
+      const rt = await this.prisma.roomType.findUnique({ where: { id: input.roomTypeId } });
+      if (!rt || rt.deletedAt) throw notFound('Room type');
+    }
+    if (input.isActive === false && existing.hkStatus === 'OCCUPIED') {
+      throw conflict(`Room ${existing.number} currently has a checked-in guest. Move or check out the guest before deactivating it.`);
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const r = await tx.room.update({
+        where: { id },
+        data: {
+          ...(cleanNum !== undefined ? { number: cleanNum } : {}),
+          ...(input.floor !== undefined ? { floor: input.floor } : {}),
+          ...(input.roomTypeId !== undefined ? { roomTypeId: input.roomTypeId } : {}),
+          ...(input.hkStatus !== undefined && existing.hkStatus !== 'OCCUPIED' ? { hkStatus: input.hkStatus } : {}),
+          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+          ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        },
+      });
+      await this.syncRoomTypeInventory(tx, existing.roomTypeId);
+      if (input.roomTypeId && input.roomTypeId !== existing.roomTypeId) {
+        await this.syncRoomTypeInventory(tx, input.roomTypeId);
+      }
+      return r;
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'room.update',
+      entityType: 'Room',
+      entityId: id,
+      summary: `Updated Room ${updated.number} (Floor ${updated.floor}, active=${updated.isActive})`,
+      before: { number: existing.number, floor: existing.floor, roomTypeId: existing.roomTypeId, isActive: existing.isActive, notes: existing.notes },
+      after: input,
+    });
+    return updated;
+  }
+
+  async deleteRoom(id: string, actor: AuthUser) {
+    if (!['OWNER', 'MANAGER'].includes(actor.role)) {
+      throw forbidden('Only the Owner or Manager can delete a physical room');
+    }
+    const existing = await this.prisma.room.findUnique({
+      where: { id },
+      include: { assignments: { where: { releasedAt: null }, include: { reservation: { select: { code: true, status: true } } } } },
+    });
+    if (!existing) throw notFound('Room');
+
+    const activeAssign = existing.assignments.find((a) => ['IN_HOUSE', 'CONFIRMED', 'HELD'].includes(a.reservation.status));
+    if (activeAssign) {
+      throw conflict(`Room ${existing.number} is assigned to booking ${activeAssign.reservation.code}. Reassign that booking to another room first.`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.housekeepingTask.deleteMany({ where: { roomId: id } });
+      await tx.roomBlock.deleteMany({ where: { roomId: id } });
+      await tx.roomAssignment.deleteMany({ where: { roomId: id } });
+      await tx.room.delete({ where: { id } });
+      await this.syncRoomTypeInventory(tx, existing.roomTypeId);
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'room.delete',
+      entityType: 'Room',
+      entityId: id,
+      summary: `Deleted physical Room ${existing.number} (Floor ${existing.floor}) by ${actor.name} (${actor.role})`,
+      before: { number: existing.number, floor: existing.floor, roomTypeId: existing.roomTypeId },
+    });
+    return { ok: true, deleted: true, number: existing.number };
+  }
+
   /* ───────── housekeeping ───────── */
 
   async board(date = hotelToday()): Promise<HkBoardDTO> {
     if (date === hotelToday()) await this.syncToday(date);
     const d = day(date);
-    const [tasks, names, { occupant, arriving }, staff] = await Promise.all([
+    const [tasks, rooms, names, { occupant, arriving }, staff] = await Promise.all([
       this.prisma.housekeepingTask.findMany({ where: { date: d }, include: { room: true } }),
+      this.rack(date),
       this.booking.roomTypeNames(),
       this.occupancy(date),
-      this.prisma.user.findMany({ where: { status: 'ACTIVE', role: { in: ['HOUSEKEEPING', 'MANAGER'] } }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+      this.prisma.user.findMany({ where: { status: 'ACTIVE', role: { in: ['HOUSEKEEPING', 'MANAGER', 'OWNER'] } }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     ]);
     const people = new Map(staff.map((s) => [s.id, s.name]));
     const missing = tasks.map((t) => t.assigneeId).filter((id): id is string => !!id && !people.has(id));
@@ -180,7 +346,74 @@ export class RackService {
       })
       .sort((a, b) => rank[a.status] - rank[b.status] || b.priority - a.priority || a.room.number.localeCompare(b.room.number));
     const counts = Object.fromEntries(HK_TASK_STATUSES.map((s) => [s, dto.filter((t) => t.status === s).length])) as Record<HkTaskStatus, number>;
-    return { date, tasks: dto, staff, counts };
+    return { date, tasks: dto, rooms, staff, counts };
+  }
+
+  async createTask(input: z.infer<typeof zHkTaskCreateInput>, actor: AuthUser) {
+    const room = await this.prisma.room.findUnique({ where: { id: input.roomId } });
+    if (!room) throw notFound('Room');
+    const date = input.date || hotelToday();
+    const d = day(date);
+
+    const task = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.housekeepingTask.findUnique({
+        where: { roomId_date_kind: { roomId: room.id, date: d, kind: input.kind } },
+      });
+      const saved = existing
+        ? await tx.housekeepingTask.update({
+            where: { id: existing.id },
+            data: {
+              status: ['DONE', 'INSPECTED', 'SKIPPED'].includes(existing.status) ? 'TODO' : existing.status,
+              priority: input.priority,
+              assigneeId: input.assigneeId !== undefined ? input.assigneeId : existing.assigneeId,
+              notes: input.notes !== undefined ? input.notes : existing.notes,
+              startedAt: ['DONE', 'INSPECTED', 'SKIPPED'].includes(existing.status) ? null : existing.startedAt,
+              completedAt: ['DONE', 'INSPECTED', 'SKIPPED'].includes(existing.status) ? null : existing.completedAt,
+              inspectedAt: ['DONE', 'INSPECTED', 'SKIPPED'].includes(existing.status) ? null : existing.inspectedAt,
+            },
+          })
+        : await tx.housekeepingTask.create({
+            data: {
+              roomId: room.id,
+              date: d,
+              kind: input.kind,
+              priority: input.priority,
+              assigneeId: input.assigneeId ?? null,
+              notes: input.notes ?? null,
+            },
+          });
+
+      if (
+        (input.kind === 'DEPARTURE' || input.kind === 'DEEP_CLEAN') &&
+        ['VACANT_CLEAN', 'INSPECTED'].includes(room.hkStatus)
+      ) {
+        await tx.room.update({ where: { id: room.id }, data: { hkStatus: 'VACANT_DIRTY' } });
+      }
+      return saved;
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'housekeeping.create',
+      entityType: 'Room',
+      entityId: room.id,
+      summary: `Dispatched ${input.kind.toLowerCase().replace('_', ' ')} task for Room ${room.number}`,
+    });
+    return task;
+  }
+
+  async deleteTask(id: string, actor: AuthUser) {
+    const task = await this.prisma.housekeepingTask.findUnique({ where: { id }, include: { room: true } });
+    if (!task) throw notFound('Task');
+    await this.prisma.housekeepingTask.delete({ where: { id } });
+    await this.audit.record({
+      actor,
+      action: 'housekeeping.delete',
+      entityType: 'Room',
+      entityId: task.roomId,
+      summary: `Removed ${task.kind.toLowerCase()} task on Room ${task.room.number}`,
+    });
+    return { ok: true };
   }
 
   async patchTask(id: string, body: z.infer<typeof zHkTaskPatch>, actor: AuthUser) {

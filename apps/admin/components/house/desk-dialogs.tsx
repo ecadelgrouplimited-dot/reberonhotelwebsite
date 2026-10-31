@@ -329,3 +329,391 @@ export function CheckOutDialog({ stay, open, onClose, onDone }: { stay: StayRef 
     </Dialog>
   );
 }
+
+/* ───────── Pre-Assign / Change Room Number (for CONFIRMED / HELD) ───────── */
+
+export function AssignRoomDialog({ stay, open, onClose, onDone }: { stay: StayRef | null; open: boolean; onClose: () => void; onDone: () => void }) {
+  const opts = useQuery({
+    queryKey: ['desk-options', stay?.id, 'assign'],
+    queryFn: () => get<RoomOption[]>(`/desk/reservations/${stay!.id}/rooms`),
+    enabled: open && !!stay,
+  });
+  const [allowDirty, setAllowDirty] = useState(false);
+  useEffect(() => {
+    if (open) setAllowDirty(false);
+  }, [open, stay?.id]);
+
+  const p = usePicker(opts.data, stay?.keep);
+
+  const m = useMutation({
+    mutationFn: () => post(`/desk/reservations/${stay!.id}/assign`, { assignments: p.assignments, allowDirty }),
+    onSuccess: () => {
+      toast.success(`Room number assigned for ${stay!.guest.name}`);
+      onDone();
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={stay ? `Assign Room Number · ${stay.guest.name}` : 'Assign Room Number'}
+      description={stay && <span><span className="font-mono">{stay.code}</span> · {dateRange(stay.arrival, stay.departure)} · Select a specific room number to reserve for this guest</span>}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            loading={m.isPending}
+            disabled={!p.complete || (p.dirtyChosen && !allowDirty)}
+            onClick={() => m.mutate()}
+          >
+            Save Room Assignment
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        {opts.isLoading ? (
+          <Skeleton className="h-32" />
+        ) : (
+          opts.data && <RoomPicker options={opts.data} picked={p.picked} setPicked={p.setPicked} allowUnclean />
+        )}
+        {p.dirtyChosen && (
+          <Switch
+            label="Pre-assign even though room is currently dirty"
+            hint="Housekeeping will clean this room before check-in."
+            checked={allowDirty}
+            onChange={setAllowDirty}
+          />
+        )}
+      </div>
+    </Dialog>
+  );
+}
+
+/* ───────── Move Room Number (for IN_HOUSE) ───────── */
+
+export function MoveRoomDialog({
+  stay,
+  currentRooms,
+  open,
+  onClose,
+  onDone,
+}: {
+  stay: StayRef | null;
+  currentRooms: { reservationRoomId: string; roomId: string; number: string }[];
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const opts = useQuery({
+    queryKey: ['desk-options', stay?.id, 'move'],
+    queryFn: () => get<RoomOption[]>(`/desk/reservations/${stay!.id}/rooms`),
+    enabled: open && !!stay,
+  });
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [reason, setReason] = useState('');
+  const [allowDirty, setAllowDirty] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setFrom(currentRooms[0]?.roomId ?? '');
+      setTo('');
+      setReason('');
+      setAllowDirty(false);
+    }
+  }, [open, stay?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const current = currentRooms.find((a) => a.roomId === from);
+  const options =
+    opts.data
+      ?.find((o) => o.reservationRoomId === current?.reservationRoomId)
+      ?.rooms.filter((x) => x.id !== from && !currentRooms.some((a) => a.roomId === x.id)) ?? [];
+  const target = options.find((x) => x.id === to);
+
+  const m = useMutation({
+    mutationFn: () => post(`/desk/reservations/${stay!.id}/move`, { fromRoomId: from, toRoomId: to, reason, allowDirty }),
+    onSuccess: () => {
+      toast.success('Guest moved to new room. Previous room queued for housekeeping.');
+      onDone();
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={stay ? `Move Room · ${stay.guest.name}` : 'Move Room'}
+      description="Transfer an in-house guest to another available room number. The old room will be marked Vacant Dirty."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            loading={m.isPending}
+            disabled={!to || reason.trim().length < 3 || (target?.hkStatus === 'VACANT_DIRTY' && !allowDirty)}
+            onClick={() => m.mutate()}
+          >
+            Confirm Room Move
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        {currentRooms.length > 1 && (
+          <div className="flex flex-wrap gap-2">
+            {currentRooms.map((a) => (
+              <button
+                key={a.roomId}
+                type="button"
+                onClick={() => setFrom(a.roomId)}
+                className={cn(
+                  'h-10 rounded-full border px-4 text-[13px] font-semibold',
+                  from === a.roomId ? 'border-fg bg-fg text-bg' : 'border-line-strong',
+                )}
+              >
+                From Room {a.number}
+              </button>
+            ))}
+          </div>
+        )}
+        {opts.isLoading ? (
+          <Skeleton className="h-24" />
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2">
+            {options.map((x) => {
+              const out = !x.free || ['OCCUPIED', 'BLOCKED', 'OUT_OF_ORDER'].includes(x.hkStatus);
+              return (
+                <button
+                  key={x.id}
+                  type="button"
+                  disabled={out}
+                  onClick={() => setTo(x.id)}
+                  className={cn(
+                    'min-h-14 rounded-2xl border px-3 py-2 text-left text-[1.1rem] font-semibold tabular transition disabled:opacity-40',
+                    to === x.id ? 'border-fg bg-fg text-bg' : 'border-line-strong hover:border-fg/40',
+                  )}
+                >
+                  {x.number}
+                  <span className="block text-[11px] font-normal">
+                    {out ? (x.why ?? 'Not free') : x.hkStatus === 'VACANT_DIRTY' ? 'Needs cleaning' : 'Ready'}
+                  </span>
+                </button>
+              );
+            })}
+            {!options.length && <p className="text-[13px] text-fg-muted">No other rooms of this suite type are available.</p>}
+          </div>
+        )}
+        {target?.hkStatus === 'VACANT_DIRTY' && (
+          <Switch label="Move guest before room is cleaned" checked={allowDirty} onChange={setAllowDirty} />
+        )}
+        <TextInput
+          label="Reason for move"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Guest preference, AC/plumbing maintenance, quieter view…"
+        />
+      </div>
+    </Dialog>
+  );
+}
+
+/* ───────── Quick Folio Charge / Credit / Payment Dialog ───────── */
+
+export function FolioChargeDialog({ stay, open, onClose, onDone }: { stay: StayRef | null; open: boolean; onClose: () => void; onDone: () => void }) {
+  const can = useCan();
+  const [mode, setMode] = useState<'charge' | 'payment'>('charge');
+  const [kind, setKind] = useState<'FNB' | 'EXTRA' | 'ADJUSTMENT'>('FNB');
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [credit, setCredit] = useState(false);
+  const [method, setMethod] = useState('MOBILE_MONEY');
+  const [reference, setReference] = useState('');
+
+  const balance = stay ? BigInt(stay.balanceMinor) : 0n;
+
+  useEffect(() => {
+    if (!open || !stay) return;
+    setMode(balance > 0n ? 'payment' : 'charge');
+    setKind('FNB');
+    setDescription('');
+    setAmount(balance > 0n ? major(balance, stay.currency) : '');
+    setCredit(false);
+    setMethod('MOBILE_MONEY');
+    setReference('');
+  }, [open, stay?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const postCharge = useMutation({
+    mutationFn: () => {
+      const minor = toMinorStr(amount, stay!.currency);
+      if (!minor || minor === '0') throw new Error('Enter an amount');
+      return post(`/desk/reservations/${stay!.id}/charges`, { kind, description, amount: minor, credit });
+    },
+    onSuccess: () => {
+      toast.success(credit ? 'Credit posted to folio' : 'Charge added to folio');
+      onDone();
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+  const postPay = useMutation({
+    mutationFn: () => {
+      const minor = toMinorStr(amount, stay!.currency);
+      if (!minor || minor === '0') throw new Error('Enter an amount');
+      return post(`/reservations/${stay!.id}/payments`, { amount: minor, method, reference: reference || undefined });
+    },
+    onSuccess: async () => {
+      const receipt = await latest(stay!.id, 'RECEIPT');
+      toast.success(
+        'Payment recorded on folio',
+        receipt ? { description: `Receipt ${receipt.number}`, duration: 12000, action: { label: 'Print receipt', onClick: () => printDocument(receipt.id) } } : undefined,
+      );
+      onDone();
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+  const QUICK = ['Dinner & Drinks', 'Room Service Breakfast', 'Laundry Service', 'Sipi Falls Guide', '4x4 Airport Transfer', 'Mini-Bar / Refreshments'];
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      size="sm"
+      title={stay ? `Folio & Billing · ${stay.guest.name}` : 'Folio & Billing'}
+      description={stay && <span><span className="font-mono">{stay.code}</span> · Current Balance: <b>{balance > 0n ? money(balance, stay.currency) : 'Settled'}</b></span>}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          {mode === 'charge' ? (
+            <Button
+              variant={credit ? 'danger' : 'primary'}
+              loading={postCharge.isPending}
+              disabled={description.trim().length < 2 || !amount}
+              onClick={() => postCharge.mutate()}
+            >
+              {credit ? 'Post Credit' : 'Post Charge'}
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              loading={postPay.isPending}
+              disabled={!amount}
+              onClick={() => postPay.mutate()}
+            >
+              Record Payment
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <div className="flex rounded-xl border border-line bg-surface-2 p-1 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => {
+              setMode('charge');
+              setAmount('');
+            }}
+            className={cn('flex-1 rounded-lg py-2 transition', mode === 'charge' ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg')}
+          >
+            + Post Charge / Credit
+          </button>
+          {can('payments:record') && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode('payment');
+                if (stay && balance > 0n) setAmount(major(balance, stay.currency));
+              }}
+              className={cn('flex-1 rounded-lg py-2 transition', mode === 'payment' ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg')}
+            >
+              Take Payment
+            </button>
+          )}
+        </div>
+
+        {mode === 'charge' ? (
+          <>
+            {!credit && (
+              <div className="flex gap-2">
+                {([
+                  ['FNB', 'Food & Drink'],
+                  ['EXTRA', 'Activity / Extra'],
+                  ['ADJUSTMENT', 'Other'],
+                ] as const).map(([v, l]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setKind(v)}
+                    className={cn(
+                      'h-9 flex-1 rounded-full border text-xs font-semibold transition',
+                      kind === v ? 'border-fg bg-fg text-bg' : 'border-line-strong hover:border-fg/40',
+                    )}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
+            <TextInput
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={credit ? 'Manager goodwill credit / discount' : 'e.g. Dinner — Mount Elgon Trout × 2'}
+            />
+            {!credit && (
+              <div className="-mt-2 flex flex-wrap gap-1.5">
+                {QUICK.map((qk) => (
+                  <button
+                    key={qk}
+                    type="button"
+                    onClick={() => setDescription(qk)}
+                    className="rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-fg-muted hover:border-fg/40 hover:text-fg"
+                  >
+                    {qk}
+                  </button>
+                ))}
+              </div>
+            )}
+            <TextInput
+              label={`Amount (${stay?.currency ?? 'UGX'})`}
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="e.g. 65000"
+            />
+            {can('payments:refund') && (
+              <Switch
+                label="Post as a credit (reduces guest balance)"
+                hint="Manager / Owner adjustment"
+                checked={credit}
+                onChange={setCredit}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            <TextInput
+              label={`Payment Amount (${stay?.currency ?? 'UGX'})`}
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <Chips value={method} onChange={setMethod} items={METHODS} />
+            <TextInput
+              label="Payment Reference (optional)"
+              placeholder="MTN MoMo ID, POS slip, or bank ref…"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+            />
+          </>
+        )}
+      </div>
+    </Dialog>
+  );
+}

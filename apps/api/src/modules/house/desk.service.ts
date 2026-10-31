@@ -68,11 +68,24 @@ export class DeskService {
   async board(date = hotelToday()): Promise<DeskBoardDTO> {
     const d = day(date);
     const rooms = await this.rack.rack(date);
-    const [arrivals, departures, inHouse, late] = await Promise.all([
+    const [arrivals, departures, inHouse, late, guestRequests] = await Promise.all([
       this.prisma.reservation.findMany({ where: { arrival: d, status: { in: ['HELD', 'CONFIRMED', 'IN_HOUSE', 'CHECKED_OUT'] } }, include: stayInclude, orderBy: [{ eta: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }] }),
       this.prisma.reservation.findMany({ where: { OR: [{ departure: d, status: { in: ['IN_HOUSE', 'CHECKED_OUT'] } }, { status: 'IN_HOUSE', departure: { lt: d } }] }, include: stayInclude, orderBy: { checkedOutAt: { sort: 'asc', nulls: 'first' } } }),
       this.prisma.reservation.findMany({ where: { status: 'IN_HOUSE' }, include: stayInclude, orderBy: { departure: 'asc' } }),
       this.prisma.reservation.findMany({ where: { status: 'CONFIRMED', arrival: { lt: d } }, include: stayInclude, orderBy: { arrival: 'asc' } }),
+      this.prisma.guestRequest.findMany({
+        where: { status: { in: ['NEW', 'ACCEPTED'] } },
+        include: {
+          reservation: {
+            include: {
+              contact: { select: { name: true } },
+              assignments: { where: { releasedAt: null }, include: { room: { select: { number: true } } } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+      }),
     ]);
     const departuresToday = departures.filter((r) => r.status === 'CHECKED_OUT' ? r.checkedOutAt && iso(r.checkedOutAt) >= date : true);
     return {
@@ -82,6 +95,17 @@ export class DeskService {
       inHouse: await this.stays(inHouse),
       lateArrivals: await this.stays(late),
       rooms,
+      guestRequests: guestRequests.map((gr) => ({
+        id: gr.id,
+        reservationId: gr.reservationId,
+        code: gr.reservation.code,
+        guestName: gr.reservation.contact.name,
+        roomNumbers: gr.reservation.assignments.map((a) => a.room.number),
+        kind: gr.kind,
+        note: gr.note,
+        status: gr.status,
+        createdAt: gr.createdAt.toISOString(),
+      })),
       counts: {
         arrivals: arrivals.length,
         arrived: arrivals.filter((r) => r.status === 'IN_HOUSE' || r.status === 'CHECKED_OUT').length,
@@ -319,5 +343,19 @@ export class DeskService {
     });
     await this.audit.record({ actor, action: body.credit ? 'folio.credit' : 'folio.charge', entityType: 'Reservation', entityId: id, summary: `${body.credit ? 'Credited' : 'Charged'} ${this.booking.money(body.amount, r.currency)} on ${r.code}: ${body.description}` });
     return this.booking.detail(id);
+  }
+
+  async patchGuestRequest(id: string, status: 'ACCEPTED' | 'DONE' | 'DECLINED', actor: AuthUser) {
+    const gr = await this.prisma.guestRequest.findUnique({ where: { id }, include: { reservation: true } });
+    if (!gr) throw notFound('Guest request');
+    await this.prisma.guestRequest.update({ where: { id }, data: { status } });
+    await this.audit.record({
+      actor,
+      action: 'desk.guest_request',
+      entityType: 'Reservation',
+      entityId: gr.reservationId,
+      summary: `Guest request (${gr.kind}) on ${gr.reservation.code} → ${status}`,
+    });
+    return { ok: true };
   }
 }

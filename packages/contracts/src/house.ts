@@ -64,6 +64,33 @@ export const zHkTaskPatch = z.object({
   priority: z.number().int().min(0).max(3).optional(),
 });
 
+export const zHkTaskCreateInput = z.object({
+  roomId: z.string().uuid(),
+  date: isoDate.optional(),
+  kind: z.enum(HK_TASK_KINDS).default('DEPARTURE'),
+  priority: z.number().int().min(0).max(3).default(1),
+  assigneeId: z.string().uuid().nullable().optional(),
+  notes: optText(1000),
+});
+
+export const zRoomCreateInput = z.object({
+  number: z.string().trim().min(1).max(20),
+  floor: z.number().int().min(-2).max(50),
+  roomTypeId: z.string().uuid(),
+  hkStatus: z.enum(['VACANT_CLEAN', 'VACANT_DIRTY', 'INSPECTED']).default('VACANT_CLEAN'),
+  isActive: z.boolean().default(true),
+  notes: optText(500),
+});
+
+export const zRoomUpdateInput = z.object({
+  number: z.string().trim().min(1).max(20).optional(),
+  floor: z.number().int().min(-2).max(50).optional(),
+  roomTypeId: z.string().uuid().optional(),
+  hkStatus: z.enum(['VACANT_CLEAN', 'VACANT_DIRTY', 'INSPECTED']).optional(),
+  isActive: z.boolean().optional(),
+  notes: z.string().trim().max(500).nullable().optional(),
+});
+
 export const zRoomBlockInput = z
   .object({ roomId: z.string().uuid(), fromDate: isoDate, toDate: isoDate, reason: z.enum(ROOM_BLOCK_REASONS), note: optText(300) })
   .refine((v) => v.fromDate < v.toDate, { path: ['toDate'], message: 'Must be after the start' });
@@ -109,6 +136,7 @@ export interface DeskStayDTO extends ReservationSummaryDTO {
   /** Completed stays before this one. 0 = first time. */
   previousStays: number;
   isVip: boolean;
+  openRequests?: number;
   checkedInAt: string | null;
   checkedOutAt: string | null;
 }
@@ -127,6 +155,18 @@ export interface RackRoomDTO {
   task: { id: string; kind: HkTaskKind; status: HkTaskStatus } | null;
 }
 
+export interface DeskGuestRequestDTO {
+  id: string;
+  reservationId: string;
+  code: string;
+  guestName: string;
+  roomNumbers: string[];
+  kind: string;
+  note: string | null;
+  status: string;
+  createdAt: string;
+}
+
 export interface DeskBoardDTO {
   date: string;
   arrivals: DeskStayDTO[];
@@ -135,6 +175,7 @@ export interface DeskBoardDTO {
   /** Confirmed arrivals from earlier days that never checked in. */
   lateArrivals: DeskStayDTO[];
   rooms: RackRoomDTO[];
+  guestRequests?: DeskGuestRequestDTO[];
   counts: { arrivals: number; arrived: number; departures: number; departed: number; inHouse: number; guestsInHouse: number; cleanVacant: number; dirty: number; outOfService: number };
 }
 
@@ -159,6 +200,7 @@ export interface HkTaskDTO {
 export interface HkBoardDTO {
   date: string;
   tasks: HkTaskDTO[];
+  rooms?: RackRoomDTO[];
   staff: { id: string; name: string }[];
   counts: Record<HkTaskStatus, number>;
 }

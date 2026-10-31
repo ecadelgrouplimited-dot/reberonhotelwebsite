@@ -2,8 +2,9 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } fr
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import {
-  zAssignRoomsInput, zCheckInInput, zCheckOutInput, zFeedbackInput, zFolioChargeInput, zGuestMergeInput, zGuestPatch, zHkStatusInput, zHkTaskPatch,
-  zMoveRoomInput, zNoShowInput, zReportQuery, zRoomBlockInput,
+  zAssignRoomsInput, zCheckInInput, zCheckOutInput, zFeedbackInput, zFolioChargeInput, zGuestMergeInput, zGuestPatch,
+  zHkStatusInput, zHkTaskCreateInput, zHkTaskPatch, zMoveRoomInput, zNoShowInput, zReportQuery, zRoomBlockInput,
+  zRoomCreateInput, zRoomUpdateInput,
 } from '@reberon/contracts';
 import { hotelToday } from '@reberon/utils';
 import { CurrentUser, Requires, type AuthUser } from '../../common/auth.js';
@@ -74,6 +75,12 @@ export class DeskController {
   charge(@Param('id') id: string, @Body(new ZodPipe(zFolioChargeInput)) body: z.infer<typeof zFolioChargeInput>, @CurrentUser() user: AuthUser) {
     return this.desk.charge(id, body, user);
   }
+
+  @Patch('requests/:id')
+  @Requires('desk:operate')
+  patchRequest(@Param('id') id: string, @Body() body: { status: 'ACCEPTED' | 'DONE' | 'DECLINED' }, @CurrentUser() user: AuthUser) {
+    return this.desk.patchGuestRequest(id, body.status, user);
+  }
 }
 
 @Controller('v1/admin')
@@ -84,6 +91,31 @@ export class RoomsHouseController {
   @Requires('rooms:status')
   rackView(@Query('date') date?: string) {
     return this.rack.rack(dateParam(date));
+  }
+
+  @Get('room-types-list')
+  @Requires('rooms:status')
+  roomTypesList() {
+    return this.rack.roomTypes();
+  }
+
+  @Post('rooms')
+  @Requires('rooms:manage')
+  createRoom(@Body(new ZodPipe(zRoomCreateInput)) body: z.infer<typeof zRoomCreateInput>, @CurrentUser() user: AuthUser) {
+    return this.rack.createRoom(body, user);
+  }
+
+  @Patch('rooms/:id')
+  @Requires('rooms:manage')
+  updateRoom(@Param('id') id: string, @Body(new ZodPipe(zRoomUpdateInput)) body: z.infer<typeof zRoomUpdateInput>, @CurrentUser() user: AuthUser) {
+    return this.rack.updateRoom(id, body, user);
+  }
+
+  @Delete('rooms/:id')
+  @HttpCode(200)
+  @Requires('rooms:manage')
+  deleteRoom(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.rack.deleteRoom(id, user);
   }
 
   @Patch('rack/:roomId/status')
@@ -98,10 +130,32 @@ export class RoomsHouseController {
     return this.rack.board(dateParam(date));
   }
 
+  @Post('housekeeping/tasks')
+  @Requires('rooms:status')
+  createTask(@Body(new ZodPipe(zHkTaskCreateInput)) body: z.infer<typeof zHkTaskCreateInput>, @CurrentUser() user: AuthUser) {
+    return this.rack.createTask(body, user);
+  }
+
+  @Post('housekeeping/sync')
+  @HttpCode(200)
+  @Requires('rooms:status')
+  async syncHousekeeping(@Body() body?: { date?: string }) {
+    const d = dateParam(body?.date);
+    await this.rack.syncToday(d);
+    return this.rack.board(d);
+  }
+
   @Patch('housekeeping/tasks/:id')
   @Requires('rooms:status')
   patchTask(@Param('id') id: string, @Body(new ZodPipe(zHkTaskPatch)) body: z.infer<typeof zHkTaskPatch>, @CurrentUser() user: AuthUser) {
     return this.rack.patchTask(id, body, user);
+  }
+
+  @Delete('housekeeping/tasks/:id')
+  @HttpCode(200)
+  @Requires('rooms:status')
+  deleteTask(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.rack.deleteTask(id, user);
   }
 
   @Get('room-blocks')
