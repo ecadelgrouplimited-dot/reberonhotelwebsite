@@ -763,7 +763,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <WebsiteHealth />
           </MeProvider>
         )}
-        <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-4 sm:px-6 lg:px-7 lg:py-5">
+        <main className="w-full max-w-none flex-1 px-4 py-4 sm:px-6 lg:px-7 lg:py-5">
           {me ? (
             <MeProvider me={me}>
               <ConfirmProvider>{children}</ConfirmProvider>

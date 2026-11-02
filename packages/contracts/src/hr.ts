@@ -76,6 +76,18 @@ export interface StaffProfileDTO {
   isSeed: boolean;
   activeShiftsCount?: number;
   pendingLeavesCount?: number;
+  systemAccess?: {
+    userId: string;
+    email: string | null;
+    role: string;
+    customRoleKey: string | null;
+    customRoleName: string | null;
+    roleDisplayName: string;
+    canSignIn: boolean;
+    hasPassword: boolean;
+    status: string;
+    lastLoginAt: string | null;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -278,3 +290,44 @@ export const zUpdatePayrollStatusInput = z.object({
   paymentStatus: z.enum(PAYROLL_STATUSES),
   paymentReference: z.string().trim().max(100).optional().nullable(),
 });
+
+export const zBulkCreateShiftsInput = z.object({
+  staffIds: z.array(z.string().uuid()).min(1),
+  departmentCode: z.string().trim().min(2).max(60).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/),
+  shiftType: z.enum(SHIFT_TYPES).default('MORNING'),
+  scheduledStartTime: z.string().trim().max(10).optional().nullable(),
+  scheduledEndTime: z.string().trim().max(10).optional().nullable(),
+  notes: z.string().trim().max(300).optional().nullable(),
+});
+
+export const zAdjustPayrollInput = z.object({
+  baseSalaryMinor: z.string().regex(/^\d+$/).optional(),
+  overtimeMinor: z.string().regex(/^\d+$/).default('0'),
+  allowancesMinor: z.string().regex(/^\d+$/).default('0'),
+  advancesDeductionMinor: z.string().regex(/^\d+$/).default('0'),
+  otherDeductionsMinor: z.string().regex(/^\d+$/).default('0'),
+  paymentStatus: z.enum(PAYROLL_STATUSES).optional(),
+  paymentReference: z.string().trim().max(100).optional().nullable(),
+});
+
+export const zBatchPayPayrollInput = z.object({
+  periodMonth: z.string().regex(/^\d{4}-\d{2}$/),
+  paymentReferencePrefix: z.string().trim().max(60).optional().nullable(),
+});
+
+export const zCreateStaffDocumentInput = z.object({
+  title: z.string().trim().min(2).max(120),
+  kind: z.string().trim().min(2).max(60).default('CONTRACT'),
+  fileUrl: z.string().trim().min(1).max(500).default('#'),
+  expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional().nullable(),
+  notes: z.string().trim().max(500).optional().nullable(),
+});
+
+export const zAssignStaffSystemRoleInput = z.object({
+  roleKey: z.string().trim().min(2).max(60),
+  email: z.string().trim().email().optional().nullable(),
+  canSignIn: z.boolean().default(true),
+});
+

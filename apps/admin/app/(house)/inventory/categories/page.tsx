@@ -146,7 +146,7 @@ export default function ItemCategoriesPage() {
   }, [categories]);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="fade-in w-full space-y-5">
       {/* Back button and breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-neutral-500">
         <Link
@@ -318,7 +318,7 @@ export default function ItemCategoriesPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-neutral-700 dark:text-neutral-300">
+            <table className="w-full min-w-[940px] text-left text-sm text-neutral-700 dark:text-neutral-300">
               <thead className="border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/75 dark:bg-neutral-800/50 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                 <tr>
                   <th className="px-6 py-3.5">Category</th>

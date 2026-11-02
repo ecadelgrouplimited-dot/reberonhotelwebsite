@@ -504,7 +504,7 @@ export default function PeoplePage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[920px] text-left text-xs">
                 <thead className="border-b border-line bg-surface-2/50 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
                   <tr>
                     <th className="px-3 py-2.5">Person</th>

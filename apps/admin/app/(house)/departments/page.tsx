@@ -142,7 +142,7 @@ export default function DepartmentsPage() {
 
   if (!canHr) {
     return (
-      <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="fade-in w-full space-y-5">
         <PageHeader
           title="Departments & Cost Centers"
           description="Operational departments, budgets, and head of department administration."
@@ -159,7 +159,7 @@ export default function DepartmentsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="fade-in w-full space-y-5">
       {/* Header */}
       <PageHeader
         title="Departments & Cost Centers"
@@ -319,7 +319,7 @@ export default function DepartmentsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-neutral-700 dark:text-neutral-300">
+            <table className="w-full min-w-[1020px] text-left text-sm text-neutral-700 dark:text-neutral-300">
               <thead className="border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/75 dark:bg-neutral-800/50 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                 <tr>
                   <th className="px-6 py-3.5">Department</th>

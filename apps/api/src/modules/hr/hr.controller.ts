@@ -1,8 +1,13 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  zAdjustPayrollInput,
+  zAssignStaffSystemRoleInput,
+  zBatchPayPayrollInput,
+  zBulkCreateShiftsInput,
   zCreateLeaveRequestInput,
   zCreateShiftInput,
+  zCreateStaffDocumentInput,
   zCreateStaffInput,
   zGeneratePayrollInput,
   zReviewLeaveRequestInput,
@@ -70,6 +75,40 @@ export class HrController {
     return this.hr.deleteStaff(id, user);
   }
 
+  @Post('staff/:id/system-role')
+  @Requires('hr:manage')
+  assignSystemRole(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zAssignStaffSystemRoleInput)) body: z.infer<typeof zAssignStaffSystemRoleInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.hr.assignSystemRole(id, body, user);
+  }
+
+  /* ───── Staff Documents & Contracts ───── */
+
+  @Get('documents')
+  @Requires('hr:manage')
+  listDocuments(@Query('staffId') staffId?: string) {
+    return this.hr.listDocuments(staffId);
+  }
+
+  @Post('staff/:id/documents')
+  @Requires('hr:manage')
+  addDocument(
+    @Param('id') staffId: string,
+    @Body(new ZodPipe(zCreateStaffDocumentInput)) body: z.infer<typeof zCreateStaffDocumentInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.hr.addDocument(staffId, body, user);
+  }
+
+  @Delete('documents/:docId')
+  @Requires('hr:manage')
+  deleteDocument(@Param('docId') docId: string, @CurrentUser() user: AuthUser) {
+    return this.hr.deleteDocument(docId, user);
+  }
+
   /* ───── Shift Rosters & Daily Attendance ───── */
 
   @Get('shifts')
@@ -92,6 +131,15 @@ export class HrController {
     return this.hr.createShift(body, user);
   }
 
+  @Post('shifts/bulk')
+  @Requires('hr:manage')
+  bulkCreateShifts(
+    @Body(new ZodPipe(zBulkCreateShiftsInput)) body: z.infer<typeof zBulkCreateShiftsInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.hr.bulkCreateShifts(body, user);
+  }
+
   @Patch('shifts/:id')
   @Requires('hr:manage')
   updateShift(
@@ -100,6 +148,12 @@ export class HrController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.hr.updateShift(id, body, user);
+  }
+
+  @Delete('shifts/:id')
+  @Requires('hr:manage')
+  deleteShift(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.hr.deleteShift(id, user);
   }
 
   /* ───── Leave Management ───── */
@@ -151,6 +205,25 @@ export class HrController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.hr.generatePayroll(body, user);
+  }
+
+  @Post('payroll/pay-all')
+  @Requires('hr:manage')
+  batchPayPayroll(
+    @Body(new ZodPipe(zBatchPayPayrollInput)) body: z.infer<typeof zBatchPayPayrollInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.hr.batchPayPayroll(body, user);
+  }
+
+  @Patch('payroll/:id')
+  @Requires('hr:manage')
+  adjustPayroll(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zAdjustPayrollInput)) body: z.infer<typeof zAdjustPayrollInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.hr.adjustPayroll(id, body, user);
   }
 
   @Patch('payroll/:id/status')

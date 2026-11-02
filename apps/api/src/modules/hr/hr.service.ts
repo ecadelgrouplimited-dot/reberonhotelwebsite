@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type {
   HrDashboardDTO,
+  Permission,
+  Role,
   StaffDocumentDTO,
   StaffLeaveRequestDTO,
   StaffPayrollRecordDTO,
@@ -9,8 +11,18 @@ import type {
 } from '@reberon/contracts';
 import { z } from 'zod';
 import {
+  OWNER_ONLY,
+  PERMISSIONS,
+  ROLES,
+  ROLE_LABELS,
+  ROLE_PERMISSIONS,
+  zAdjustPayrollInput,
+  zAssignStaffSystemRoleInput,
+  zBatchPayPayrollInput,
+  zBulkCreateShiftsInput,
   zCreateLeaveRequestInput,
   zCreateShiftInput,
+  zCreateStaffDocumentInput,
   zCreateStaffInput,
   zGeneratePayrollInput,
   zReviewLeaveRequestInput,
@@ -18,6 +30,8 @@ import {
   zUpdateShiftInput,
   zUpdateStaffInput,
 } from '@reberon/contracts';
+import type { User } from '@reberon/db';
+import { normalizePhone } from '@reberon/utils';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
 import { type AuthUser } from '../../common/auth.js';
@@ -487,7 +501,7 @@ export class HrService {
       ];
     }
 
-    const [staffList, departments] = await Promise.all([
+    const [staffList, departments, activeUsers] = await Promise.all([
       this.prisma.staffProfile.findMany({
         where,
         orderBy: [{ status: 'asc' }, { firstName: 'asc' }, { lastName: 'asc' }],
@@ -501,51 +515,82 @@ export class HrService {
         },
       }),
       this.prisma.hotelDepartment.findMany({ select: { code: true, name: true } }),
+      this.prisma.user.findMany({ where: { deletedAt: null } }),
     ]);
 
     const deptMap = new Map<string, string>(departments.map((d) => [d.code, d.name]));
+    const userById = new Map<string, User>(activeUsers.map((u) => [u.id, u]));
+    const userByEmail = new Map<string, User>();
+    const userByPhone = new Map<string, User>();
+    for (const u of activeUsers) {
+      if (u.email) userByEmail.set(u.email.toLowerCase(), u);
+      if (u.phone) userByPhone.set(normalizePhone(u.phone) ?? u.phone, u);
+    }
 
-    return staffList.map((s) => ({
-      id: s.id,
-      employeeNumber: s.employeeNumber,
-      userId: s.userId,
-      firstName: s.firstName,
-      lastName: s.lastName,
-      otherNames: s.otherNames,
-      fullName: [s.firstName, s.lastName, s.otherNames].filter(Boolean).join(' '),
-      gender: s.gender as any,
-      dateOfBirth: s.dateOfBirth?.toISOString().slice(0, 10) ?? null,
-      nationalIdNumber: s.nationalIdNumber,
-      phone: s.phone,
-      alternatePhone: s.alternatePhone,
-      email: s.email,
-      residenceAddress: s.residenceAddress,
-      emergencyContactName: s.emergencyContactName,
-      emergencyContactPhone: s.emergencyContactPhone,
-      emergencyContactRelation: s.emergencyContactRelation,
-      departmentCode: s.departmentCode,
-      departmentName: deptMap.get(s.departmentCode) ?? s.departmentCode,
-      jobTitle: s.jobTitle,
-      employmentType: s.employmentType as any,
-      dateJoined: s.dateJoined.toISOString().slice(0, 10),
-      contractEndDate: s.contractEndDate?.toISOString().slice(0, 10) ?? null,
-      baseSalaryMinor: s.baseSalaryMinor.toString(),
-      currency: s.currency as any,
-      paymentMethod: s.paymentMethod as any,
-      bankName: s.bankName,
-      bankAccountNumber: s.bankAccountNumber,
-      mobileMoneyNumber: s.mobileMoneyNumber,
-      nssfNumber: s.nssfNumber,
-      tinNumber: s.tinNumber,
-      status: s.status as any,
-      avatarUrl: s.avatarUrl,
-      notes: s.notes,
-      isSeed: s.isSeed,
-      activeShiftsCount: s._count.shifts,
-      pendingLeavesCount: s._count.leaveRequests,
-      createdAt: s.createdAt.toISOString(),
-      updatedAt: s.updatedAt.toISOString(),
-    }));
+    return staffList.map((s) => {
+      let matchedUser: User | undefined = s.userId ? userById.get(s.userId) : undefined;
+      if (!matchedUser && s.email) matchedUser = userByEmail.get(s.email.toLowerCase());
+      if (!matchedUser && s.phone) matchedUser = userByPhone.get(normalizePhone(s.phone) ?? s.phone);
+
+      return {
+        id: s.id,
+        employeeNumber: s.employeeNumber,
+        userId: matchedUser?.id ?? s.userId,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        otherNames: s.otherNames,
+        fullName: [s.firstName, s.lastName, s.otherNames].filter(Boolean).join(' '),
+        gender: s.gender as any,
+        dateOfBirth: s.dateOfBirth?.toISOString().slice(0, 10) ?? null,
+        nationalIdNumber: s.nationalIdNumber,
+        phone: s.phone,
+        alternatePhone: s.alternatePhone,
+        email: s.email ?? matchedUser?.email ?? null,
+        residenceAddress: s.residenceAddress,
+        emergencyContactName: s.emergencyContactName,
+        emergencyContactPhone: s.emergencyContactPhone,
+        emergencyContactRelation: s.emergencyContactRelation,
+        departmentCode: s.departmentCode,
+        departmentName: deptMap.get(s.departmentCode) ?? s.departmentCode,
+        jobTitle: s.jobTitle,
+        employmentType: s.employmentType as any,
+        dateJoined: s.dateJoined.toISOString().slice(0, 10),
+        contractEndDate: s.contractEndDate?.toISOString().slice(0, 10) ?? null,
+        baseSalaryMinor: s.baseSalaryMinor.toString(),
+        currency: s.currency as any,
+        paymentMethod: s.paymentMethod as any,
+        bankName: s.bankName,
+        bankAccountNumber: s.bankAccountNumber,
+        mobileMoneyNumber: s.mobileMoneyNumber,
+        nssfNumber: s.nssfNumber,
+        tinNumber: s.tinNumber,
+        status: s.status as any,
+        avatarUrl: s.avatarUrl,
+        notes: s.notes,
+        isSeed: s.isSeed,
+        activeShiftsCount: s._count.shifts,
+        pendingLeavesCount: s._count.leaveRequests,
+        systemAccess: matchedUser
+          ? {
+              userId: matchedUser.id,
+              email: matchedUser.email,
+              role: matchedUser.role,
+              customRoleKey: matchedUser.customRoleKey ?? null,
+              customRoleName: matchedUser.customRoleName ?? null,
+              roleDisplayName:
+                matchedUser.customRoleName ||
+                ROLE_LABELS[matchedUser.role as Role] ||
+                matchedUser.role,
+              canSignIn: matchedUser.canSignIn,
+              hasPassword: !!matchedUser.passwordHash,
+              status: matchedUser.status,
+              lastLoginAt: matchedUser.lastLoginAt?.toISOString() ?? null,
+            }
+          : null,
+        createdAt: s.createdAt.toISOString(),
+        updatedAt: s.updatedAt.toISOString(),
+      };
+    });
   }
 
   async getStaff(id: string): Promise<StaffProfileDTO & {
@@ -557,23 +602,37 @@ export class HrService {
     const staff = await this.prisma.staffProfile.findUnique({
       where: { id },
       include: {
-        shifts: { orderBy: { date: 'desc' }, take: 10 },
-        leaveRequests: { orderBy: { startDate: 'desc' }, take: 5 },
-        payrollRecords: { orderBy: { periodMonth: 'desc' }, take: 6 },
+        shifts: { orderBy: { date: 'desc' }, take: 20 },
+        leaveRequests: { orderBy: { startDate: 'desc' }, take: 15 },
+        payrollRecords: { orderBy: { periodMonth: 'desc' }, take: 12 },
         documents: { orderBy: { createdAt: 'desc' } },
       },
     });
     if (!staff) throw notFound('Staff Profile');
 
-    const dept = await this.prisma.hotelDepartment.findUnique({
-      where: { code: staff.departmentCode },
-      select: { name: true },
-    });
+    const [dept, activeUsers] = await Promise.all([
+      this.prisma.hotelDepartment.findUnique({
+        where: { code: staff.departmentCode },
+        select: { name: true },
+      }),
+      this.prisma.user.findMany({ where: { deletedAt: null } }),
+    ]);
+
+    let matchedUser: User | undefined = staff.userId
+      ? activeUsers.find((u) => u.id === staff.userId)
+      : undefined;
+    if (!matchedUser && staff.email) {
+      matchedUser = activeUsers.find((u) => u.email?.toLowerCase() === staff.email?.toLowerCase());
+    }
+    if (!matchedUser && staff.phone) {
+      const norm = normalizePhone(staff.phone) ?? staff.phone;
+      matchedUser = activeUsers.find((u) => (u.phone ? (normalizePhone(u.phone) ?? u.phone) === norm : false));
+    }
 
     return {
       id: staff.id,
       employeeNumber: staff.employeeNumber,
-      userId: staff.userId,
+      userId: matchedUser?.id ?? staff.userId,
       firstName: staff.firstName,
       lastName: staff.lastName,
       otherNames: staff.otherNames,
@@ -583,7 +642,7 @@ export class HrService {
       nationalIdNumber: staff.nationalIdNumber,
       phone: staff.phone,
       alternatePhone: staff.alternatePhone,
-      email: staff.email,
+      email: staff.email ?? matchedUser?.email ?? null,
       residenceAddress: staff.residenceAddress,
       emergencyContactName: staff.emergencyContactName,
       emergencyContactPhone: staff.emergencyContactPhone,
@@ -606,6 +665,23 @@ export class HrService {
       avatarUrl: staff.avatarUrl,
       notes: staff.notes,
       isSeed: staff.isSeed,
+      systemAccess: matchedUser
+        ? {
+            userId: matchedUser.id,
+            email: matchedUser.email,
+            role: matchedUser.role,
+            customRoleKey: matchedUser.customRoleKey ?? null,
+            customRoleName: matchedUser.customRoleName ?? null,
+            roleDisplayName:
+              matchedUser.customRoleName ||
+              ROLE_LABELS[matchedUser.role as Role] ||
+              matchedUser.role,
+            canSignIn: matchedUser.canSignIn,
+            hasPassword: !!matchedUser.passwordHash,
+            status: matchedUser.status,
+            lastLoginAt: matchedUser.lastLoginAt?.toISOString() ?? null,
+          }
+        : null,
       createdAt: staff.createdAt.toISOString(),
       updatedAt: staff.updatedAt.toISOString(),
       shifts: staff.shifts.map((sh) => ({
@@ -1426,5 +1502,418 @@ export class HrService {
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     };
+  }
+
+  /* ───────────────────────── 6. Payroll Adjustments & Batch Payout ───────────────────────── */
+
+  async adjustPayroll(
+    id: string,
+    input: z.infer<typeof zAdjustPayrollInput>,
+    actor: AuthUser,
+  ): Promise<StaffPayrollRecordDTO> {
+    const record = await this.prisma.staffPayrollRecord.findUnique({
+      where: { id },
+      include: { staff: true },
+    });
+    if (!record) throw notFound('Payroll Record');
+
+    const base = input.baseSalaryMinor !== undefined ? BigInt(input.baseSalaryMinor) : record.baseSalaryMinor;
+    const overtime = BigInt(input.overtimeMinor);
+    const allowances = BigInt(input.allowancesMinor);
+    const advances = BigInt(input.advancesDeductionMinor);
+    const other = BigInt(input.otherDeductionsMinor);
+
+    const gross = base + overtime + allowances;
+    const nssfEmp = (gross * 5n) / 100n;
+    const nssfEmpr = (gross * 10n) / 100n;
+    const paye = this.calculatePayeTax(gross);
+    const totalDeductions = nssfEmp + paye + advances + other;
+    const net = gross > totalDeductions ? gross - totalDeductions : 0n;
+
+    const updated = await this.prisma.staffPayrollRecord.update({
+      where: { id },
+      data: {
+        baseSalaryMinor: base,
+        overtimeMinor: overtime,
+        allowancesMinor: allowances,
+        grossSalaryMinor: gross,
+        payeTaxMinor: paye,
+        nssfEmployeeMinor: nssfEmp,
+        nssfEmployerMinor: nssfEmpr,
+        advancesDeductionMinor: advances,
+        otherDeductionsMinor: other,
+        netSalaryMinor: net,
+        ...(input.paymentStatus ? { paymentStatus: input.paymentStatus } : {}),
+        ...(input.paymentReference !== undefined ? { paymentReference: input.paymentReference || null } : {}),
+      },
+      include: { staff: true },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'payroll.adjust',
+      entityType: 'StaffPayrollRecord',
+      entityId: updated.id,
+      summary: `Adjusted payroll for ${updated.staff.firstName} ${updated.staff.lastName} (${updated.periodMonth}) · Net: ${net.toString()} ${updated.currency}`,
+    });
+
+    return {
+      id: updated.id,
+      staffId: updated.staffId,
+      staffName: `${updated.staff.firstName} ${updated.staff.lastName}`,
+      employeeNumber: updated.staff.employeeNumber,
+      departmentCode: updated.staff.departmentCode,
+      jobTitle: updated.staff.jobTitle,
+      periodMonth: updated.periodMonth,
+      baseSalaryMinor: updated.baseSalaryMinor.toString(),
+      overtimeMinor: updated.overtimeMinor.toString(),
+      allowancesMinor: updated.allowancesMinor.toString(),
+      grossSalaryMinor: updated.grossSalaryMinor.toString(),
+      payeTaxMinor: updated.payeTaxMinor.toString(),
+      nssfEmployeeMinor: updated.nssfEmployeeMinor.toString(),
+      nssfEmployerMinor: updated.nssfEmployerMinor.toString(),
+      advancesDeductionMinor: updated.advancesDeductionMinor.toString(),
+      otherDeductionsMinor: updated.otherDeductionsMinor.toString(),
+      netSalaryMinor: updated.netSalaryMinor.toString(),
+      currency: updated.currency as any,
+      paymentStatus: updated.paymentStatus as any,
+      paymentReference: updated.paymentReference,
+      paidAt: updated.paidAt?.toISOString() ?? null,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  async batchPayPayroll(
+    input: z.infer<typeof zBatchPayPayrollInput>,
+    actor: AuthUser,
+  ): Promise<{ paidCount: number; totalNetMinor: string }> {
+    const unpaid = await this.prisma.staffPayrollRecord.findMany({
+      where: {
+        periodMonth: input.periodMonth,
+        paymentStatus: { not: 'PAID' },
+      },
+      include: { staff: true },
+    });
+
+    const prefix = input.paymentReferencePrefix?.trim() || `PAY-${input.periodMonth}`;
+    let totalNet = 0n;
+    let paidCount = 0;
+
+    for (const r of unpaid) {
+      const ref = `${prefix}-${r.staff.employeeNumber}`;
+      await this.updatePayrollStatus(
+        r.id,
+        { paymentStatus: 'PAID', paymentReference: ref },
+        actor,
+      );
+      totalNet += r.netSalaryMinor;
+      paidCount++;
+    }
+
+    return { paidCount, totalNetMinor: totalNet.toString() };
+  }
+
+  /* ───────────────────────── 7. Bulk Shifts & Delete Shift ───────────────────────── */
+
+  async bulkCreateShifts(
+    input: z.infer<typeof zBulkCreateShiftsInput>,
+    actor: AuthUser,
+  ): Promise<{ createdCount: number }> {
+    const start = new Date(input.startDate);
+    const end = new Date(input.endDate);
+    if (end < start) {
+      throw badRequest('End date cannot be earlier than start date');
+    }
+    const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays > 31) {
+      throw badRequest('Bulk shift schedule cannot exceed 31 days at once');
+    }
+
+    const staffList = await this.prisma.staffProfile.findMany({
+      where: { id: { in: input.staffIds } },
+    });
+    if (staffList.length === 0) throw notFound('Staff Profiles');
+
+    let createdCount = 0;
+    for (const staff of staffList) {
+      for (let d = 0; d <= diffDays; d++) {
+        const curDate = new Date(start);
+        curDate.setDate(curDate.getDate() + d);
+
+        const existing = await this.prisma.staffShift.findFirst({
+          where: {
+            staffId: staff.id,
+            date: curDate,
+          },
+        });
+
+        if (existing) {
+          await this.prisma.staffShift.update({
+            where: { id: existing.id },
+            data: {
+              departmentCode: input.departmentCode || staff.departmentCode,
+              shiftType: input.shiftType,
+              scheduledStartTime: input.scheduledStartTime || null,
+              scheduledEndTime: input.scheduledEndTime || null,
+              notes: input.notes?.trim() || existing.notes,
+            },
+          });
+        } else {
+          await this.prisma.staffShift.create({
+            data: {
+              staffId: staff.id,
+              departmentCode: input.departmentCode || staff.departmentCode,
+              date: curDate,
+              shiftType: input.shiftType,
+              scheduledStartTime: input.scheduledStartTime || null,
+              scheduledEndTime: input.scheduledEndTime || null,
+              attendanceStatus: 'SCHEDULED',
+              notes: input.notes?.trim() || null,
+            },
+          });
+        }
+        createdCount++;
+      }
+    }
+
+    await this.audit.record({
+      actor,
+      action: 'shift.bulk_create',
+      entityType: 'StaffShift',
+      entityId: input.startDate,
+      summary: `Scheduled ${createdCount} shifts (${input.startDate} to ${input.endDate}) across ${staffList.length} staff`,
+    });
+
+    return { createdCount };
+  }
+
+  async deleteShift(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    const existing = await this.prisma.staffShift.findUnique({
+      where: { id },
+      include: { staff: true },
+    });
+    if (!existing) throw notFound('Staff Shift');
+
+    await this.prisma.staffShift.delete({ where: { id } });
+
+    await this.audit.record({
+      actor,
+      action: 'shift.delete',
+      entityType: 'StaffShift',
+      entityId: id,
+      summary: `Removed ${existing.shiftType} shift for ${existing.staff.firstName} ${existing.staff.lastName} on ${existing.date.toISOString().slice(0, 10)}`,
+    });
+
+    return { ok: true };
+  }
+
+  /* ───────────────────────── 8. Staff Documents & Contracts ───────────────────────── */
+
+  async listDocuments(staffId?: string): Promise<(StaffDocumentDTO & { staffName?: string; employeeNumber?: string; departmentCode?: string })[]> {
+    const docs = await this.prisma.staffDocument.findMany({
+      where: staffId ? { staffId } : {},
+      include: {
+        staff: {
+          select: { firstName: true, lastName: true, employeeNumber: true, departmentCode: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return docs.map((d) => ({
+      id: d.id,
+      staffId: d.staffId,
+      staffName: `${d.staff.firstName} ${d.staff.lastName}`,
+      employeeNumber: d.staff.employeeNumber,
+      departmentCode: d.staff.departmentCode,
+      title: d.title,
+      kind: d.kind,
+      fileUrl: d.fileUrl,
+      expiryDate: d.expiryDate?.toISOString().slice(0, 10) ?? null,
+      notes: d.notes,
+      createdAt: d.createdAt.toISOString(),
+    }));
+  }
+
+  async addDocument(
+    staffId: string,
+    input: z.infer<typeof zCreateStaffDocumentInput>,
+    actor: AuthUser,
+  ): Promise<StaffDocumentDTO> {
+    const staff = await this.prisma.staffProfile.findUnique({ where: { id: staffId } });
+    if (!staff) throw notFound('Staff Profile');
+
+    const doc = await this.prisma.staffDocument.create({
+      data: {
+        staffId,
+        title: input.title.trim(),
+        kind: input.kind.trim().toUpperCase(),
+        fileUrl: input.fileUrl.trim() || '#',
+        expiryDate: input.expiryDate ? new Date(input.expiryDate) : null,
+        notes: input.notes?.trim() || null,
+      },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'staff.document_add',
+      entityType: 'StaffDocument',
+      entityId: doc.id,
+      summary: `Added ${doc.kind} document "${doc.title}" for ${staff.firstName} ${staff.lastName}`,
+    });
+
+    return {
+      id: doc.id,
+      staffId: doc.staffId,
+      title: doc.title,
+      kind: doc.kind,
+      fileUrl: doc.fileUrl,
+      expiryDate: doc.expiryDate?.toISOString().slice(0, 10) ?? null,
+      notes: doc.notes,
+      createdAt: doc.createdAt.toISOString(),
+    };
+  }
+
+  async deleteDocument(docId: string, actor: AuthUser): Promise<{ ok: boolean }> {
+    const doc = await this.prisma.staffDocument.findUnique({
+      where: { id: docId },
+      include: { staff: true },
+    });
+    if (!doc) throw notFound('Staff Document');
+
+    await this.prisma.staffDocument.delete({ where: { id: docId } });
+
+    await this.audit.record({
+      actor,
+      action: 'staff.document_delete',
+      entityType: 'StaffDocument',
+      entityId: docId,
+      summary: `Deleted document "${doc.title}" for ${doc.staff.firstName} ${doc.staff.lastName}`,
+    });
+
+    return { ok: true };
+  }
+
+  /* ───────────────────────── 9. Direct System Role Assignment from HR ───────────────────────── */
+
+  async assignSystemRole(
+    staffId: string,
+    input: z.infer<typeof zAssignStaffSystemRoleInput>,
+    actor: AuthUser,
+  ): Promise<StaffProfileDTO> {
+    const staff = await this.prisma.staffProfile.findUnique({ where: { id: staffId } });
+    if (!staff) throw notFound('Staff Profile');
+
+    const roleKey = input.roleKey.trim().toUpperCase();
+    if (roleKey === 'OWNER' && actor.role !== 'OWNER') {
+      throw forbidden('Only an existing Owner can grant the Owner role.');
+    }
+
+    const roleDef = await this.prisma.roleDefinition.findUnique({ where: { key: roleKey } });
+    let baseRole: Role = 'DESK';
+    let customRoleKey: string | null = null;
+    let customRoleName: string | null = null;
+    let grants: string[] = [];
+    let revokes: string[] = [];
+
+    if ((ROLES as readonly string[]).includes(roleKey)) {
+      baseRole = roleKey as Role;
+      if (roleDef && !roleDef.isSystem) {
+        customRoleKey = roleDef.key;
+        customRoleName = roleDef.name;
+      }
+    } else if (roleDef) {
+      baseRole = ((ROLES as readonly string[]).includes(roleDef.baseRole) ? roleDef.baseRole : 'DESK') as Role;
+      customRoleKey = roleDef.key;
+      customRoleName = roleDef.name;
+      const preset = new Set<string>(ROLE_PERMISSIONS[baseRole] ?? []);
+      const target = new Set<string>(
+        roleDef.permissions.filter(
+          (p) => (PERMISSIONS as readonly string[]).includes(p) && !OWNER_ONLY.includes(p as Permission),
+        ),
+      );
+      grants = [...target].filter((p) => !preset.has(p));
+      revokes = [...preset].filter((p) => !target.has(p));
+    } else {
+      throw badRequest(`Role "${roleKey}" does not exist.`);
+    }
+
+    const fullName = [staff.firstName, staff.lastName, staff.otherNames].filter(Boolean).join(' ');
+    const email = (input.email?.trim() || staff.email?.trim() || '').toLowerCase() || null;
+    const phone = normalizePhone(staff.phone) ?? staff.phone;
+
+    // Look for an existing User record linked to this StaffProfile
+    let existingUser: User | null = null;
+    if (staff.userId) {
+      existingUser = await this.prisma.user.findUnique({ where: { id: staff.userId } });
+    }
+    if (!existingUser && email) {
+      existingUser = await this.prisma.user.findUnique({ where: { email } });
+    }
+    if (!existingUser && phone) {
+      existingUser = await this.prisma.user.findFirst({ where: { phone, deletedAt: null } });
+    }
+
+    let targetUser: User;
+    if (existingUser) {
+      if (existingUser.role === 'OWNER' && actor.role !== 'OWNER') {
+        throw forbidden('Only an Owner can change another Owner account.');
+      }
+      targetUser = await this.prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          name: fullName,
+          email: email ?? existingUser.email,
+          phone: phone ?? existingUser.phone,
+          jobTitle: staff.jobTitle,
+          role: baseRole,
+          customRoleKey,
+          customRoleName,
+          grants,
+          revokes,
+          canSignIn: input.canSignIn && !!(email ?? existingUser.email),
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
+      });
+    } else {
+      targetUser = await this.prisma.user.create({
+        data: {
+          name: fullName,
+          email,
+          phone,
+          jobTitle: staff.jobTitle,
+          role: baseRole,
+          customRoleKey,
+          customRoleName,
+          grants,
+          revokes,
+          canSignIn: input.canSignIn && !!email,
+          status: 'ACTIVE',
+        },
+      });
+    }
+
+    await this.prisma.staffProfile.update({
+      where: { id: staff.id },
+      data: {
+        userId: targetUser.id,
+        ...(email ? { email } : {}),
+      },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'staff.assign_role',
+      entityType: 'StaffProfile',
+      entityId: staff.id,
+      summary: `Assigned system access role ${customRoleName || ROLE_LABELS[baseRole] || baseRole} to ${fullName} (${staff.employeeNumber})`,
+    });
+
+    const refreshed = await this.listStaff();
+    const match = refreshed.find((s) => s.id === staff.id);
+    if (!match) throw notFound('Staff Profile');
+    return match;
   }
 }
