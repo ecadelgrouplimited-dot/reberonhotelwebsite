@@ -107,6 +107,8 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [expandedNoteItemId, setExpandedNoteItemId] = useState<string | null>(null);
   const [targetOpenOrder, setTargetOpenOrder] = useState<PosOrderDTO | null>(null);
+  const [editingOpenOrder, setEditingOpenOrder] = useState<PosOrderDTO | null>(null);
+  const [servedByName, setServedByName] = useState<string>(me.name || 'Staff');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [tableOrRoom, setTableOrRoom] = useState('');
@@ -117,8 +119,8 @@ export default function PosPage() {
   const [customDiscountMinor, setCustomDiscountMinor] = useState<string>('');
   const [cashTendered, setCashTendered] = useState<string>('');
 
-  // KDS & Queue Filters
-  const [kdsFilter, setKdsFilter] = useState<'ACTIVE' | 'OPEN_TABS' | 'ALL'>('ACTIVE');
+  // KDS & Queue Filters: 'OPEN_TABS' (Waiting Payment) | 'PAID' (Confirmed Receipts) | 'ACTIVE' (Kitchen/Bar Prep) | 'ALL'
+  const [kdsFilter, setKdsFilter] = useState<'OPEN_TABS' | 'PAID' | 'ACTIVE' | 'ALL'>('OPEN_TABS');
   const [kdsViewMode, setKdsViewMode] = useState<'CARDS' | 'TABLE'>('CARDS');
   const [orderSearch, setOrderSearch] = useState('');
 
@@ -128,6 +130,12 @@ export default function PosPage() {
   const [settleResId, setSettleResId] = useState('');
   const [settleDiscount, setSettleDiscount] = useState('0');
   const [settleTendered, setSettleTendered] = useState('');
+  const [settleRef, setSettleRef] = useState('');
+
+  // Shift Handover State
+  const [handoverFrom, setHandoverFrom] = useState<string>(me.name || '');
+  const [handoverTo, setHandoverTo] = useState<string>('');
+  const [handoverNotes, setHandoverNotes] = useState<string>('');
 
   const [menuModalOpen, setMenuModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PosItemDTO | null>(null);
@@ -274,6 +282,7 @@ export default function PosPage() {
   const resetTicket = () => {
     setCart([]);
     setTargetOpenOrder(null);
+    setEditingOpenOrder(null);
     setCustomerName('');
     setCustomerPhone('');
     setTableOrRoom('');
@@ -284,9 +293,60 @@ export default function PosPage() {
     setExpandedNoteItemId(null);
   };
 
+  const loadOrderForEditing = (o: PosOrderDTO) => {
+    const out = outlets?.find((x) => x.id === o.outletId) ?? outlets?.[0];
+    const allMenuItems = (outlets ?? []).flatMap((x) => x.categories.flatMap((c) => c.items));
+    const loadedCart: CartLine[] = o.items.map((line) => {
+      const matched = allMenuItems.find((m) => m.id === line.itemId);
+      const fallbackItem: PosItemDTO = matched ?? {
+        id: line.itemId,
+        categoryId: '',
+        sku: 'POS',
+        name: line.itemName,
+        description: null,
+        priceMinorUGX: line.unitPriceMinor,
+        priceMinorUSD: line.unitPriceMinor,
+        isAvailable: true,
+        prepMinutes: null,
+        inventoryItemId: null,
+      };
+      return {
+        item: fallbackItem,
+        quantity: line.quantity,
+        notes: line.notes ?? '',
+      };
+    });
+    setTargetOpenOrder(null);
+    setEditingOpenOrder(o);
+    setCart(loadedCart);
+    setTableOrRoom(o.tableOrRoom ?? '');
+    setCustomerName(o.customerName ?? '');
+    setCustomerPhone(o.customerPhone ?? '');
+    setServedByName(o.servedByName || me.name || 'Staff');
+    setOrderNotes(o.notes ?? '');
+    setCustomDiscountMinor(o.discountMinor !== '0' ? o.discountMinor : '');
+    setActiveTab(out?.code ?? outlets?.[0]?.code ?? 'KITCHEN');
+    toast.info(`Editing Bill ${o.orderNumber} (${o.tableOrRoom || 'Table'}) — update items & save`);
+  };
+
   // Mutations
   const placeOrder = useMutation({
     mutationFn: (settleNow: boolean) => {
+      if (editingOpenOrder) {
+        return patch<PosOrderDTO>(`/pos/orders/${editingOpenOrder.id}`, {
+          tableOrRoom: tableOrRoom.trim() || null,
+          customerName: customerName.trim() || null,
+          customerPhone: customerPhone.trim() || null,
+          servedByName: servedByName.trim() || me.name,
+          discountMinor: cartDiscountMinor.toString(),
+          notes: orderNotes.trim() || null,
+          items: cart.map((l) => ({
+            itemId: l.item.id,
+            quantity: l.quantity,
+            notes: l.notes.trim() || null,
+          })),
+        });
+      }
       if (targetOpenOrder) {
         return post<PosOrderDTO>(`/pos/orders/${targetOpenOrder.id}/items`, {
           notes: orderNotes.trim() || undefined,
@@ -307,6 +367,7 @@ export default function PosPage() {
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         tableOrRoom: tableOrRoom.trim() || undefined,
+        servedByName: servedByName.trim() || me.name,
         paymentMethod,
         currency,
         discountMinor: cartDiscountMinor.toString(),
@@ -324,29 +385,40 @@ export default function PosPage() {
       qc.invalidateQueries({ queryKey: ['pos', 'outlets'] });
       qc.invalidateQueries({ queryKey: ['documents'] });
       qc.invalidateQueries({ queryKey: ['inventory'] });
+      const wasEdit = !!editingOpenOrder;
       const wasAppend = !!targetOpenOrder;
       resetTicket();
-      if (wasAppend) {
+      if (wasEdit) {
+        toast.success(`Saved & updated Bill ${order.orderNumber} (${order.tableOrRoom || 'Table'})`, {
+          action: {
+            label: 'Print Updated Bill',
+            onClick: () => printPosSlip(order.id, 'BILL'),
+          },
+        });
+      } else if (wasAppend) {
         toast.success(`Added round to ${order.orderNumber} (${order.tableOrRoom || 'Tab'})`, {
           action: {
-            label: 'Print KOT',
-            onClick: () => printPosSlip(order.id, 'KOT'),
+            label: 'Print Guest Bill',
+            onClick: () => printPosSlip(order.id, 'BILL'),
           },
         });
       } else if (!settleNow) {
-        toast.success(`Fired ${order.orderNumber} to Kitchen/Bar · Open Tab`, {
-          action: {
-            label: 'Print KOT',
-            onClick: () => printPosSlip(order.id, 'KOT'),
+        toast.success(
+          `Held Bill ${order.orderNumber} (${order.tableOrRoom || 'Table'}) · Waiting Payment`,
+          {
+            action: {
+              label: 'Print First Bill (Invoice)',
+              onClick: () => printPosSlip(order.id, 'BILL'),
+            },
           },
-        });
+        );
       } else {
         toast.success(
-          `${order.orderNumber} Settled · ${money(order.totalMinor, order.currency)}`,
+          `${order.orderNumber} Payment Confirmed · ${money(order.totalMinor, order.currency)}`,
           order.documentId
             ? {
                 action: {
-                  label: 'Print 80mm Receipt',
+                  label: 'Print Final Receipt',
                   onClick: () => printDocument(order.documentId!, '80MM'),
                 },
               }
@@ -359,7 +431,7 @@ export default function PosPage() {
         );
       }
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not place order'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not save POS bill'),
   });
 
   const settleOrderMut = useMutation({
@@ -369,25 +441,45 @@ export default function PosPage() {
         paymentMethod: settleMethod,
         reservationId: settleMethod === 'ROOM_FOLIO' ? settleResId : undefined,
         discountMinor: settleDiscount.trim() || '0',
+        paymentReference: settleRef.trim() || undefined,
       });
     },
     onSuccess: (order) => {
       qc.invalidateQueries({ queryKey: ['pos', 'orders'] });
       qc.invalidateQueries({ queryKey: ['documents'] });
       setSettleModalOrder(null);
+      setSettleRef('');
       toast.success(
-        `${order.orderNumber} Settled (${PAYMENT_LABELS[order.paymentMethod]})`,
+        `Payment Confirmed · ${order.orderNumber} Closed (${PAYMENT_LABELS[order.paymentMethod]})`,
         order.documentId
           ? {
               action: {
-                label: 'Print 80mm Receipt',
+                label: 'Print Final Official Receipt',
                 onClick: () => printDocument(order.documentId!, '80MM'),
               },
             }
           : undefined,
       );
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not settle tab'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not confirm payment'),
+  });
+
+  const handoverShiftMut = useMutation({
+    mutationFn: () =>
+      post<{ transferredCount: number; toStaffName: string }>('/pos/orders/handover-shift', {
+        fromServedByName: handoverFrom.trim() || undefined,
+        toStaffName: handoverTo.trim(),
+        notes: handoverNotes.trim() || undefined,
+      }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['pos', 'orders'] });
+      setHandoverTo('');
+      setHandoverNotes('');
+      toast.success(
+        `Shift Handover Complete: ${res.transferredCount} waiting bill(s) assigned to ${res.toStaffName}`,
+      );
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not hand over shift'),
   });
 
   const updateStatus = useMutation({
@@ -493,6 +585,11 @@ export default function PosPage() {
     [orders],
   );
 
+  const paidOrders = useMemo(
+    () => (orders ?? []).filter((o) => o.isSettled && o.status !== 'CANCELLED'),
+    [orders],
+  );
+
   const pendingOrdersCount = useMemo(
     () => (orders ?? []).filter((o) => ['PENDING', 'PREPARING', 'READY'].includes(o.status)).length,
     [orders],
@@ -501,15 +598,27 @@ export default function PosPage() {
   const todaySalesMinor = useMemo(
     () =>
       (orders ?? [])
-        .filter((o) => o.status !== 'CANCELLED' && o.currency === 'UGX')
+        .filter((o) => o.isSettled && o.status !== 'CANCELLED' && o.currency === 'UGX')
         .reduce((s, o) => s + BigInt(o.totalMinor), 0n),
     [orders],
+  );
+
+  const waitingSalesMinor = useMemo(
+    () =>
+      openTabs
+        .filter((o) => o.currency === 'UGX')
+        .reduce((s, o) => s + BigInt(o.totalMinor), 0n),
+    [openTabs],
   );
 
   const shiftBreakdown = useMemo(() => {
     const valid = (orders ?? []).filter((o) => o.status !== 'CANCELLED');
     const byMethod: Record<string, bigint> = {};
     const byOutlet: Record<string, { count: number; total: bigint }> = {};
+    const byWaiter: Record<
+      string,
+      { openCount: number; openTotal: bigint; paidCount: number; paidTotal: bigint }
+    > = {};
     const itemMap = new Map<string, { name: string; qty: number; total: bigint }>();
 
     for (const o of valid) {
@@ -523,6 +632,22 @@ export default function PosPage() {
       out.total += amt;
       byOutlet[o.outletName] = out;
 
+      const wName = o.servedByName || 'Staff';
+      const wStat = byWaiter[wName] ?? {
+        openCount: 0,
+        openTotal: 0n,
+        paidCount: 0,
+        paidTotal: 0n,
+      };
+      if (o.isSettled) {
+        wStat.paidCount += 1;
+        wStat.paidTotal += amt;
+      } else {
+        wStat.openCount += 1;
+        wStat.openTotal += amt;
+      }
+      byWaiter[wName] = wStat;
+
       for (const it of o.items) {
         const prev = itemMap.get(it.itemName) ?? { name: it.itemName, qty: 0, total: 0n };
         prev.qty += it.quantity;
@@ -532,7 +657,7 @@ export default function PosPage() {
     }
 
     const topItems = [...itemMap.values()].sort((a, b) => b.qty - a.qty).slice(0, 8);
-    return { byMethod, byOutlet, topItems, totalOrders: valid.length };
+    return { byMethod, byOutlet, byWaiter, topItems, totalOrders: valid.length };
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
@@ -541,6 +666,8 @@ export default function PosPage() {
       list = list.filter((o) => ['PENDING', 'PREPARING', 'READY'].includes(o.status));
     } else if (kdsFilter === 'OPEN_TABS') {
       list = list.filter((o) => !o.isSettled && o.status !== 'CANCELLED');
+    } else if (kdsFilter === 'PAID') {
+      list = list.filter((o) => o.isSettled && o.status !== 'CANCELLED');
     }
     if (orderSearch.trim()) {
       const q = orderSearch.toLowerCase();
@@ -549,6 +676,7 @@ export default function PosPage() {
           o.orderNumber.toLowerCase().includes(q) ||
           (o.tableOrRoom ?? '').toLowerCase().includes(q) ||
           (o.customerName ?? '').toLowerCase().includes(q) ||
+          (o.servedByName ?? '').toLowerCase().includes(q) ||
           o.items.some((i) => i.itemName.toLowerCase().includes(q)),
       );
     }
@@ -601,8 +729,8 @@ export default function PosPage() {
   return (
     <div className="fade-in">
       <PageHeader
-        title="Point of Sale · Kitchen, Bar & Outlets"
-        description="Fast order terminal, open table tabs, room folio posting, thermal KOT & 80mm receipt printing."
+        title="Point of Sale · Restaurant, Bar & Waiter Billing"
+        description="Hold & edit table bills (First Bill / Invoice), confirm payments to issue Final Official Receipts, and manage waiter shift handovers."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -611,7 +739,7 @@ export default function PosPage() {
               icon={<BarChart3 className="size-3.5" />}
               onClick={() => setShiftModalOpen(true)}
             >
-              Shift Sales: {money(todaySalesMinor.toString(), 'UGX')}
+              Waiters & Shifts · Paid: {money(todaySalesMinor.toString(), 'UGX')}
             </Button>
 
             <Button
@@ -623,15 +751,27 @@ export default function PosPage() {
                 setKdsFilter('OPEN_TABS');
               }}
             >
-              Open Tabs ({openTabs.length})
+              Waiting Payment ({openTabs.length})
             </Button>
 
             <Button
-              variant={activeTab === 'KDS' && kdsFilter !== 'OPEN_TABS' ? 'primary' : 'secondary'}
+              variant={activeTab === 'KDS' && kdsFilter === 'PAID' ? 'primary' : 'secondary'}
+              size="sm"
+              icon={<CheckCircle2 className="size-3.5" />}
+              onClick={() => {
+                setActiveTab('KDS');
+                setKdsFilter('PAID');
+              }}
+            >
+              Paid & Confirmed ({paidOrders.length})
+            </Button>
+
+            <Button
+              variant={activeTab === 'KDS' && kdsFilter === 'ACTIVE' ? 'primary' : 'secondary'}
               size="sm"
               icon={<ChefHat className="size-3.5" />}
               onClick={() => {
-                if (activeTab === 'KDS' && kdsFilter !== 'OPEN_TABS') {
+                if (activeTab === 'KDS' && kdsFilter === 'ACTIVE') {
                   setActiveTab(outlets?.[0]?.code ?? 'KITCHEN');
                 } else {
                   setActiveTab('KDS');
@@ -639,7 +779,7 @@ export default function PosPage() {
                 }
               }}
             >
-              KDS Queue ({pendingOrdersCount})
+              Kitchen / Bar Prep ({pendingOrdersCount})
             </Button>
 
             {activeTab !== 'KDS' && (
@@ -685,8 +825,8 @@ export default function PosPage() {
               })),
               {
                 value: 'KDS',
-                label: 'Order Queue & Open Tabs (KDS)',
-                count: pendingOrdersCount + openTabs.length,
+                label: 'Bills & Tabs (Waiting vs Paid)',
+                count: openTabs.length + paidOrders.length,
               },
             ]}
           />
@@ -698,6 +838,30 @@ export default function PosPage() {
                 <div className="flex flex-wrap items-center gap-1">
                   <button
                     type="button"
+                    onClick={() => setKdsFilter('OPEN_TABS')}
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                      kdsFilter === 'OPEN_TABS'
+                        ? 'bg-accent text-white shadow-xs'
+                        : 'bg-surface-2 text-fg-muted hover:text-fg',
+                    )}
+                  >
+                    Waiting Payment · Open Bills ({openTabs.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKdsFilter('PAID')}
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                      kdsFilter === 'PAID'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-surface-2 text-fg-muted hover:text-fg',
+                    )}
+                  >
+                    Paid & Confirmed Receipts ({paidOrders.length})
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setKdsFilter('ACTIVE')}
                     className={cn(
                       'rounded-md px-3 py-1.5 text-xs font-semibold transition',
@@ -706,19 +870,7 @@ export default function PosPage() {
                         : 'bg-surface-2 text-fg-muted hover:text-fg',
                     )}
                   >
-                    Kitchen / Bar Active ({pendingOrdersCount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setKdsFilter('OPEN_TABS')}
-                    className={cn(
-                      'rounded-md px-3 py-1.5 text-xs font-semibold transition',
-                      kdsFilter === 'OPEN_TABS'
-                        ? 'bg-fg text-bg'
-                        : 'bg-surface-2 text-fg-muted hover:text-fg',
-                    )}
-                  >
-                    Unpaid Open Tabs ({openTabs.length})
+                    Kitchen / Bar Prep ({pendingOrdersCount})
                   </button>
                   <button
                     type="button"
@@ -730,7 +882,7 @@ export default function PosPage() {
                         : 'bg-surface-2 text-fg-muted hover:text-fg',
                     )}
                   >
-                    All Orders ({orders?.length ?? 0})
+                    All Bills ({orders?.length ?? 0})
                   </button>
                 </div>
 
@@ -810,7 +962,7 @@ export default function PosPage() {
                             </p>
                           </div>
                           <Pill tone={o.isSettled ? 'green' : 'amber'}>
-                            {o.isSettled ? PAYMENT_LABELS[o.paymentMethod] : 'OPEN TAB'}
+                            {o.isSettled ? `PAID · ${PAYMENT_LABELS[o.paymentMethod]}` : 'WAITING PAYMENT'}
                           </Pill>
                         </div>
 
@@ -846,7 +998,9 @@ export default function PosPage() {
 
                       <div className="space-y-2 border-t border-line pt-2.5">
                         <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-fg-muted">Total</span>
+                          <span className="text-fg-muted">
+                            {o.isSettled ? 'Total Paid (Confirmed)' : 'Total Due (Waiting Payment)'}
+                          </span>
                           <span className="font-mono text-sm tabular">
                             {money(o.totalMinor, o.currency)}
                           </span>
@@ -887,14 +1041,23 @@ export default function PosPage() {
                               <Button
                                 size="sm"
                                 variant="secondary"
+                                icon={<Edit3 className="size-3" />}
+                                onClick={() => loadOrderForEditing(o)}
+                              >
+                                Edit Bill
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
                                 icon={<PlusCircle className="size-3" />}
                                 onClick={() => {
+                                  setEditingOpenOrder(null);
                                   setTargetOpenOrder(o);
                                   setTableOrRoom(o.tableOrRoom ?? '');
                                   setCustomerName(o.customerName ?? '');
                                   const out = outlets?.find((x) => x.id === o.outletId);
                                   setActiveTab(out?.code ?? outlets?.[0]?.code ?? 'KITCHEN');
-                                  toast.info(`Adding items to ${o.orderNumber} (${o.tableOrRoom || 'Open Tab'})`);
+                                  toast.info(`Adding round to ${o.orderNumber} (${o.tableOrRoom || 'Open Bill'})`);
                                 }}
                               >
                                 + Round
@@ -905,7 +1068,7 @@ export default function PosPage() {
                                 icon={<CreditCard className="size-3" />}
                                 onClick={() => openSettleDialog(o)}
                               >
-                                Settle Bill
+                                Confirm Payment
                               </Button>
                             </>
                           )}
@@ -926,18 +1089,18 @@ export default function PosPage() {
                               type="button"
                               onClick={() => printPosSlip(o.id, 'BILL')}
                               className="inline-flex items-center gap-1 rounded border border-line bg-surface-2 px-2 py-1 text-[11px] font-semibold hover:bg-surface"
-                              title="Print 80mm Guest Pro-Forma Bill Check"
+                              title="Print 80mm First Receipt (Guest Bill / Invoice — Waiting Payment)"
                             >
-                              <FileText className="size-3" /> Bill Check
+                              <FileText className="size-3" /> First Bill (Invoice)
                             </button>
                             {o.documentId && (
                               <button
                                 type="button"
                                 onClick={() => printDocument(o.documentId!, '80MM')}
                                 className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400"
-                                title="Print Official Numbered 80mm Receipt"
+                                title="Print Official Numbered Final Payment Receipt"
                               >
-                                <Receipt className="size-3" /> Receipt
+                                <Receipt className="size-3" /> Final Receipt
                               </button>
                             )}
                           </div>
@@ -1003,7 +1166,7 @@ export default function PosPage() {
                             </td>
                             <td className="px-3.5 py-2.5 whitespace-nowrap">
                               <Pill tone={o.isSettled ? 'green' : 'amber'}>
-                                {o.isSettled ? PAYMENT_LABELS[o.paymentMethod] : 'OPEN TAB'}
+                                {o.isSettled ? `PAID · ${PAYMENT_LABELS[o.paymentMethod]}` : 'WAITING PAYMENT'}
                               </Pill>
                             </td>
                             <td className="px-3.5 py-2.5 whitespace-nowrap">
@@ -1017,13 +1180,22 @@ export default function PosPage() {
                             <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
                               <div className="inline-flex items-center gap-1">
                                 {!o.isSettled && o.status !== 'CANCELLED' && (
-                                  <Button
-                                    size="sm"
-                                    variant="primary"
-                                    onClick={() => openSettleDialog(o)}
-                                  >
-                                    Settle
-                                  </Button>
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => loadOrderForEditing(o)}
+                                    >
+                                      Edit Bill
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="primary"
+                                      onClick={() => openSettleDialog(o)}
+                                    >
+                                      Confirm Pay
+                                    </Button>
+                                  </>
                                 )}
                                 <Button
                                   size="sm"
@@ -1039,7 +1211,7 @@ export default function PosPage() {
                                   icon={<FileText className="size-3" />}
                                   onClick={() => printPosSlip(o.id, 'BILL')}
                                 >
-                                  Bill
+                                  First Bill
                                 </Button>
                                 {o.documentId && (
                                   <Button
@@ -1048,7 +1220,7 @@ export default function PosPage() {
                                     icon={<Receipt className="size-3" />}
                                     onClick={() => printDocument(o.documentId!, '80MM')}
                                   >
-                                    Receipt
+                                    Final Receipt
                                   </Button>
                                 )}
                               </div>
@@ -1214,9 +1386,11 @@ export default function PosPage() {
               <div className="lg:sticky lg:top-16 lg:self-start">
                 <Section
                   title={
-                    targetOpenOrder
-                      ? `Add to ${targetOpenOrder.orderNumber}`
-                      : 'Order Ticket'
+                    editingOpenOrder
+                      ? `Edit Bill · ${editingOpenOrder.orderNumber}`
+                      : targetOpenOrder
+                        ? `Add Round · ${targetOpenOrder.orderNumber}`
+                        : 'Order Ticket & Bill Builder'
                   }
                   actions={
                     <div className="flex items-center gap-2">
@@ -1242,7 +1416,7 @@ export default function PosPage() {
                           USD
                         </button>
                       </div>
-                      {(cart.length > 0 || targetOpenOrder) && (
+                      {(cart.length > 0 || targetOpenOrder || editingOpenOrder) && (
                         <button
                           type="button"
                           onClick={resetTicket}
@@ -1255,31 +1429,74 @@ export default function PosPage() {
                   }
                 >
                   {/* Open Tab Selector Banner */}
-                  {openTabs.length > 0 && !targetOpenOrder && (
+                  {openTabs.length > 0 && !targetOpenOrder && !editingOpenOrder && (
                     <div className="mb-3 rounded-lg border border-line-strong bg-surface-2 p-2.5">
-                      <label className="block text-[11px] font-semibold text-fg">
-                        Attach to Running Open Tab (Optional)
-                      </label>
-                      <select
-                        className="input mt-1 !min-h-8 !py-1 text-xs"
-                        value=""
-                        onChange={(e) => {
-                          const found = openTabs.find((o) => o.id === e.target.value);
-                          if (found) {
-                            setTargetOpenOrder(found);
-                            setTableOrRoom(found.tableOrRoom ?? '');
-                            setCustomerName(found.customerName ?? '');
-                          }
-                        }}
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="block text-[11px] font-semibold text-fg">
+                          Keep Updating an Existing Open Bill (Waiting Payment)
+                        </label>
+                        <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                          {openTabs.length} Open
+                        </span>
+                      </div>
+                      <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                        <select
+                          className="input !min-h-8 !py-1 text-xs"
+                          value=""
+                          onChange={(e) => {
+                            const found = openTabs.find((o) => o.id === e.target.value);
+                            if (found) {
+                              setTargetOpenOrder(found);
+                              setTableOrRoom(found.tableOrRoom ?? '');
+                              setCustomerName(found.customerName ?? '');
+                            }
+                          }}
+                        >
+                          <option value="">+ Add Round to Bill…</option>
+                          {openTabs.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.tableOrRoom || 'Tab'} · {o.customerName || 'Guest'} ({o.orderNumber} ·{' '}
+                              {money(o.totalMinor, o.currency)})
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="input !min-h-8 !py-1 text-xs"
+                          value=""
+                          onChange={(e) => {
+                            const found = openTabs.find((o) => o.id === e.target.value);
+                            if (found) loadOrderForEditing(found);
+                          }}
+                        >
+                          <option value="">✎ Edit Full Bill…</option>
+                          {openTabs.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              Edit {o.orderNumber} · {o.tableOrRoom || 'Tab'} (
+                              {money(o.totalMinor, o.currency)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {editingOpenOrder && (
+                    <div className="mb-3 flex items-center justify-between rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+                      <div>
+                        <p className="font-bold text-amber-700 dark:text-amber-300">
+                          Editing Unpaid Bill {editingOpenOrder.orderNumber}
+                        </p>
+                        <p className="text-[11px] text-fg-muted">
+                          Adjust item quantities, add/remove items, or update table & waiter before saving.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={resetTicket}
+                        className="text-[11px] font-semibold underline"
                       >
-                        <option value="">— Start New Ticket —</option>
-                        {openTabs.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.tableOrRoom || 'Tab'} · {o.customerName || 'Guest'} ({o.orderNumber} ·{' '}
-                            {money(o.totalMinor, o.currency)})
-                          </option>
-                        ))}
-                      </select>
+                        Cancel Edit
+                      </button>
                     </div>
                   )}
 
@@ -1287,10 +1504,10 @@ export default function PosPage() {
                     <div className="mb-3 flex items-center justify-between rounded-lg border border-line-strong bg-surface-2 px-3 py-2 text-xs">
                       <div>
                         <p className="font-bold text-fg">
-                          Appending to {targetOpenOrder.orderNumber}
+                          Appending New Round to {targetOpenOrder.orderNumber}
                         </p>
                         <p className="text-[11px] text-fg-muted">
-                          {targetOpenOrder.tableOrRoom || 'Counter'} · Current tab:{' '}
+                          {targetOpenOrder.tableOrRoom || 'Counter'} · Current bill:{' '}
                           {money(targetOpenOrder.totalMinor, targetOpenOrder.currency)}
                         </p>
                       </div>
@@ -1299,7 +1516,7 @@ export default function PosPage() {
                         onClick={() => setTargetOpenOrder(null)}
                         className="text-[11px] font-semibold underline"
                       >
-                        New Ticket
+                        New Bill
                       </button>
                     </div>
                   )}
@@ -1307,8 +1524,8 @@ export default function PosPage() {
                   {!cart.length ? (
                     <Empty
                       icon={<ShoppingBag className="size-4" />}
-                      title="Tap menu items to build ticket"
-                      body="Select a table, add modifiers, then fire to Kitchen/Bar or settle immediately."
+                      title="Tap menu items to build bill"
+                      body="1. Select Table & Waiter -> 2. Hold Bill & Print Guest Invoice (Waiting Payment) -> 3. Confirm Payment when guest pays to issue Final Receipt."
                     />
                   ) : (
                     <div className="space-y-3">
@@ -1447,7 +1664,13 @@ export default function PosPage() {
                           </div>
                         )}
                         <div className="flex items-center justify-between text-[14px] font-bold">
-                          <span>{targetOpenOrder ? 'Round Total' : 'Total Due'}</span>
+                          <span>
+                            {editingOpenOrder
+                              ? 'Updated Bill Total'
+                              : targetOpenOrder
+                                ? 'Round Total'
+                                : 'Bill Total Due'}
+                          </span>
                           <span className="font-mono tabular">
                             {money(cartTotalMinor.toString(), currency)}
                           </span>
@@ -1459,7 +1682,7 @@ export default function PosPage() {
                           {/* Quick Table / Spot Pills */}
                           <div>
                             <label className="mb-1 block text-[11px] font-semibold text-fg-muted">
-                              Quick Table / Spot
+                              Unique Identification · Table / Spot & Waiter
                             </label>
                             <div className="mb-1.5 flex flex-wrap gap-1">
                               {QUICK_SPOTS.map((sp) => (
@@ -1480,91 +1703,109 @@ export default function PosPage() {
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <TextInput
-                                label="Table / Spot"
+                                label="Table / Spot *"
                                 placeholder="e.g. Table 4"
                                 value={tableOrRoom}
                                 onChange={(e) => setTableOrRoom(e.target.value)}
                               />
                               <TextInput
                                 label="Guest Name"
-                                placeholder="Walk-in"
+                                placeholder="Walk-in Guest"
                                 value={customerName}
                                 onChange={(e) => setCustomerName(e.target.value)}
                               />
                             </div>
+                            <div className="mt-2">
+                              <TextInput
+                                label="Waiter / Server on Duty"
+                                placeholder={me?.name ?? 'Waiter name'}
+                                value={servedByName}
+                                onChange={(e) => setServedByName(e.target.value)}
+                                hint="Identifies the waiter responsible for this bill during their shift."
+                              />
+                            </div>
                           </div>
 
-                          <SelectInput
-                            label="Settlement Method"
-                            value={paymentMethod}
-                            onChange={(e) => setPaymentMethod(e.target.value as PosPaymentMethod)}
-                          >
-                            <option value="CASH">Cash (Auto-Receipt)</option>
-                            <option value="MOBILE_MONEY">Mobile Money (Auto-Receipt)</option>
-                            <option value="CARD">Card POS (Auto-Receipt)</option>
-                            <option value="ROOM_FOLIO">Post to Resident Room Folio</option>
-                            <option value="BANK_TRANSFER">Bank Transfer</option>
-                          </SelectInput>
-
-                          {/* Cash Tendered & Change Calculator */}
-                          {paymentMethod === 'CASH' && currency === 'UGX' && (
-                            <div className="rounded-lg border border-line bg-surface-2/40 p-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-semibold text-fg-muted">
-                                  Cash Tendered (Change Calc)
-                                </span>
-                                <div className="flex gap-1">
-                                  {[20000, 50000, 100000, 200000].map((note) => (
-                                    <button
-                                      key={note}
-                                      type="button"
-                                      onClick={() => setCashTendered(String(note))}
-                                      className="rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] font-semibold hover:bg-accent hover:text-white"
-                                    >
-                                      {note / 1000}k
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="mt-1.5 flex items-center gap-2">
-                                <input
-                                  className="input !min-h-7 !py-1 font-mono text-xs"
-                                  placeholder="Enter cash given…"
-                                  value={cashTendered}
-                                  onChange={(e) => setCashTendered(e.target.value)}
-                                />
-                                {changeDueMinor !== null && (
-                                  <span className="shrink-0 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                                    Change: {money(changeDueMinor.toString(), 'UGX')}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {paymentMethod === 'ROOM_FOLIO' && (
-                            <SelectInput
-                              label="Resident Room / Reservation"
-                              value={reservationId}
-                              onChange={(e) => {
-                                setReservationId(e.target.value);
-                                const found = (inHouseGuests ?? []).find(
-                                  (r) => r.reservationId === e.target.value,
-                                );
-                                if (found) {
-                                  setCustomerName(found.guestName);
-                                  if (found.roomNumber) setTableOrRoom(`Room ${found.roomNumber}`);
+                          {!editingOpenOrder && (
+                            <>
+                              <SelectInput
+                                label="If Paying Immediately · Payment Method"
+                                value={paymentMethod}
+                                onChange={(e) =>
+                                  setPaymentMethod(e.target.value as PosPaymentMethod)
                                 }
-                              }}
-                            >
-                              <option value="">— Select checked-in guest / room —</option>
-                              {(inHouseGuests ?? []).map((r) => (
-                                <option key={r.reservationId} value={r.reservationId}>
-                                  {r.roomNumber ? `Room ${r.roomNumber} · ` : ''}
-                                  {r.guestName} ({r.code} · {r.status})
+                              >
+                                <option value="CASH">Cash (Confirm & Issue Final Receipt)</option>
+                                <option value="MOBILE_MONEY">
+                                  Mobile Money (Confirm & Issue Final Receipt)
                                 </option>
-                              ))}
-                            </SelectInput>
+                                <option value="CARD">Card POS (Confirm & Issue Final Receipt)</option>
+                                <option value="ROOM_FOLIO">Post to Resident Room Folio</option>
+                                <option value="BANK_TRANSFER">Bank Transfer</option>
+                              </SelectInput>
+
+                              {/* Cash Tendered & Change Calculator */}
+                              {paymentMethod === 'CASH' && currency === 'UGX' && (
+                                <div className="rounded-lg border border-line bg-surface-2/40 p-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[11px] font-semibold text-fg-muted">
+                                      Cash Tendered (Change Calc)
+                                    </span>
+                                    <div className="flex gap-1">
+                                      {[20000, 50000, 100000, 200000].map((note) => (
+                                        <button
+                                          key={note}
+                                          type="button"
+                                          onClick={() => setCashTendered(String(note))}
+                                          className="rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] font-semibold hover:bg-accent hover:text-white"
+                                        >
+                                          {note / 1000}k
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div className="mt-1.5 flex items-center gap-2">
+                                    <input
+                                      className="input !min-h-7 !py-1 font-mono text-xs"
+                                      placeholder="Enter cash given…"
+                                      value={cashTendered}
+                                      onChange={(e) => setCashTendered(e.target.value)}
+                                    />
+                                    {changeDueMinor !== null && (
+                                      <span className="shrink-0 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                        Change: {money(changeDueMinor.toString(), 'UGX')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {paymentMethod === 'ROOM_FOLIO' && (
+                                <SelectInput
+                                  label="Resident Room / Reservation"
+                                  value={reservationId}
+                                  onChange={(e) => {
+                                    setReservationId(e.target.value);
+                                    const found = (inHouseGuests ?? []).find(
+                                      (r) => r.reservationId === e.target.value,
+                                    );
+                                    if (found) {
+                                      setCustomerName(found.guestName);
+                                      if (found.roomNumber)
+                                        setTableOrRoom(`Room ${found.roomNumber}`);
+                                    }
+                                  }}
+                                >
+                                  <option value="">— Select checked-in guest / room —</option>
+                                  {(inHouseGuests ?? []).map((r) => (
+                                    <option key={r.reservationId} value={r.reservationId}>
+                                      {r.roomNumber ? `Room ${r.roomNumber} · ` : ''}
+                                      {r.guestName} ({r.code} · {r.status})
+                                    </option>
+                                  ))}
+                                </SelectInput>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -1576,8 +1817,31 @@ export default function PosPage() {
                         onChange={(e) => setOrderNotes(e.target.value)}
                       />
 
-                      {/* Dual Action Buttons: Open Tab / Fire to KDS vs Immediate Charge */}
-                      {targetOpenOrder ? (
+                      {/* Action Buttons: Edit Bill vs Add Round vs Stage 1 (Hold & Print Bill) / Stage 2 (Confirm Payment) */}
+                      {editingOpenOrder ? (
+                        <div className="grid grid-cols-1 gap-2 pt-1">
+                          <Button
+                            variant="primary"
+                            size="lg"
+                            className="w-full"
+                            icon={<CheckCircle2 className="size-4" />}
+                            loading={placeOrder.isPending}
+                            onClick={() => placeOrder.mutate(false)}
+                          >
+                            Save Updated Bill · {editingOpenOrder.orderNumber} (
+                            {money(cartTotalMinor.toString(), currency)})
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="w-full"
+                            icon={<Printer className="size-3.5" />}
+                            onClick={() => printPosSlip(editingOpenOrder.id, 'BILL')}
+                          >
+                            Print Updated Guest Bill (Invoice)
+                          </Button>
+                        </div>
+                      ) : targetOpenOrder ? (
                         <Button
                           variant="primary"
                           size="lg"
@@ -1595,7 +1859,20 @@ export default function PosPage() {
                             variant="primary"
                             size="lg"
                             className="w-full"
-                            icon={<Receipt className="size-4" />}
+                            icon={<Flame className="size-4" />}
+                            loading={placeOrder.isPending}
+                            disabled={cart.length === 0}
+                            onClick={() => placeOrder.mutate(false)}
+                          >
+                            1. Hold Bill & Issue Guest Check (Pay Later ·{' '}
+                            {money(cartTotalMinor.toString(), currency)})
+                          </Button>
+
+                          <Button
+                            variant="secondary"
+                            size="md"
+                            className="w-full"
+                            icon={<Receipt className="size-3.5" />}
                             loading={placeOrder.isPending}
                             disabled={
                               cart.length === 0 ||
@@ -1604,20 +1881,8 @@ export default function PosPage() {
                             onClick={() => placeOrder.mutate(true)}
                           >
                             {paymentMethod === 'ROOM_FOLIO'
-                              ? `Post ${money(cartTotalMinor.toString(), currency)} to Room Folio`
-                              : `Charge & Receipt · ${money(cartTotalMinor.toString(), currency)}`}
-                          </Button>
-
-                          <Button
-                            variant="secondary"
-                            size="md"
-                            className="w-full"
-                            icon={<Flame className="size-3.5" />}
-                            loading={placeOrder.isPending}
-                            disabled={cart.length === 0}
-                            onClick={() => placeOrder.mutate(false)}
-                          >
-                            Fire to Kitchen / Open Tab (Pay Later)
+                              ? `2. Post ${money(cartTotalMinor.toString(), currency)} to Room Folio`
+                              : `2. Confirm Payment Now & Final Receipt · ${money(cartTotalMinor.toString(), currency)}`}
                           </Button>
                         </div>
                       )}
@@ -1630,16 +1895,22 @@ export default function PosPage() {
         </>
       )}
 
-      {/* 1. Settle Open Tab Modal */}
+      {/* 1. Confirm Payment & Issue Final Receipt Modal */}
       <Dialog
         open={!!settleModalOrder}
         onClose={() => setSettleModalOrder(null)}
         size="sm"
-        title={`Settle Tab · ${settleModalOrder?.orderNumber ?? ''}`}
-        description={`${settleModalOrder?.tableOrRoom || 'Counter'} · ${settleModalOrder?.customerName || 'Walk-in Guest'}`}
+        title={`Confirm Payment & Issue Final Receipt · ${settleModalOrder?.orderNumber ?? ''}`}
+        description={`${settleModalOrder?.tableOrRoom || 'Counter'} · ${settleModalOrder?.customerName || 'Walk-in Guest'} · Waiter: ${settleModalOrder?.servedByName || 'Staff'}`}
       >
         {settleModalOrder && (
           <div className="grid gap-3.5">
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11.5px] text-amber-800 dark:text-amber-300">
+              <strong>Stage 2 — Record & Confirm Payment:</strong> Confirming payment closes this
+              waiting bill (`{settleModalOrder.orderNumber}`) and generates the official numbered{' '}
+              <strong>Final Payment Receipt</strong>.
+            </div>
+
             <div className="rounded-xl border border-line bg-surface-2 p-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-fg-muted">Items ({settleModalOrder.items.length})</span>
@@ -1648,7 +1919,7 @@ export default function PosPage() {
                 </span>
               </div>
               <div className="mt-1.5 flex items-center justify-between border-t border-line pt-1.5 text-sm font-bold">
-                <span>Total Due</span>
+                <span>Total Amount to Confirm</span>
                 <span className="font-mono">
                   {money(
                     (
@@ -1664,15 +1935,15 @@ export default function PosPage() {
             </div>
 
             <SelectInput
-              label="Payment Method"
+              label="Confirmed Payment Method *"
               value={settleMethod}
               onChange={(e) => setSettleMethod(e.target.value as PosPaymentMethod)}
             >
-              <option value="CASH">Cash (Issue 80mm Receipt)</option>
-              <option value="MOBILE_MONEY">Mobile Money (Issue 80mm Receipt)</option>
-              <option value="CARD">Card POS (Issue 80mm Receipt)</option>
+              <option value="CASH">Cash Received (Issue Final 80mm Receipt)</option>
+              <option value="MOBILE_MONEY">Mobile Money Confirmed (Issue Final Receipt)</option>
+              <option value="CARD">Card POS Approved (Issue Final Receipt)</option>
               <option value="ROOM_FOLIO">Post to Resident Room Folio</option>
-              <option value="BANK_TRANSFER">Bank Transfer</option>
+              <option value="BANK_TRANSFER">Bank Transfer Confirmed</option>
             </SelectInput>
 
             {settleMethod === 'ROOM_FOLIO' && (
@@ -1691,40 +1962,58 @@ export default function PosPage() {
               </SelectInput>
             )}
 
-            <TextInput
-              label={`Discount (${settleModalOrder.currency})`}
-              value={settleDiscount}
-              onChange={(e) => setSettleDiscount(e.target.value)}
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <TextInput
+                label={`Discount (${settleModalOrder.currency})`}
+                value={settleDiscount}
+                onChange={(e) => setSettleDiscount(e.target.value)}
+              />
+              <TextInput
+                label="Payment Ref / Transaction ID"
+                placeholder="MoMo ID, POS Auth, or Slip #"
+                value={settleRef}
+                onChange={(e) => setSettleRef(e.target.value)}
+              />
+            </div>
 
             {settleMethod === 'CASH' && (
               <TextInput
-                label="Cash Tendered (Optional change calc)"
+                label="Cash Tendered by Client (Optional change calc)"
                 placeholder="e.g. 50000"
                 value={settleTendered}
                 onChange={(e) => setSettleTendered(e.target.value)}
                 hint={
                   /^\d+$/.test(settleTendered.trim()) &&
                   BigInt(settleTendered.trim()) >= BigInt(settleModalOrder.totalMinor)
-                    ? `Change due: ${money((BigInt(settleTendered.trim()) - BigInt(settleModalOrder.totalMinor)).toString(), settleModalOrder.currency)}`
+                    ? `Change due to client: ${money((BigInt(settleTendered.trim()) - BigInt(settleModalOrder.totalMinor)).toString(), settleModalOrder.currency)}`
                     : undefined
                 }
               />
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <Button variant="ghost" onClick={() => setSettleModalOrder(null)}>
-                Cancel
-              </Button>
+            <div className="flex items-center justify-between gap-2 pt-2">
               <Button
-                variant="primary"
-                icon={<CheckCircle2 className="size-4" />}
-                loading={settleOrderMut.isPending}
-                disabled={settleMethod === 'ROOM_FOLIO' && !settleResId}
-                onClick={() => settleOrderMut.mutate()}
+                variant="secondary"
+                size="sm"
+                icon={<Printer className="size-3.5" />}
+                onClick={() => printPosSlip(settleModalOrder.id, 'BILL')}
               >
-                Confirm Settlement & Print
+                Print First Bill
               </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" onClick={() => setSettleModalOrder(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  icon={<CheckCircle2 className="size-4" />}
+                  loading={settleOrderMut.isPending}
+                  disabled={settleMethod === 'ROOM_FOLIO' && !settleResId}
+                  onClick={() => settleOrderMut.mutate()}
+                >
+                  Confirm Payment & Print Final Receipt
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -1876,45 +2165,141 @@ export default function PosPage() {
         </form>
       </Dialog>
 
-      {/* 4. Shift Sales & Z-Report Summary Modal */}
+      {/* 4. Shift Sales, Waiters & Handover Modal */}
       <Dialog
         open={shiftModalOpen}
         onClose={() => setShiftModalOpen(false)}
         size="lg"
-        title="POS Shift Summary & Z-Report"
-        description="Live revenue breakdown across outlets, payment methods, open tabs and top-selling items."
+        title="Waiters, Shift Handover & POS Z-Report"
+        description="Individual waiter attribution, shift handover of open unpaid bills, and confirmed vs waiting revenue breakdown."
       >
         <div className="grid gap-4">
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <div className="rounded-xl border border-line bg-surface-2 p-3">
-              <p className="text-[11px] text-fg-muted">Total POS Sales (UGX)</p>
-              <p className="mt-1 font-mono text-base font-bold">
+              <p className="text-[11px] text-fg-muted">Confirmed Paid (UGX)</p>
+              <p className="mt-1 font-mono text-base font-bold text-emerald-600 dark:text-emerald-400">
                 {money(todaySalesMinor.toString(), 'UGX')}
               </p>
             </div>
             <div className="rounded-xl border border-line bg-surface-2 p-3">
-              <p className="text-[11px] text-fg-muted">Orders Processed</p>
-              <p className="mt-1 font-mono text-base font-bold">{shiftBreakdown.totalOrders}</p>
+              <p className="text-[11px] text-fg-muted">Waiting Payment (UGX)</p>
+              <p className="mt-1 font-mono text-base font-bold text-amber-500">
+                {money(waitingSalesMinor.toString(), 'UGX')}
+              </p>
             </div>
             <div className="rounded-xl border border-line bg-surface-2 p-3">
-              <p className="text-[11px] text-fg-muted">Unpaid Open Tabs</p>
+              <p className="text-[11px] text-fg-muted">Paid Receipts</p>
+              <p className="mt-1 font-mono text-base font-bold">{paidOrders.length}</p>
+            </div>
+            <div className="rounded-xl border border-line bg-surface-2 p-3">
+              <p className="text-[11px] text-fg-muted">Waiting Bills</p>
               <p className="mt-1 font-mono text-base font-bold text-amber-500">
                 {openTabs.length}
               </p>
             </div>
           </div>
 
+          {/* Individual Waiters & Shift Accountability */}
+          <div className="rounded-xl border border-line p-3.5">
+            <div className="mb-2 flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-fg-subtle">
+                Waiters on Shift · Individual Bill Attribution
+              </h4>
+              <span className="text-[11px] text-fg-muted">
+                Tracks every bill by waiter (`Individuals → Shifts → Changing`)
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-line text-[10.5px] uppercase text-fg-subtle">
+                    <th className="py-1.5 pr-2">Waiter / Server</th>
+                    <th className="px-2 py-1.5">Waiting Bills (Unpaid)</th>
+                    <th className="px-2 py-1.5">Paid & Confirmed</th>
+                    <th className="py-1.5 pl-2 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {Object.entries(shiftBreakdown.byWaiter).map(([waiter, stats]) => (
+                    <tr key={waiter}>
+                      <td className="py-2 pr-2 font-semibold text-fg">{waiter}</td>
+                      <td className="px-2 py-2 font-mono text-amber-600 dark:text-amber-400">
+                        {stats.openCount} bills · {money(stats.openTotal.toString(), 'UGX')}
+                      </td>
+                      <td className="px-2 py-2 font-mono text-emerald-600 dark:text-emerald-400">
+                        {stats.paidCount} receipts · {money(stats.paidTotal.toString(), 'UGX')}
+                      </td>
+                      <td className="py-2 pl-2 text-right">
+                        {stats.openCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setHandoverFrom(waiter)}
+                            className="rounded border border-line bg-surface-2 px-2 py-0.5 text-[11px] font-semibold hover:border-accent hover:text-accent"
+                          >
+                            Handover {stats.openCount} Open →
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Shift Handover Form (Transfer Open Waiting Bills between Waiters) */}
+          <div className="rounded-xl border border-line bg-surface-2/50 p-3.5">
+            <h4 className="mb-1 text-xs font-bold uppercase tracking-wider text-fg">
+              Change Shift · Handover Open Waiting Bills
+            </h4>
+            <p className="mb-3 text-[11.5px] text-fg-muted">
+              When a waiter finishes their shift, transfer their open unpaid bills (`Waiting Payment`)
+              to the incoming waiter and log an official shift handover announcement.
+            </p>
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              <TextInput
+                label="Outgoing Waiter (From)"
+                placeholder="Leave blank for all open bills"
+                value={handoverFrom}
+                onChange={(e) => setHandoverFrom(e.target.value)}
+              />
+              <TextInput
+                label="Incoming Waiter (To) *"
+                placeholder="e.g. Samuel Kiprop"
+                value={handoverTo}
+                onChange={(e) => setHandoverTo(e.target.value)}
+              />
+              <TextInput
+                label="Shift Handover Notes"
+                placeholder="e.g. Table 4 waiting for MoMo confirmation"
+                value={handoverNotes}
+                onChange={(e) => setHandoverNotes(e.target.value)}
+              />
+            </div>
+            <div className="mt-3 flex justify-end">
+              <Button
+                variant="primary"
+                size="sm"
+                loading={handoverShiftMut.isPending}
+                disabled={!handoverTo.trim() || openTabs.length === 0}
+                onClick={() => handoverShiftMut.mutate()}
+              >
+                Transfer Open Bills & Record Shift Change
+              </Button>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-line p-3.5">
               <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-fg-subtle">
-                By Settlement Method
+                By Settlement Status & Method
               </h4>
               <ul className="divide-y divide-line text-xs">
                 {Object.entries(shiftBreakdown.byMethod).map(([k, val]) => (
                   <li key={k} className="flex items-center justify-between py-1.5">
                     <span>
                       {k === 'OPEN_TAB'
-                        ? 'Open Tabs (Unpaid)'
+                        ? 'Waiting Payment (Unpaid Bills)'
                         : (PAYMENT_LABELS[k as PosPaymentMethod] ?? k)}
                     </span>
                     <span className="font-mono font-semibold">{money(val.toString(), 'UGX')}</span>
@@ -1942,27 +2327,6 @@ export default function PosPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-line p-3.5">
-            <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-fg-subtle">
-              Top Selling Items
-            </h4>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {shiftBreakdown.topItems.map((it) => (
-                <div
-                  key={it.name}
-                  className="flex items-center justify-between rounded-lg bg-surface-2/60 px-2.5 py-1.5 text-xs"
-                >
-                  <span className="truncate font-medium">
-                    <strong>{it.qty}×</strong> {it.name}
-                  </span>
-                  <span className="ml-2 font-mono text-[11px] font-semibold">
-                    {money(it.total.toString(), 'UGX')}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => window.print()} icon={<Printer className="size-3.5" />}>
               Print Shift Report
@@ -1973,6 +2337,7 @@ export default function PosPage() {
           </div>
         </div>
       </Dialog>
+
 
       {/* Delete Menu Item Confirmation Prompt */}
       {deletingMenuItem && (

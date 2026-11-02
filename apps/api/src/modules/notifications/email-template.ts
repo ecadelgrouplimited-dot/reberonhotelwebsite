@@ -19,22 +19,22 @@ export function renderEmail(c: EmailContent, hotelName = 'Reberon Hotel') {
         .join('')}</table>`
     : '';
   const action = c.action
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0"><tr><td style="background:#9E2A2B;border-radius:999px"><a href="${esc(c.action.url)}" style="display:inline-block;padding:14px 26px;color:#FFFFFF;font-weight:600;text-decoration:none;font-size:15px">${esc(c.action.label)}</a></td></tr></table>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0"><tr><td style="background:#D76E1B;border-radius:999px"><a href="${esc(c.action.url)}" style="display:inline-block;padding:14px 26px;color:#FFFFFF;font-weight:600;text-decoration:none;font-size:15px">${esc(c.action.label)}</a></td></tr></table>`
     : '';
-  const html = `<!doctype html><html><body style="margin:0;background:#F4F5F1;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F1;padding:32px 12px"><tr><td align="center">
+  const html = `<!doctype html><html><body style="margin:0;background:#F4F5F8;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5F8;padding:32px 12px"><tr><td align="center">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border-radius:18px;overflow:hidden">
-      <tr><td style="background:#1E2B24;padding:28px 32px;color:#F4F5F1">
+      <tr><td style="background:#1A1E43;padding:28px 32px;color:#FFFFFF">
         <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:.5px">${esc(hotelName)}</div>
-        <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#E0A54B;margin-top:6px">Kapchorwa · Mount Elgon</div>
+        <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#D76E1B;margin-top:6px">Kapchorwa · Mount Elgon</div>
       </td></tr>
       <tr><td style="padding:32px">
-        <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:26px;line-height:1.25;color:#121513;margin:0 0 18px">${esc(c.heading)}</h1>
-        ${c.paragraphs.map((p) => `<p style="font-size:15px;line-height:1.65;color:#262B27;margin:0 0 14px">${esc(p)}</p>`).join('')}
+        <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:26px;line-height:1.25;color:#121526;margin:0 0 18px">${esc(c.heading)}</h1>
+        ${c.paragraphs.map((p) => `<p style="font-size:15px;line-height:1.65;color:#262B38;margin:0 0 14px">${esc(p)}</p>`).join('')}
         ${facts}${action}
-        ${c.footnote ? `<p style="font-size:13px;line-height:1.6;color:#8A867B;margin:18px 0 0">${esc(c.footnote)}</p>` : ''}
+        ${c.footnote ? `<p style="font-size:13px;line-height:1.6;color:#7A8094;margin:18px 0 0">${esc(c.footnote)}</p>` : ''}
       </td></tr>
-      <tr><td style="padding:20px 32px;background:#F6F1E7;color:#8A867B;font-size:12px;line-height:1.6">${esc(hotelName)} · Kapchorwa, Uganda · reberonhotel.com</td></tr>
+      <tr><td style="padding:20px 32px;background:#F6F1E7;color:#7A8094;font-size:12px;line-height:1.6">${esc(hotelName)} · Kapchorwa, Uganda · reberonhotel.com</td></tr>
     </table>
   </td></tr></table></body></html>`;
   const text = [

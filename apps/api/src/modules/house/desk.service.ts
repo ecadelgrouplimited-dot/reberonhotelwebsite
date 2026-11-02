@@ -10,6 +10,7 @@ import { badRequest, conflict, forbidden, notFound } from '../../common/errors.j
 import { last4, seal } from '../../common/crypto.js';
 import { env } from '../../config.js';
 import { MessagingService } from '../notifications/messaging.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { BookingService } from '../booking/booking.service.js';
 import { InventoryService, day, iso, nightsOf, type Tx } from '../booking/inventory.service.js';
@@ -35,6 +36,7 @@ export class DeskService {
     private readonly booking: BookingService,
     private readonly rack: RackService,
     private readonly messaging: MessagingService,
+    private readonly notifications: NotificationsService,
     private readonly documents: DocumentsService,
   ) {}
 
@@ -265,7 +267,73 @@ export class DeskService {
     // The numbered final bill, ready to print at the desk.
     await this.documents.invoice(id, actor).catch((e) => this.log.error(`invoice for ${pre.code}: ${(e as Error).message}`));
     await this.audit.record({ actor, action: 'desk.check_out', entityType: 'Reservation', entityId: id, summary: `Checked out ${pre.code}${out.early ? ' (early)' : ''}` });
-    if (!body.feedback) await this.messaging.forReservation('stay.thank_you', id).catch(() => undefined);
+
+    // 1. Immediate notification to the Client (Guest) via Email / SMS / WhatsApp
+    await this.messaging.forReservation('stay.thank_you', id).catch(() => undefined);
+
+    // 2. Automated notifications to Housekeeping & the Hotel Hierarchy (Owner & Managers)
+    const roomNumbers = out.r.assignments.map((a) => a.room.number).sort().join(', ') || 'Unassigned';
+    const guestName = out.r.contact?.name || 'Guest';
+    const settledAmountStr = this.booking.money(out.r.totalMinor, out.r.currency);
+
+    await this.prisma.staffAnnouncement
+      .create({
+        data: {
+          title: `Departure Check-Out: Room ${roomNumbers} (${out.r.code})`,
+          body: `${guestName} (${out.r.code}) has checked out of Room ${roomNumbers} (processed by ${actor.name}). Final folio settled at ${settledAmountStr}. Room status set to VACANT_DIRTY — Housekeeping departure turnover required immediately.`,
+          department: 'HOUSEKEEPING',
+          isPinned: false,
+          authorId: actor.id,
+          authorName: actor.name,
+        },
+      })
+      .catch((e) => this.log.warn(`checkout announcement failed: ${(e as Error).message}`));
+
+    const staffRecipients = await this.prisma.user
+      .findMany({
+        where: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          role: { in: ['OWNER', 'MANAGER', 'HOUSEKEEPING', 'DESK'] },
+        },
+        select: { email: true, name: true, role: true },
+      })
+      .catch(() => []);
+
+    for (const staff of staffRecipients) {
+      if (!staff.email) continue;
+      const isHk = staff.role === 'HOUSEKEEPING';
+      await this.notifications
+        .email({
+          to: staff.email,
+          subject: isHk
+            ? `[Housekeeping Action] Room ${roomNumbers} Checked Out — Departure Clean Required`
+            : `[Check-Out Alert] ${guestName} (${out.r.code}) · Room ${roomNumbers} · ${settledAmountStr}`,
+          heading: isHk
+            ? `Room ${roomNumbers} Vacated — Departure Clean Queued`
+            : `Guest Check-Out Completed (${out.r.code})`,
+          paragraphs: [
+            isHk
+              ? `${guestName} has just checked out of Room ${roomNumbers}. The room is now marked VACANT_DIRTY and prioritized on the Housekeeping Queue.`
+              : `${guestName} has been checked out of Room ${roomNumbers} by ${actor.name}. Final folio & receipt settled.`,
+          ],
+          facts: [
+            ['Reservation', out.r.code],
+            ['Guest', guestName],
+            ['Room(s) Vacated', roomNumbers],
+            ['Final Settled Total', settledAmountStr],
+            ['Checked Out By', actor.name],
+            ['Housekeeping Status', 'VACANT_DIRTY (Departure Task Created)'],
+          ],
+          action: {
+            label: isHk ? 'Open Housekeeping Queue' : 'Open The House Dashboard',
+            url: `${env.ADMIN_URL}/${isHk ? 'housekeeping' : 'desk'}`,
+          },
+          footnote: 'Automated Reberon Hotel Hierarchy & Housekeeping Dispatch.',
+        })
+        .catch(() => undefined);
+    }
+
     return this.booking.detail(id);
   }
 

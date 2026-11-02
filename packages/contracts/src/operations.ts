@@ -135,6 +135,7 @@ export interface PosOrderDTO {
   discountMinor: string;
   totalMinor: string;
   notes: string | null;
+  servedById?: string | null;
   servedByName: string | null;
   items: PosOrderItemDTO[];
   createdAt: string;
@@ -156,12 +157,13 @@ export const zCreatePosOrderInput = z.object({
   tableOrRoom: z.string().trim().max(60).optional(),
   customerName: z.string().trim().max(120).optional(),
   customerPhone: z.string().trim().max(40).optional(),
+  servedByName: z.string().trim().max(120).optional(),
   paymentMethod: z.enum(POS_PAYMENT_METHODS).default('CASH'),
   currency: z.enum(['UGX', 'USD']).default('UGX'),
   discountMinor: z.string().regex(/^\d+$/).default('0'),
   notes: z.string().trim().max(500).optional(),
   status: z.enum(POS_ORDER_STATUSES).optional(),
-  settleNow: z.boolean().default(true),
+  settleNow: z.boolean().default(false),
   items: z.array(
     z.object({
       itemId: z.string().uuid(),
@@ -182,12 +184,42 @@ export const zAppendPosOrderItemsInput = z.object({
   ).min(1),
 });
 
+export const zUpdatePosOrderInput = z.object({
+  tableOrRoom: z.string().trim().max(60).optional().nullable(),
+  customerName: z.string().trim().max(120).optional().nullable(),
+  customerPhone: z.string().trim().max(40).optional().nullable(),
+  discountMinor: z.string().regex(/^\d+$/).optional(),
+  notes: z.string().trim().max(500).optional().nullable(),
+  servedById: z.string().uuid().optional().nullable(),
+  servedByName: z.string().trim().max(120).optional(),
+  items: z
+    .array(
+      z.object({
+        itemId: z.string().uuid(),
+        quantity: z.number().int().min(1).max(500),
+        notes: z.string().trim().max(200).optional().nullable(),
+      }),
+    )
+    .min(1)
+    .optional(),
+});
+
 export const zSettlePosOrderInput = z.object({
   paymentMethod: z.enum(POS_PAYMENT_METHODS),
   reservationId: z.string().uuid().optional().nullable(),
   discountMinor: z.string().regex(/^\d+$/).optional(),
   customerName: z.string().trim().max(120).optional(),
   customerPhone: z.string().trim().max(40).optional(),
+  paymentReference: z.string().trim().max(120).optional(),
+  amountTenderedMinor: z.string().regex(/^\d+$/).optional(),
+});
+
+export const zHandoverPosShiftInput = z.object({
+  fromServedByName: z.string().trim().max(120).optional(),
+  toStaffId: z.string().uuid().optional().nullable(),
+  toStaffName: z.string().trim().min(2).max(120),
+  orderIds: z.array(z.string().uuid()).optional(),
+  notes: z.string().trim().max(300).optional(),
 });
 
 export const zUpdatePosOrderStatusInput = z.object({

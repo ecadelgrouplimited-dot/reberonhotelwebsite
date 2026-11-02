@@ -37,6 +37,7 @@ import {
   zCreatePosOrderInput,
   zCreateQuotationInput,
   zCreateRequisitionInput,
+  zHandoverPosShiftInput,
   zRecordStockMovementInput,
   zReviewRequisitionInput,
   zSettlePosOrderInput,
@@ -44,6 +45,7 @@ import {
   zUpdateCategoryInput,
   zUpdateDepartmentInput,
   zUpdateInventoryItemInput,
+  zUpdatePosOrderInput,
 } from '@reberon/contracts';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
@@ -154,6 +156,7 @@ export class OperationsService {
       discountMinor: r.discountMinor.toString(),
       totalMinor: r.totalMinor.toString(),
       notes: r.notes,
+      servedById: r.servedById ?? null,
       servedByName: r.servedByName,
       items: r.items.map((i: any) => ({
         id: i.id,
@@ -333,7 +336,7 @@ export class OperationsService {
         totalMinor: total,
         notes: input.notes ?? null,
         servedById: actor.id,
-        servedByName: actor.name,
+        servedByName: input.servedByName?.trim() || actor.name,
         items: {
           create: orderLines.map((l) => ({
             itemId: l.itemId,
@@ -550,10 +553,18 @@ export class OperationsService {
         })),
         payment: {
           method: input.paymentMethod.replace('_', ' '),
-          reference: order.orderNumber,
+          reference: input.paymentReference?.trim()
+            ? `${order.orderNumber} · Ref: ${input.paymentReference.trim()}`
+            : order.orderNumber,
           purpose: `${order.outlet.name} — ${order.items.map((l) => `${l.quantity}× ${l.itemName}`).join(', ')}`,
         },
-        note: order.tableOrRoom ? `Station / Table: ${order.tableOrRoom}` : null,
+        note: [
+          order.tableOrRoom ? `Station / Table: ${order.tableOrRoom}` : null,
+          order.servedByName ? `Waiter / Server: ${order.servedByName}` : null,
+          `Payment Confirmed By: ${actor.name}`,
+        ]
+          .filter(Boolean)
+          .join(' · '),
         actor: { id: actor.id, name: actor.name },
       });
       documentId = doc.id;
@@ -580,10 +591,217 @@ export class OperationsService {
       action: 'pos.order.settle',
       entityType: 'PosOrder',
       entityId: orderId,
-      summary: `Settled ${order.orderNumber} via ${input.paymentMethod}`,
+      summary: `Confirmed payment & settled ${order.orderNumber} via ${input.paymentMethod}${input.paymentReference ? ` (Ref: ${input.paymentReference})` : ''}`,
     });
 
     return this.mapOrder(updated);
+  }
+
+  async updateOrder(
+    orderId: string,
+    input: z.infer<typeof zUpdatePosOrderInput>,
+    actor: AuthUser,
+  ): Promise<PosOrderDTO> {
+    const existing = await this.prisma.posOrder.findUnique({
+      where: { id: orderId },
+      include: { outlet: true, items: { include: { item: true } } },
+    });
+    if (!existing) throw notFound('POS Order');
+    if (existing.status === 'CANCELLED') throw badRequest('Cannot edit a cancelled order');
+    if (existing.documentId || existing.folioLineId) {
+      throw badRequest('Cannot edit a bill after payment has already been confirmed and settled');
+    }
+
+    let nextSubtotal = existing.subtotalMinor;
+    let replacementLines:
+      | {
+          itemId: string;
+          itemName: string;
+          quantity: number;
+          unitPriceMinor: bigint;
+          totalMinor: bigint;
+          notes: string | null;
+          inventoryItemId: string | null;
+        }[]
+      | null = null;
+
+    if (input.items && input.items.length > 0) {
+      const dbItems = await this.prisma.posItem.findMany({
+        where: { id: { in: input.items.map((x) => x.itemId) } },
+      });
+      const itemMap = new Map(dbItems.map((x) => [x.id, x]));
+      let sub = 0n;
+      replacementLines = input.items.map((reqItem) => {
+        const dbIt = itemMap.get(reqItem.itemId);
+        if (!dbIt) throw badRequest('One or more menu items were not found');
+        const unitPrice =
+          existing.currency === 'USD'
+            ? (dbIt.priceMinorUSD ?? dbIt.priceMinorUGX)
+            : dbIt.priceMinorUGX;
+        const lineTotal = unitPrice * BigInt(reqItem.quantity);
+        sub += lineTotal;
+        return {
+          itemId: dbIt.id,
+          itemName: dbIt.name,
+          quantity: reqItem.quantity,
+          unitPriceMinor: unitPrice,
+          totalMinor: lineTotal,
+          notes: reqItem.notes ?? null,
+          inventoryItemId: dbIt.inventoryItemId,
+        };
+      });
+      nextSubtotal = sub;
+
+      // Reconcile inventory delta between old items and edited items
+      const oldQtyByInv = new Map<string, number>();
+      for (const oldLine of existing.items) {
+        const invId = oldLine.item?.inventoryItemId;
+        if (invId) oldQtyByInv.set(invId, (oldQtyByInv.get(invId) ?? 0) + oldLine.quantity);
+      }
+      const newQtyByInv = new Map<string, number>();
+      for (const newLine of replacementLines) {
+        if (newLine.inventoryItemId) {
+          newQtyByInv.set(
+            newLine.inventoryItemId,
+            (newQtyByInv.get(newLine.inventoryItemId) ?? 0) + newLine.quantity,
+          );
+        }
+      }
+      const allInvIds = new Set([...oldQtyByInv.keys(), ...newQtyByInv.keys()]);
+      for (const invId of allInvIds) {
+        const prevQty = oldQtyByInv.get(invId) ?? 0;
+        const nextQty = newQtyByInv.get(invId) ?? 0;
+        const diff = nextQty - prevQty;
+        if (diff !== 0) {
+          const inv = await this.prisma.inventoryItem.findUnique({ where: { id: invId } });
+          if (inv) {
+            const nextOnHand = Math.max(0, inv.onHand - diff);
+            await this.prisma.inventoryItem.update({
+              where: { id: inv.id },
+              data: { onHand: nextOnHand },
+            });
+            await this.prisma.stockMovement.create({
+              data: {
+                itemId: inv.id,
+                type: diff > 0 ? 'STOCK_OUT' : 'STOCK_IN',
+                quantity: Math.abs(diff),
+                balanceAfter: nextOnHand,
+                department: existing.outlet.type,
+                reference: existing.orderNumber,
+                notes: `POS Bill Edit (${existing.orderNumber}): ${diff > 0 ? '+' : ''}${diff}`,
+                recordedById: actor.id,
+                recordedByName: actor.name,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    const nextDiscount =
+      input.discountMinor !== undefined ? BigInt(input.discountMinor) : existing.discountMinor;
+    const nextTotal = nextSubtotal > nextDiscount ? nextSubtotal - nextDiscount : 0n;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (replacementLines) {
+        await tx.posOrderItem.deleteMany({ where: { orderId } });
+      }
+      return tx.posOrder.update({
+        where: { id: orderId },
+        data: {
+          ...(input.tableOrRoom !== undefined ? { tableOrRoom: input.tableOrRoom } : {}),
+          ...(input.customerName !== undefined ? { customerName: input.customerName || 'Walk-in Guest' } : {}),
+          ...(input.customerPhone !== undefined ? { customerPhone: input.customerPhone } : {}),
+          ...(input.notes !== undefined ? { notes: input.notes } : {}),
+          ...(input.servedById !== undefined ? { servedById: input.servedById } : {}),
+          ...(input.servedByName !== undefined ? { servedByName: input.servedByName } : {}),
+          subtotalMinor: nextSubtotal,
+          discountMinor: nextDiscount,
+          totalMinor: nextTotal,
+          ...(replacementLines
+            ? {
+                items: {
+                  create: replacementLines.map((l) => ({
+                    itemId: l.itemId,
+                    itemName: l.itemName,
+                    quantity: l.quantity,
+                    unitPriceMinor: l.unitPriceMinor,
+                    totalMinor: l.totalMinor,
+                    notes: l.notes,
+                  })),
+                },
+              }
+            : {}),
+        },
+        include: { outlet: true, items: true },
+      });
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'pos.order.update',
+      entityType: 'PosOrder',
+      entityId: orderId,
+      summary: `Updated open POS bill ${existing.orderNumber} (${updated.tableOrRoom || 'Counter'} · Waiter: ${updated.servedByName || actor.name})`,
+    });
+
+    return this.mapOrder(updated);
+  }
+
+  async handoverShift(
+    input: z.infer<typeof zHandoverPosShiftInput>,
+    actor: AuthUser,
+  ): Promise<{ transferredCount: number; toStaffName: string }> {
+    const whereClause: any = {
+      status: { not: 'CANCELLED' },
+      documentId: null,
+      folioLineId: null,
+    };
+    if (input.orderIds && input.orderIds.length > 0) {
+      whereClause.id = { in: input.orderIds };
+    } else if (input.fromServedByName?.trim()) {
+      whereClause.servedByName = input.fromServedByName.trim();
+    }
+
+    const openBills = await this.prisma.posOrder.findMany({
+      where: whereClause,
+      select: { id: true, orderNumber: true, tableOrRoom: true, totalMinor: true },
+    });
+
+    if (openBills.length > 0) {
+      await this.prisma.posOrder.updateMany({
+        where: { id: { in: openBills.map((b) => b.id) } },
+        data: {
+          servedById: input.toStaffId ?? null,
+          servedByName: input.toStaffName.trim(),
+        },
+      });
+    }
+
+    const billList = openBills
+      .map((b) => `${b.orderNumber} (${b.tableOrRoom || 'Tab'})`)
+      .join(', ');
+
+    await this.prisma.staffAnnouncement.create({
+      data: {
+        title: `POS Shift Handover → ${input.toStaffName.trim()} (${openBills.length} Open Bills)`,
+        body: `${input.fromServedByName || actor.name} handed over ${openBills.length} waiting/unpaid POS bill(s) to ${input.toStaffName.trim()}${billList ? `: ${billList}` : ''}.${input.notes ? ` Note: ${input.notes}` : ''}`,
+        department: 'KITCHEN',
+        isPinned: false,
+        authorId: actor.id,
+        authorName: actor.name,
+      },
+    });
+
+    await this.audit.record({
+      actor,
+      action: 'pos.shift.handover',
+      entityType: 'PosOrder',
+      entityId: actor.id,
+      summary: `Handed over ${openBills.length} open POS bill(s) from ${input.fromServedByName || actor.name} to ${input.toStaffName}`,
+    });
+
+    return { transferredCount: openBills.length, toStaffName: input.toStaffName.trim() };
   }
 
   async updateOrderStatus(id: string, status: PosOrderDTO['status'], actor: AuthUser): Promise<PosOrderDTO> {
@@ -784,7 +1002,12 @@ export class OperationsService {
     }).format(order.createdAt);
 
     const isKot = kind === 'KOT';
-    const title = isKot ? `KITCHEN / BAR ORDER TICKET` : `GUEST BILL CHECK`;
+    const isPaid = Boolean(order.documentId || order.folioLineId);
+    const title = isKot
+      ? `KITCHEN / BAR ORDER TICKET`
+      : isPaid
+        ? `SETTLED POS BILL`
+        : `GUEST BILL / INVOICE (UNPAID)`;
     let qrHtml = '';
     if (!isKot) {
       let qrTarget = `${env.WEB_URL}`;
@@ -795,7 +1018,7 @@ export class OperationsService {
           qrTarget = `${env.WEB_URL}/verify?number=${encodeURIComponent(doc.number)}&check=${encodeURIComponent(chk)}`;
         }
       }
-      qrHtml = `<div style="margin: 8px auto 0; text-align: center;">${renderQrSvg(qrTarget, 84)}<div style="font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px;">Scan to Verify</div></div>`;
+      qrHtml = `<div style="margin: 8px auto 0; text-align: center;">${renderQrSvg(qrTarget, 84)}<div style="font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px;">${isPaid ? 'Scan to Verify Final Receipt' : 'Bill Ref · Present at Cashier'}</div></div>`;
     }
     const rowsHtml = order.items
       .map(
@@ -867,10 +1090,10 @@ export class OperationsService {
   </div>
   <div class="station">${esc(order.tableOrRoom || 'COUNTER / WALK-IN')}</div>
   <div class="meta">
-    <div><span>Order #:</span><strong>${esc(order.orderNumber)}</strong></div>
+    <div><span>Bill / Order #:</span><strong>${esc(order.orderNumber)}</strong></div>
     <div><span>Time:</span><span>${esc(timeStr)}</span></div>
     <div><span>Guest:</span><strong>${esc(order.customerName || 'Walk-in')}</strong></div>
-    <div><span>Server:</span><span>${esc(order.servedByName || 'Staff')}</span></div>
+    <div><span>Waiter / Server:</span><strong>${esc(order.servedByName || 'Staff')}</strong></div>
   </div>
   <table>
     <tbody>${rowsHtml}</tbody>
@@ -881,12 +1104,13 @@ export class OperationsService {
       ? `<div class="totals">
           <div><span>Subtotal</span><span>${fmtMoney(order.subtotalMinor, order.currency)}</span></div>
           ${order.discountMinor > 0n ? `<div><span>Discount</span><span>- ${fmtMoney(order.discountMinor, order.currency)}</span></div>` : ''}
-          <div class="grand"><span>TOTAL DUE</span><span>${fmtMoney(order.totalMinor, order.currency)}</span></div>
-          <div><span>Status</span><strong>${order.documentId || order.folioLineId ? `PAID (${order.paymentMethod.replace('_', ' ')})` : 'OPEN BILL (UNPAID)'}</strong></div>
+          <div class="grand"><span>${isPaid ? 'AMOUNT PAID' : 'TOTAL AMOUNT DUE'}</span><span>${fmtMoney(order.totalMinor, order.currency)}</span></div>
+          <div><span>Payment Status</span><strong>${isPaid ? `CONFIRMED & PAID (${order.paymentMethod.replace('_', ' ')})` : 'WAITING FOR PAYMENT (NOT A RECEIPT)'}</strong></div>
         </div>
+        ${!isPaid ? `<div class="order-note" style="text-align:center;">THIS IS A GUEST BILL / INVOICE ONLY.<br/>Please request your Official Payment Receipt after paying the Cashier.</div>` : ''}
         <div class="ftr">
           Thank you for dining at Reberon Hotel<br/>
-          Mount Elgon · reberonhotel.com
+          Stay In Comfort, Leave With Memories · reberonhotel.com
           ${qrHtml}
         </div>`
       : `<div class="ftr">Prepared for ${esc(order.outlet.deviceStation || order.outlet.name)}</div>`

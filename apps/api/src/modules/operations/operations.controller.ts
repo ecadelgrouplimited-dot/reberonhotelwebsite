@@ -18,6 +18,7 @@ import {
   zCreatePosOrderInput,
   zCreateQuotationInput,
   zCreateRequisitionInput,
+  zHandoverPosShiftInput,
   zRecordStockMovementInput,
   zReviewRequisitionInput,
   zSettlePosOrderInput,
@@ -25,6 +26,7 @@ import {
   zUpdateCategoryInput,
   zUpdateDepartmentInput,
   zUpdateInventoryItemInput,
+  zUpdatePosOrderInput,
   zUpdatePosOrderStatusInput,
   zUpdateQuotationStatusInput,
 } from '@reberon/contracts';
@@ -116,6 +118,26 @@ export class OperationsController {
     );
     res.setHeader('Cache-Control', 'no-store');
     res.send(out.html);
+  }
+
+  @Patch('pos/orders/:id')
+  @Requires('pos:operate')
+  updateOrder(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zUpdatePosOrderInput)) body: z.infer<typeof zUpdatePosOrderInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.updateOrder(id, body, user);
+  }
+
+  @Post('pos/orders/handover-shift')
+  @HttpCode(200)
+  @Requires('pos:operate')
+  handoverShift(
+    @Body(new ZodPipe(zHandoverPosShiftInput)) body: z.infer<typeof zHandoverPosShiftInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.handoverShift(body, user);
   }
 
   @Patch('pos/orders/:id/status')
