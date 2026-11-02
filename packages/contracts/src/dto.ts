@@ -195,6 +195,7 @@ export interface MeDTO {
   name: string;
   role: Role;
   avatarUrl: string | null;
+  jobTitle?: string | null;
   permissions: string[];
 }
 

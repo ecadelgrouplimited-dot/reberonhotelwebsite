@@ -38,6 +38,7 @@ export default function DepartmentsPage() {
   const qc = useQueryClient();
   const can = useCan();
   const me = useMe();
+  const canHr = can('hr:manage');
   const isOwner = me.role === 'OWNER';
 
   const [search, setSearch] = useState('');
@@ -51,11 +52,13 @@ export default function DepartmentsPage() {
     queryKey: ['departments'],
     queryFn: () => get<HotelDepartmentDTO[]>('/departments'),
     refetchInterval: 30_000,
+    enabled: canHr,
   });
 
   const { data: staffList } = useQuery({
     queryKey: ['hr-staff'],
     queryFn: () => get<StaffProfileDTO[]>('/hr/staff?status=ACTIVE'),
+    enabled: canHr,
   });
 
   const createMutation = useMutation({
@@ -136,6 +139,24 @@ export default function DepartmentsPage() {
     if (!departments) return 0;
     return departments.reduce((acc, d) => acc + (d.openRequisitionsCount || 0), 0);
   }, [departments]);
+
+  if (!canHr) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+        <PageHeader
+          title="Departments & Cost Centers"
+          description="Operational departments, budgets, and head of department administration."
+        />
+        <div className="rounded-2xl border border-line bg-surface p-12 text-center shadow-xs">
+          <Empty
+            icon={<Building2 className="size-5" />}
+            title="Departments Access Restricted"
+            body="Your user account does not have permission to manage hotel departments, heads of department, and budgetary allocations. Please contact a hotel manager if you require access."
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">

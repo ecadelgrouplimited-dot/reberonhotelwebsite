@@ -21,7 +21,7 @@ export class HrController {
   /* ───── Overview ───── */
 
   @Get('overview')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   overview() {
     return this.hr.overview();
   }
@@ -29,7 +29,7 @@ export class HrController {
   /* ───── Staff Profiles ───── */
 
   @Get('staff')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   listStaff(
     @Query('search') search?: string,
     @Query('department') department?: string,
@@ -40,13 +40,13 @@ export class HrController {
   }
 
   @Get('staff/:id')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   getStaff(@Param('id') id: string) {
     return this.hr.getStaff(id);
   }
 
   @Post('staff')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   createStaff(
     @Body(new ZodPipe(zCreateStaffInput)) body: z.infer<typeof zCreateStaffInput>,
     @CurrentUser() user: AuthUser,
@@ -55,7 +55,7 @@ export class HrController {
   }
 
   @Patch('staff/:id')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   updateStaff(
     @Param('id') id: string,
     @Body(new ZodPipe(zUpdateStaffInput)) body: z.infer<typeof zUpdateStaffInput>,
@@ -65,7 +65,7 @@ export class HrController {
   }
 
   @Delete('staff/:id')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   deleteStaff(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.hr.deleteStaff(id, user);
   }
@@ -73,7 +73,7 @@ export class HrController {
   /* ───── Shift Rosters & Daily Attendance ───── */
 
   @Get('shifts')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   listShifts(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -84,7 +84,7 @@ export class HrController {
   }
 
   @Post('shifts')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   createShift(
     @Body(new ZodPipe(zCreateShiftInput)) body: z.infer<typeof zCreateShiftInput>,
     @CurrentUser() user: AuthUser,
@@ -93,7 +93,7 @@ export class HrController {
   }
 
   @Patch('shifts/:id')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   updateShift(
     @Param('id') id: string,
     @Body(new ZodPipe(zUpdateShiftInput)) body: z.infer<typeof zUpdateShiftInput>,
@@ -105,7 +105,7 @@ export class HrController {
   /* ───── Leave Management ───── */
 
   @Get('leaves')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   listLeaveRequests(
     @Query('status') status?: string,
     @Query('department') department?: string,
@@ -115,7 +115,7 @@ export class HrController {
   }
 
   @Post('leaves')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   createLeaveRequest(
     @Body(new ZodPipe(zCreateLeaveRequestInput)) body: z.infer<typeof zCreateLeaveRequestInput>,
     @CurrentUser() user: AuthUser,
@@ -124,7 +124,7 @@ export class HrController {
   }
 
   @Post('leaves/:id/review')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   reviewLeaveRequest(
     @Param('id') id: string,
     @Body(new ZodPipe(zReviewLeaveRequestInput)) body: z.infer<typeof zReviewLeaveRequestInput>,
@@ -136,7 +136,7 @@ export class HrController {
   /* ───── Payroll ───── */
 
   @Get('payroll')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   listPayroll(
     @Query('periodMonth') periodMonth?: string,
     @Query('paymentStatus') paymentStatus?: string,
@@ -145,7 +145,7 @@ export class HrController {
   }
 
   @Post('payroll/generate')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   generatePayroll(
     @Body(new ZodPipe(zGeneratePayrollInput)) body: z.infer<typeof zGeneratePayrollInput>,
     @CurrentUser() user: AuthUser,
@@ -154,7 +154,7 @@ export class HrController {
   }
 
   @Patch('payroll/:id/status')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   updatePayrollStatus(
     @Param('id') id: string,
     @Body(new ZodPipe(zUpdatePayrollStatusInput)) body: z.infer<typeof zUpdatePayrollStatusInput>,

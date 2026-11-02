@@ -148,11 +148,11 @@ export const NAV: NavGroup[] = [
     icon: Users,
     defaultOpen: true,
     items: [
-      { label: 'Staff Directory', href: '/hr', icon: Users, perm: 'inventory:manage', badge: 'staff' },
-      { label: 'Departments', href: '/departments', icon: Building2, perm: 'inventory:manage', badge: 'departments' },
-      { label: 'Shift Rosters', href: '/hr?tab=ROSTER', icon: Clock, perm: 'inventory:manage', badge: 'shifts' },
-      { label: 'Leave Requests', href: '/hr?tab=LEAVE', icon: CalendarDays, perm: 'inventory:manage', badge: 'leave' },
-      { label: 'Payroll & Taxes', href: '/hr?tab=PAYROLL', icon: DollarSign, perm: 'inventory:manage', badge: 'payroll' },
+      { label: 'Staff Directory', href: '/hr', icon: Users, perm: 'hr:manage', badge: 'staff' },
+      { label: 'Departments', href: '/departments', icon: Building2, perm: 'hr:manage', badge: 'departments' },
+      { label: 'Shift Rosters', href: '/hr?tab=ROSTER', icon: Clock, perm: 'hr:manage', badge: 'shifts' },
+      { label: 'Leave Requests', href: '/hr?tab=LEAVE', icon: CalendarDays, perm: 'hr:manage', badge: 'leave' },
+      { label: 'Payroll & Taxes', href: '/hr?tab=PAYROLL', icon: DollarSign, perm: 'hr:manage', badge: 'payroll' },
     ],
   },
   {

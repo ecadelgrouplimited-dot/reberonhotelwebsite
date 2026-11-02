@@ -59,6 +59,7 @@ export default function HrPage() {
   const qc = useQueryClient();
   const can = useCan();
   const me = useMe();
+  const canHr = can('hr:manage');
   const isOwner = me.role === 'OWNER';
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -98,11 +99,13 @@ export default function HrPage() {
     queryKey: ['hr-overview'],
     queryFn: () => get<HrDashboardDTO>('/hr/overview'),
     refetchInterval: 30_000,
+    enabled: canHr,
   });
 
   const { data: departments } = useQuery({
     queryKey: ['departments'],
     queryFn: () => get<HotelDepartmentDTO[]>('/departments'),
+    enabled: canHr,
   });
 
   const { data: staffList, isLoading: staffLoading, refetch: refetchStaff } = useQuery({
@@ -111,18 +114,19 @@ export default function HrPage() {
       get<StaffProfileDTO[]>(
         `/hr/staff?department=${encodeURIComponent(deptFilter)}&status=${encodeURIComponent(statusFilter)}`,
       ),
+    enabled: canHr,
   });
 
   const { data: shifts, isLoading: shiftsLoading, refetch: refetchShifts } = useQuery({
     queryKey: ['hr-shifts', deptFilter],
     queryFn: () => get<StaffShiftDTO[]>(`/hr/shifts?department=${encodeURIComponent(deptFilter)}`),
-    enabled: activeTab === 'ROSTER',
+    enabled: canHr && activeTab === 'ROSTER',
   });
 
   const { data: leaves, isLoading: leavesLoading, refetch: refetchLeaves } = useQuery({
     queryKey: ['hr-leaves'],
     queryFn: () => get<StaffLeaveRequestDTO[]>('/hr/leaves'),
-    enabled: activeTab === 'LEAVE',
+    enabled: canHr && activeTab === 'LEAVE',
   });
 
   const currentMonthStr = useMemo(() => {
@@ -135,7 +139,7 @@ export default function HrPage() {
   const { data: payrollRecords, isLoading: payrollLoading, refetch: refetchPayroll } = useQuery({
     queryKey: ['hr-payroll', payrollMonth],
     queryFn: () => get<StaffPayrollRecordDTO[]>(`/hr/payroll?periodMonth=${encodeURIComponent(payrollMonth)}`),
-    enabled: activeTab === 'PAYROLL',
+    enabled: canHr && activeTab === 'PAYROLL',
   });
 
   // Filtered staff
@@ -239,6 +243,24 @@ export default function HrPage() {
     },
     onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to update payroll'),
   });
+
+  if (!canHr) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+        <PageHeader
+          title="Human Resource Management"
+          description="Confidential staff directory, shift rosters, leave requests, and payroll."
+        />
+        <div className="rounded-2xl border border-line bg-surface p-12 text-center shadow-xs">
+          <Empty
+            icon={<Users className="size-5" />}
+            title="Human Resources Access Restricted"
+            body="Your user account does not have permission to access confidential employee records, shift rosters, leave requests, or payroll. Please contact a hotel manager or administrator if you require access."
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">

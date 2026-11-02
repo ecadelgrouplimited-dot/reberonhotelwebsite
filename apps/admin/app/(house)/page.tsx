@@ -161,13 +161,19 @@ export default function Today() {
   const canBookings = can('bookings:read');
   const canRooms = can('rooms:status');
   const canPos = can('pos:operate');
+  const canClub = can('healthclub:operate');
   const canInv = can('inventory:manage');
   const canReq = can('requisitions:request');
   const canReports = can('reports:read');
+  const canHr = can('hr:manage');
 
   // Default lens tailored to user's role
   const defaultLens: DashboardLens =
-    me.role === 'HOUSEKEEPING' && !canDesk ? 'HOUSEKEEPING' : 'ALL';
+    me.role === 'HOUSEKEEPING' && !canDesk
+      ? 'HOUSEKEEPING'
+      : canPos && !canDesk
+        ? 'OPERATIONS'
+        : 'ALL';
   const [lens, setLens] = useState<DashboardLens>(defaultLens);
   const [deskTab, setDeskTab] = useState<'ARRIVALS' | 'IN_HOUSE' | 'DEPARTURES'>('ARRIVALS');
 
@@ -207,7 +213,7 @@ export default function Today() {
     queryKey: ['hr-overview'],
     queryFn: () => get<HrDashboardDTO>('/hr/overview'),
     refetchInterval: 60_000,
-    enabled: canInv,
+    enabled: canHr,
   });
 
   // 6. Pending requisitions & announcements
@@ -343,6 +349,30 @@ export default function Today() {
     ...(canInv
       ? [
           {
+            label: 'Inventory & Stock',
+            sub: 'Pantry, ingredients & stock levels',
+            href: '/inventory',
+            icon: Boxes,
+            badgeCount: pulse?.operations.lowStockCount ?? 0,
+            badgeTone: ((pulse?.operations.lowStockCount ?? 0) > 0 ? 'red' : 'green') as 'red' | 'green',
+          },
+        ]
+      : []),
+    ...(canReq
+      ? [
+          {
+            label: 'Store Requisitions',
+            sub: 'Department supply requests',
+            href: '/requisitions',
+            icon: ClipboardCheck,
+            badgeCount: pulse?.operations.pendingRequisitions ?? 0,
+            badgeTone: ((pulse?.operations.pendingRequisitions ?? 0) > 0 ? 'red' : 'green') as 'red' | 'green',
+          },
+        ]
+      : []),
+    ...(canHr
+      ? [
+          {
             label: 'Staff & HR',
             sub: 'Rosters, leave & payroll',
             href: '/hr',
@@ -429,16 +459,16 @@ export default function Today() {
           },
         ]
       : []),
-    ...(canInbox || canWaitlist || canInv
+    ...(canInbox || canWaitlist || canHr
       ? [
           {
             id: 'HR_COMMS' as const,
-            label: 'HR, Inbox & Demand',
+            label: canHr ? 'HR, Inbox & Demand' : 'Inbox & Demand',
             icon: Inbox,
             badge:
               (pulse?.inbox.newCount ?? 0) +
                 (pulse?.waitlist.newCount ?? 0) +
-                (pulse?.hr.pendingLeaves ?? 0) ||
+                (canHr ? pulse?.hr.pendingLeaves ?? 0 : 0) ||
               undefined,
             tone: 'red' as const,
           },
@@ -497,7 +527,7 @@ export default function Today() {
     if (canInv && pulse.operations.lowStockCount > 0) {
       actionAlerts.push({ label: 'Low Stock SKUs', count: pulse.operations.lowStockCount, href: '/inventory', tone: 'red' });
     }
-    if (canInv && pulse.hr.pendingLeaves > 0) {
+    if (canHr && pulse.hr.pendingLeaves > 0) {
       actionAlerts.push({ label: 'Pending Leave Requests', count: pulse.hr.pendingLeaves, href: '/hr?tab=LEAVE', tone: 'red' });
     }
     if (can('guests:read') && pulse.feedback.openIssues > 0) {
@@ -528,7 +558,7 @@ export default function Today() {
     <div className="fade-in space-y-4">
       <PageHeader
         title={`Overview · ${me.name.split(' ')[0]}`}
-        description={`${todayFormatted} · ${roleBadgeLabel[me.role] ?? me.role} · Kapchorwa HQ (1,900m)`}
+        description={`${todayFormatted} · ${me.jobTitle ? `${me.jobTitle} · ` : ''}${canPos && !canDesk ? 'Culinary & Operations' : (roleBadgeLabel[me.role] ?? me.role)} · Kapchorwa HQ (1,900m)`}
         actions={
           <>
             <button
@@ -553,6 +583,11 @@ export default function Today() {
             {canPos && (
               <Button size="sm" href="/pos" icon={<UtensilsCrossed className="size-3.5" />}>
                 POS
+              </Button>
+            )}
+            {canReq && !canDesk && !canBookings && (
+              <Button size="sm" variant="secondary" href="/requisitions" icon={<ClipboardCheck className="size-3.5" />}>
+                Requisitions
               </Button>
             )}
             {can('bookings:write') && (
@@ -768,10 +803,10 @@ export default function Today() {
 
           {canPos && (
             <KpiCard
-              label="POS & Health Club"
+              label={canClub ? 'POS & Health Club' : 'Kitchen & Bar POS'}
               icon={UtensilsCrossed}
               value={money(pulse.operations.posRevenueTodayUgxMinor, 'UGX')}
-              sub={`${pulse.operations.posCompletedToday} settled · ${pulse.operations.healthClubInsideNow} in Gym/Spa`}
+              sub={canClub ? `${pulse.operations.posCompletedToday} settled · ${pulse.operations.healthClubInsideNow} in Gym/Spa` : `${pulse.operations.posCompletedToday} settled · ${pulse.operations.posOpenOrders} active tabs`}
               href="/pos"
               badge={
                 pulse.operations.posOpenOrders > 0
@@ -781,7 +816,22 @@ export default function Today() {
             />
           )}
 
-          {(canReq || canInv) && (
+          {canInv && (
+            <KpiCard
+              label="Kitchen & Store Inventory"
+              icon={Boxes}
+              value={`${pulse.operations.totalInventoryItems} Total Items`}
+              sub={`${pulse.operations.lowStockCount} low-stock SKUs · ${pulse.operations.pendingRequisitions} requisitions pending`}
+              href="/inventory"
+              badge={
+                pulse.operations.lowStockCount > 0
+                  ? { text: `${pulse.operations.lowStockCount} low stock`, tone: 'red' }
+                  : { text: 'Stock OK', tone: 'green' }
+              }
+            />
+          )}
+
+          {canReq && !canInv && (
             <KpiCard
               label="Supply & Requisitions"
               icon={ClipboardCheck}
@@ -814,7 +864,7 @@ export default function Today() {
             />
           )}
 
-          {canInv && (
+          {canHr && (
             <KpiCard
               label="Staff & Rosters"
               icon={Users}

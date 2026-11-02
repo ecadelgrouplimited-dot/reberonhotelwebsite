@@ -182,6 +182,7 @@ export class DashboardController {
     const canClub = has(user, 'healthclub:operate');
     const canInv = has(user, 'inventory:manage');
     const canReq = has(user, 'requisitions:request');
+    const canHr = has(user, 'hr:manage');
     const canContent = has(user, 'content:read');
     const canMessages = has(user, 'messages:read');
 
@@ -263,12 +264,12 @@ export class DashboardController {
       canReq ? this.prisma.requisition.count({ where: { status: { in: ['PENDING', 'MANAGER_APPROVED'] } } }) : Promise.resolve(0),
       canReq ? this.prisma.requisition.count({ where: { status: { in: ['PENDING', 'MANAGER_APPROVED'] }, priority: 'URGENT' } }) : Promise.resolve(0),
       this.prisma.staffAnnouncement.count({ where: { isPinned: true } }),
-      canInv ? this.prisma.staffProfile.count({ where: { status: 'ACTIVE' } }) : Promise.resolve(0),
-      canInv ? this.prisma.hotelDepartment.count({ where: { isActive: true } }) : Promise.resolve(0),
-      canInv ? this.prisma.staffShift.findMany({ where: { date: todayDate }, select: { attendanceStatus: true } }) : Promise.resolve([]),
-      canInv ? this.prisma.staffProfile.count({ where: { status: 'ON_LEAVE' } }) : Promise.resolve(0),
-      canInv ? this.prisma.staffLeaveRequest.count({ where: { status: 'PENDING' } }) : Promise.resolve(0),
-      canInv ? this.prisma.staffPayrollRecord.count({ where: { paymentStatus: 'DRAFT' } }) : Promise.resolve(0),
+      canHr ? this.prisma.staffProfile.count({ where: { status: 'ACTIVE' } }) : Promise.resolve(0),
+      canHr ? this.prisma.hotelDepartment.count({ where: { isActive: true } }) : Promise.resolve(0),
+      canHr ? this.prisma.staffShift.findMany({ where: { date: todayDate }, select: { attendanceStatus: true } }) : Promise.resolve([]),
+      canHr ? this.prisma.staffProfile.count({ where: { status: 'ON_LEAVE' } }) : Promise.resolve(0),
+      canHr ? this.prisma.staffLeaveRequest.count({ where: { status: 'PENDING' } }) : Promise.resolve(0),
+      canHr ? this.prisma.staffPayrollRecord.count({ where: { paymentStatus: 'DRAFT' } }) : Promise.resolve(0),
       canContent ? this.prisma.page.findMany({ where: { deletedAt: null }, include: { publishedVersion: true } }) : Promise.resolve([]),
       canMessages ? this.prisma.outboundMessage.count({ where: { status: 'FAILED', createdAt: { gte: since24h } } }) : Promise.resolve(0),
     ]);

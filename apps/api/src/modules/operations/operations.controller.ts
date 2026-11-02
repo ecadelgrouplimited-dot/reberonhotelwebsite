@@ -377,13 +377,13 @@ export class OperationsController {
   /* ───── Hotel Departments & Cost Centers ───── */
 
   @Get('departments')
-  @Requires('inventory:manage')
+  @Requires('dashboard:view')
   listDepartments() {
     return this.ops.listDepartments();
   }
 
   @Post('departments')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   createDepartment(
     @Body(new ZodPipe(zCreateDepartmentInput)) body: z.infer<typeof zCreateDepartmentInput>,
     @CurrentUser() user: AuthUser,
@@ -392,7 +392,7 @@ export class OperationsController {
   }
 
   @Patch('departments/:id')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   updateDepartment(
     @Param('id') id: string,
     @Body(new ZodPipe(zUpdateDepartmentInput)) body: z.infer<typeof zUpdateDepartmentInput>,
@@ -402,7 +402,7 @@ export class OperationsController {
   }
 
   @Delete('departments/:id')
-  @Requires('inventory:manage')
+  @Requires('hr:manage')
   deleteDepartment(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.ops.deleteDepartment(id, user);
   }

@@ -26,13 +26,14 @@ export class AuthService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  me(u: Pick<User, 'id' | 'email' | 'name' | 'role' | 'grants' | 'revokes'> & { avatarId?: string | null }): MeDTO {
+  me(u: Pick<User, 'id' | 'email' | 'name' | 'role' | 'grants' | 'revokes'> & { avatarId?: string | null; jobTitle?: string | null }): MeDTO {
     return {
       id: u.id,
       email: u.email ?? '',
       name: u.name,
       role: u.role,
       avatarUrl: u.avatarId ? `${env.MEDIA_PUBLIC_URL}/i/${u.avatarId}/320.webp` : null,
+      jobTitle: u.jobTitle ?? null,
       permissions: permissionsOf(u),
     };
   }
