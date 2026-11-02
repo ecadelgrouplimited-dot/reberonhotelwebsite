@@ -196,7 +196,21 @@ export interface MeDTO {
   role: Role;
   avatarUrl: string | null;
   jobTitle?: string | null;
+  customRoleKey?: string | null;
+  customRoleName?: string | null;
   permissions: string[];
+}
+
+export interface RoleDefinitionDTO {
+  key: string;
+  name: string;
+  description: string;
+  color: string;
+  baseRole: Role;
+  permissions: string[];
+  isSystem: boolean;
+  usersCount: number;
+  updatedAt?: string;
 }
 
 export interface UserDTO {
@@ -206,6 +220,8 @@ export interface UserDTO {
   phone: string | null;
   jobTitle: string | null;
   role: Role;
+  customRoleKey?: string | null;
+  customRoleName?: string | null;
   status: UserStatus;
   /** Off: a staff record only, no House login. */
   canSignIn: boolean;

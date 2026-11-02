@@ -64,6 +64,8 @@ const CHANNEL: Record<string, string> = {
 };
 
 type DashboardLens = 'ALL' | 'EXECUTIVE' | 'DESK' | 'HOUSEKEEPING' | 'OPERATIONS' | 'HR_COMMS';
+type BadgeTone = 'red' | 'amber' | 'green' | 'neutral';
+type KpiAccent = 'emerald' | 'sky' | 'amber' | 'indigo' | 'orange' | 'teal' | 'violet' | 'rose';
 
 interface QuickAction {
   label: string;
@@ -71,8 +73,68 @@ interface QuickAction {
   href: string;
   icon: LucideIcon;
   badgeCount?: number;
-  badgeTone?: 'red' | 'green';
+  badgeTone?: BadgeTone;
 }
+
+const TONE_PILL_CLASSES: Record<BadgeTone, string> = {
+  red: 'border-rose-500/35 bg-rose-500/12 text-danger font-bold',
+  amber: 'border-amber-500/35 bg-amber-500/12 text-warning font-semibold',
+  green: 'border-emerald-500/30 bg-emerald-500/10 text-success font-semibold',
+  neutral: 'border-line bg-surface-2 text-fg-muted font-medium',
+};
+
+const TONE_DOT_CLASSES: Record<BadgeTone, string> = {
+  red: 'bg-rose-500',
+  amber: 'bg-amber-500',
+  green: 'bg-emerald-500',
+  neutral: 'bg-fg-subtle',
+};
+
+const KPI_ACCENT_STYLES: Record<
+  KpiAccent,
+  { border: string; iconBg: string; iconText: string }
+> = {
+  emerald: {
+    border: 'border-l-4 border-l-emerald-500',
+    iconBg: 'bg-emerald-500/12',
+    iconText: 'text-emerald-600 dark:text-emerald-400',
+  },
+  sky: {
+    border: 'border-l-4 border-l-sky-500',
+    iconBg: 'bg-sky-500/12',
+    iconText: 'text-sky-600 dark:text-sky-400',
+  },
+  amber: {
+    border: 'border-l-4 border-l-amber-500',
+    iconBg: 'bg-amber-500/12',
+    iconText: 'text-amber-600 dark:text-amber-400',
+  },
+  indigo: {
+    border: 'border-l-4 border-l-indigo-500',
+    iconBg: 'bg-indigo-500/12',
+    iconText: 'text-indigo-600 dark:text-indigo-400',
+  },
+  orange: {
+    border: 'border-l-4 border-l-orange-500',
+    iconBg: 'bg-orange-500/12',
+    iconText: 'text-orange-600 dark:text-orange-400',
+  },
+  teal: {
+    border: 'border-l-4 border-l-teal-500',
+    iconBg: 'bg-teal-500/12',
+    iconText: 'text-teal-600 dark:text-teal-400',
+  },
+  violet: {
+    border: 'border-l-4 border-l-violet-500',
+    iconBg: 'bg-violet-500/12',
+    iconText: 'text-violet-600 dark:text-violet-400',
+  },
+  rose: {
+    border: 'border-l-4 border-l-rose-500',
+    iconBg: 'bg-rose-500/12',
+    iconText: 'text-rose-600 dark:text-rose-400',
+  },
+};
 
 function StatusBadgePill({
   count,
@@ -80,20 +142,18 @@ function StatusBadgePill({
   label,
 }: {
   count?: number;
-  tone: 'red' | 'green' | 'amber' | 'neutral';
+  tone: BadgeTone;
   label: string;
 }) {
-  const dot = {
-    red: 'bg-rose-500',
-    green: 'bg-emerald-500',
-    amber: 'bg-amber-500',
-    neutral: 'bg-fg-subtle',
-  }[tone];
-
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium text-fg tabular">
-      <span className={cn('size-1.5 rounded-full shrink-0', dot)} />
-      {count !== undefined && <span className="font-semibold">{count}</span>}
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] tabular',
+        TONE_PILL_CLASSES[tone],
+      )}
+    >
+      <span className={cn('size-1.5 rounded-full shrink-0', TONE_DOT_CLASSES[tone])} />
+      {count !== undefined && <span className="font-bold">{count}</span>}
       <span>{label}</span>
     </span>
   );
@@ -105,6 +165,7 @@ function KpiCard({
   sub,
   href,
   icon: Icon,
+  accent = 'emerald',
   badge,
 }: {
   label: string;
@@ -112,39 +173,53 @@ function KpiCard({
   sub: string;
   href: string;
   icon: LucideIcon;
-  badge?: { text: string; tone: 'red' | 'green' | 'amber' | 'neutral' };
+  accent?: KpiAccent;
+  badge?: { text: string; tone: BadgeTone };
 }) {
-  const dotCls = badge
-    ? {
-        red: 'bg-rose-500',
-        green: 'bg-emerald-500',
-        amber: 'bg-amber-500',
-        neutral: 'bg-fg-subtle',
-      }[badge.tone]
-    : '';
+  const accentStyle = KPI_ACCENT_STYLES[accent];
 
   return (
     <Link
       href={href}
-      className="card group flex flex-col justify-between p-3.5 transition-all hover:border-line-strong hover:shadow-md"
+      className={cn(
+        'card group relative flex flex-col justify-between p-4 transition-all hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md',
+        accentStyle.border,
+      )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
-          <Icon className="size-3.5 text-fg-muted transition-colors group-hover:text-fg" strokeWidth={1.8} />
-          {label}
-        </span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <span
+            className={cn(
+              'grid size-8 shrink-0 place-items-center rounded-lg transition-transform group-hover:scale-105',
+              accentStyle.iconBg,
+              accentStyle.iconText,
+            )}
+          >
+            <Icon className="size-4" strokeWidth={2} />
+          </span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-fg-muted">
+            {label}
+          </span>
+        </div>
         {badge && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-fg tabular">
-            <span className={cn('size-1.5 rounded-full shrink-0', dotCls)} />
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] tabular',
+              TONE_PILL_CLASSES[badge.tone],
+            )}
+          >
+            <span className={cn('size-1.5 rounded-full shrink-0', TONE_DOT_CLASSES[badge.tone])} />
             {badge.text}
           </span>
         )}
       </div>
-      <div className="mt-2.5 flex items-baseline justify-between gap-2">
-        <p className="display text-2xl font-bold tracking-tight text-fg tabular">{value}</p>
-        <ArrowRight className="size-3.5 text-fg-subtle opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
+      <div className="mt-3.5 flex items-baseline justify-between gap-2">
+        <p className="display text-2xl font-extrabold tracking-tight text-fg sm:text-[28px] leading-none tabular">
+          {value}
+        </p>
+        <ArrowRight className="size-4 text-fg-subtle opacity-0 transition-all group-hover:translate-x-0.5 group-hover:text-fg group-hover:opacity-100" />
       </div>
-      <p className="mt-1 truncate text-[11.5px] text-fg-muted">{sub}</p>
+      <p className="mt-2 truncate text-[12px] font-medium text-fg-muted">{sub}</p>
     </Link>
   );
 }
@@ -242,53 +317,60 @@ export default function Today() {
   const roleBadgeLabel: Record<string, string> = {
     OWNER: 'Proprietor & Executive View',
     MANAGER: 'General Manager Command',
+    HR: 'Human Resources & Payroll',
+    ACCOUNTANT: 'Finance & Accounts',
     DESK: 'Front Desk & Guest Services',
+    KITCHEN: 'Kitchen & Culinary Operations',
+    BAR: 'Bar & Beverage Operations',
+    GYM: 'Health Club & Spa Operations',
     HOUSEKEEPING: 'Housekeeping & Room Readiness',
   };
 
-  // Build role-aware priority quick actions with live red/green badges
+  // Build role-aware priority quick actions with strict urgency-tiered badges (red / amber / green / neutral)
   const criticalActions: QuickAction[] = [
     ...(canDesk
       ? [
           {
-            label: 'Front Desk',
-            sub: 'Check-in, assign & departures',
+            label: 'Front Desk & Check-In',
+            sub:
+              (pulse?.desk.lateArrivals ?? 0) > 0
+                ? `${pulse?.desk.lateArrivals} overdue · ${pulse?.desk.arrivalsToday ?? 0} arriving today`
+                : 'Check-in, assign rooms & departures',
             href: '/desk',
             icon: ConciergeBell,
             badgeCount:
-              (pulse?.desk.arrivalsToday ?? 0) +
-              (pulse?.desk.departuresToday ?? 0) +
               (pulse?.desk.lateArrivals ?? 0) ||
+              (pulse?.desk.arrivalsToday ?? 0) + (pulse?.desk.departuresToday ?? 0) ||
               (pulse?.desk.inHouse ?? 0),
-            badgeTone:
-              ((pulse?.desk.arrivalsToday ?? 0) +
-                (pulse?.desk.departuresToday ?? 0) +
-                (pulse?.desk.lateArrivals ?? 0) >
-              0
+            badgeTone: (
+              (pulse?.desk.lateArrivals ?? 0) > 0
                 ? 'red'
-                : 'green') as 'red' | 'green',
-          },
-        ]
-      : []),
-    ...(canBookings
-      ? [
-          {
-            label: 'Reservations',
-            sub: 'Bookings, holds & folios',
-            href: '/reservations?sort=latest',
-            icon: BookOpenText,
-            badgeCount: (pulse?.reservations.heldCount ?? 0) || (pulse?.reservations.confirmedCount ?? 0),
-            badgeTone: ((pulse?.reservations.heldCount ?? 0) > 0 ? 'red' : 'green') as 'red' | 'green',
+                : (pulse?.desk.arrivalsToday ?? 0) + (pulse?.desk.departuresToday ?? 0) > 0
+                  ? 'amber'
+                  : 'green'
+            ) as BadgeTone,
           },
         ]
       : []),
     ...(can('bookings:write')
       ? [
           {
-            label: 'New Walk-In / Stay',
-            sub: 'Instant booking & hold',
+            label: '+ New Booking / Walk-In',
+            sub: 'Instant reservation or 48h hold',
             href: '/reservations/new?walkin=1',
             icon: UserRoundPlus,
+          },
+        ]
+      : []),
+    ...(canBookings
+      ? [
+          {
+            label: 'Reservations & Holds',
+            sub: 'Bookings, holds & guest folios',
+            href: '/reservations?sort=latest',
+            icon: BookOpenText,
+            badgeCount: (pulse?.reservations.heldCount ?? 0) || (pulse?.reservations.confirmedCount ?? 0),
+            badgeTone: ((pulse?.reservations.heldCount ?? 0) > 0 ? 'amber' : 'neutral') as BadgeTone,
           },
         ]
       : []),
@@ -300,11 +382,11 @@ export default function Today() {
             href: '/rack',
             icon: LayoutGrid,
             badgeCount: pulse?.rooms.vacantClean ?? 0,
-            badgeTone: ((pulse?.rooms.vacantClean ?? 0) > 0 ? 'green' : 'red') as 'red' | 'green',
+            badgeTone: ((pulse?.rooms.vacantClean ?? 0) > 0 ? 'green' : 'red') as BadgeTone,
           },
           {
-            label: 'Housekeeping',
-            sub: 'Cleaning & room inspection',
+            label: 'Housekeeping Queue',
+            sub: 'Floor cleaning & room inspection',
             href: '/housekeeping',
             icon: SprayCan,
             badgeCount:
@@ -312,25 +394,26 @@ export default function Today() {
               (pulse?.rooms.hkTodoCount ?? 0) +
               (pulse?.rooms.hkDoneToInspect ?? 0) ||
               (pulse?.rooms.vacantClean ?? 0),
-            badgeTone:
-              ((pulse?.rooms.vacantDirty ?? 0) +
+            badgeTone: (
+              (pulse?.rooms.vacantDirty ?? 0) +
                 (pulse?.rooms.hkTodoCount ?? 0) +
                 (pulse?.rooms.hkDoneToInspect ?? 0) >
               0
-                ? 'red'
-                : 'green') as 'red' | 'green',
+                ? 'amber'
+                : 'green'
+            ) as BadgeTone,
           },
         ]
       : []),
     ...(canPos
       ? [
           {
-            label: 'POS Terminal',
-            sub: 'Kitchen, Bar & Room Tabs',
+            label: 'Add POS Charge',
+            sub: 'Kitchen, Bar & Room Folio Tabs',
             href: '/pos',
             icon: UtensilsCrossed,
             badgeCount: (pulse?.operations.posOpenOrders ?? 0) || (pulse?.operations.posCompletedToday ?? 0),
-            badgeTone: ((pulse?.operations.posOpenOrders ?? 0) > 0 ? 'red' : 'green') as 'red' | 'green',
+            badgeTone: ((pulse?.operations.posOpenOrders ?? 0) > 0 ? 'amber' : 'green') as BadgeTone,
           },
         ]
       : []),
@@ -338,11 +421,11 @@ export default function Today() {
       ? [
           {
             label: 'Receipts & Billing',
-            sub: 'Issue A4 & 80mm thermal',
+            sub: 'Issue A4 & 80mm thermal receipts',
             href: '/receipts',
             icon: ReceiptText,
             badgeCount: pulse?.finance.receiptsIssuedToday ?? 0,
-            badgeTone: 'green' as const,
+            badgeTone: 'neutral' as BadgeTone,
           },
         ]
       : []),
@@ -354,7 +437,7 @@ export default function Today() {
             href: '/inventory',
             icon: Boxes,
             badgeCount: pulse?.operations.lowStockCount ?? 0,
-            badgeTone: ((pulse?.operations.lowStockCount ?? 0) > 0 ? 'red' : 'green') as 'red' | 'green',
+            badgeTone: ((pulse?.operations.lowStockCount ?? 0) > 0 ? 'red' : 'green') as BadgeTone,
           },
         ]
       : []),
@@ -366,7 +449,13 @@ export default function Today() {
             href: '/requisitions',
             icon: ClipboardCheck,
             badgeCount: pulse?.operations.pendingRequisitions ?? 0,
-            badgeTone: ((pulse?.operations.pendingRequisitions ?? 0) > 0 ? 'red' : 'green') as 'red' | 'green',
+            badgeTone: (
+              (pulse?.operations.urgentRequisitions ?? 0) > 0
+                ? 'red'
+                : (pulse?.operations.pendingRequisitions ?? 0) > 0
+                  ? 'amber'
+                  : 'green'
+            ) as BadgeTone,
           },
         ]
       : []),
@@ -378,14 +467,14 @@ export default function Today() {
             href: '/hr',
             icon: Users,
             badgeCount: (pulse?.hr.pendingLeaves ?? 0) || (pulse?.hr.activeStaff ?? 0),
-            badgeTone: ((pulse?.hr.pendingLeaves ?? 0) > 0 ? 'red' : 'green') as 'red' | 'green',
+            badgeTone: ((pulse?.hr.pendingLeaves ?? 0) > 0 ? 'amber' : 'neutral') as BadgeTone,
           },
         ]
       : []),
   ].slice(0, 8);
 
-  // Available lenses for the current user
-  const lenses: { id: DashboardLens; label: string; icon: LucideIcon; badge?: number; tone?: 'red' | 'green' }[] = [
+  // Available lenses for the current user with urgency-tiered badges
+  const lenses: { id: DashboardLens; label: string; icon: LucideIcon; badge?: number; tone?: BadgeTone }[] = [
     ...(me.role !== 'HOUSEKEEPING' || canDesk
       ? [{ id: 'ALL' as const, label: 'All Command', icon: Radio }]
       : []),
@@ -407,18 +496,17 @@ export default function Today() {
             label: 'Front Desk & Stays',
             icon: ConciergeBell,
             badge:
-              (pulse?.desk.arrivalsToday ?? 0) +
-                (pulse?.desk.departuresToday ?? 0) +
-                (pulse?.desk.lateArrivals ?? 0) ||
+              (pulse?.desk.lateArrivals ?? 0) +
+                (pulse?.desk.arrivalsToday ?? 0) +
+                (pulse?.desk.departuresToday ?? 0) ||
               (pulse?.desk.inHouse ?? 0) ||
               undefined,
             tone:
-              (pulse?.desk.arrivalsToday ?? 0) +
-                (pulse?.desk.departuresToday ?? 0) +
-                (pulse?.desk.lateArrivals ?? 0) >
-              0
+              (pulse?.desk.lateArrivals ?? 0) > 0
                 ? ('red' as const)
-                : ('green' as const),
+                : (pulse?.desk.arrivalsToday ?? 0) + (pulse?.desk.departuresToday ?? 0) > 0
+                  ? ('amber' as const)
+                  : ('green' as const),
           },
         ]
       : []),
@@ -435,12 +523,14 @@ export default function Today() {
               (pulse?.rooms.vacantClean ?? 0) ||
               undefined,
             tone:
-              (pulse?.rooms.vacantDirty ?? 0) +
-                (pulse?.rooms.hkTodoCount ?? 0) +
-                (pulse?.rooms.hkDoneToInspect ?? 0) >
-              0
+              (pulse?.rooms.vacantClean ?? 1) === 0 && (pulse?.rooms.totalActive ?? 0) > 0
                 ? ('red' as const)
-                : ('green' as const),
+                : (pulse?.rooms.vacantDirty ?? 0) +
+                      (pulse?.rooms.hkTodoCount ?? 0) +
+                      (pulse?.rooms.hkDoneToInspect ?? 0) >
+                    0
+                  ? ('amber' as const)
+                  : ('green' as const),
           },
         ]
       : []),
@@ -455,7 +545,10 @@ export default function Today() {
                 (pulse?.operations.pendingRequisitions ?? 0) +
                 (pulse?.operations.lowStockCount ?? 0) ||
               undefined,
-            tone: 'red' as const,
+            tone:
+              (pulse?.operations.lowStockCount ?? 0) + (pulse?.operations.urgentRequisitions ?? 0) > 0
+                ? ('red' as const)
+                : ('amber' as const),
           },
         ]
       : []),
@@ -470,56 +563,24 @@ export default function Today() {
                 (pulse?.waitlist.newCount ?? 0) +
                 (canHr ? pulse?.hr.pendingLeaves ?? 0 : 0) ||
               undefined,
-            tone: 'red' as const,
+            tone: 'amber' as const,
           },
         ]
       : []),
   ];
 
-  // Action items requiring attention right now
-  const actionAlerts: { label: string; count: number; href: string; tone: 'red' | 'green' }[] = [];
+  // Action items strictly tiered by operational urgency:
+  // RED = immediate overdue/errors/shortages; AMBER = pending staff tasks
+  const actionAlerts: { label: string; count: number; href: string; tone: BadgeTone }[] = [];
   if (pulse) {
-    if (canInbox && pulse.inbox.newCount > 0) {
-      actionAlerts.push({ label: 'Unread Enquiries', count: pulse.inbox.newCount, href: '/inbox?status=NEW', tone: 'red' });
-    }
-    if (canWaitlist && pulse.waitlist.newCount > 0) {
-      actionAlerts.push({ label: 'Uncontacted Waitlist', count: pulse.waitlist.newCount, href: '/waitlist?status=NEW', tone: 'red' });
-    }
-    if (canDesk && pulse.desk.arrivalsToday > 0) {
-      actionAlerts.push({ label: 'Arrivals Today', count: pulse.desk.arrivalsToday, href: '/desk', tone: 'red' });
-    }
+    // 1. Immediate Critical / Overdue (RED)
     if (canDesk && pulse.desk.lateArrivals > 0) {
       actionAlerts.push({ label: 'Overdue Arrivals', count: pulse.desk.lateArrivals, href: '/desk', tone: 'red' });
     }
-    if (canDesk && pulse.desk.pendingGuestRequests > 0) {
-      actionAlerts.push({ label: 'Guest Stay Requests', count: pulse.desk.pendingGuestRequests, href: '/reservations', tone: 'red' });
-    }
-    if (canBookings && pulse.reservations.heldCount > 0) {
-      actionAlerts.push({ label: 'Held Bookings (Unpaid)', count: pulse.reservations.heldCount, href: '/reservations', tone: 'red' });
-    }
-    if (canRooms && (pulse.rooms.vacantDirty > 0 || pulse.rooms.hkTodoCount > 0)) {
+    if (canReq && pulse.operations.urgentRequisitions > 0) {
       actionAlerts.push({
-        label: 'Dirty Rooms / Tasks',
-        count: pulse.rooms.vacantDirty + pulse.rooms.hkTodoCount,
-        href: '/housekeeping',
-        tone: 'red',
-      });
-    }
-    if (canRooms && pulse.rooms.hkDoneToInspect > 0) {
-      actionAlerts.push({
-        label: 'Rooms Awaiting Inspection',
-        count: pulse.rooms.hkDoneToInspect,
-        href: '/housekeeping',
-        tone: 'red',
-      });
-    }
-    if (canPos && pulse.operations.posOpenOrders > 0) {
-      actionAlerts.push({ label: 'Active Kitchen/Bar Orders', count: pulse.operations.posOpenOrders, href: '/pos', tone: 'red' });
-    }
-    if (canReq && pulse.operations.pendingRequisitions > 0) {
-      actionAlerts.push({
-        label: 'Pending Requisitions',
-        count: pulse.operations.pendingRequisitions,
+        label: 'Urgent Requisitions',
+        count: pulse.operations.urgentRequisitions,
         href: '/requisitions',
         tone: 'red',
       });
@@ -527,14 +588,58 @@ export default function Today() {
     if (canInv && pulse.operations.lowStockCount > 0) {
       actionAlerts.push({ label: 'Low Stock SKUs', count: pulse.operations.lowStockCount, href: '/inventory', tone: 'red' });
     }
-    if (canHr && pulse.hr.pendingLeaves > 0) {
-      actionAlerts.push({ label: 'Pending Leave Requests', count: pulse.hr.pendingLeaves, href: '/hr?tab=LEAVE', tone: 'red' });
-    }
     if (can('guests:read') && pulse.feedback.openIssues > 0) {
-      actionAlerts.push({ label: 'Open Feedback Issues', count: pulse.feedback.openIssues, href: '/feedback', tone: 'red' });
+      actionAlerts.push({ label: 'Open Guest Issues', count: pulse.feedback.openIssues, href: '/feedback', tone: 'red' });
+    }
+
+    // 2. Pending Operational Tasks (AMBER)
+    if (canDesk && pulse.desk.arrivalsToday > 0) {
+      actionAlerts.push({ label: 'Arrivals Today', count: pulse.desk.arrivalsToday, href: '/desk', tone: 'amber' });
+    }
+    if (canDesk && pulse.desk.pendingGuestRequests > 0) {
+      actionAlerts.push({ label: 'Guest Stay Requests', count: pulse.desk.pendingGuestRequests, href: '/reservations', tone: 'amber' });
+    }
+    if (canBookings && pulse.reservations.heldCount > 0) {
+      actionAlerts.push({ label: 'Held Bookings (Unpaid)', count: pulse.reservations.heldCount, href: '/reservations', tone: 'amber' });
+    }
+    if (canRooms && (pulse.rooms.vacantDirty > 0 || pulse.rooms.hkTodoCount > 0)) {
+      actionAlerts.push({
+        label: 'Dirty Rooms / Tasks',
+        count: pulse.rooms.vacantDirty + pulse.rooms.hkTodoCount,
+        href: '/housekeeping',
+        tone: 'amber',
+      });
+    }
+    if (canRooms && pulse.rooms.hkDoneToInspect > 0) {
+      actionAlerts.push({
+        label: 'Awaiting Inspection',
+        count: pulse.rooms.hkDoneToInspect,
+        href: '/housekeeping',
+        tone: 'amber',
+      });
+    }
+    if (canPos && pulse.operations.posOpenOrders > 0) {
+      actionAlerts.push({ label: 'Active Kitchen/Bar Tabs', count: pulse.operations.posOpenOrders, href: '/pos', tone: 'amber' });
+    }
+    if (canReq && pulse.operations.pendingRequisitions - pulse.operations.urgentRequisitions > 0) {
+      actionAlerts.push({
+        label: 'Pending Requisitions',
+        count: pulse.operations.pendingRequisitions - pulse.operations.urgentRequisitions,
+        href: '/requisitions',
+        tone: 'amber',
+      });
+    }
+    if (canHr && pulse.hr.pendingLeaves > 0) {
+      actionAlerts.push({ label: 'Pending Leave Requests', count: pulse.hr.pendingLeaves, href: '/hr?tab=LEAVE', tone: 'amber' });
+    }
+    if (canInbox && pulse.inbox.newCount > 0) {
+      actionAlerts.push({ label: 'Unread Enquiries', count: pulse.inbox.newCount, href: '/inbox?status=NEW', tone: 'amber' });
+    }
+    if (canWaitlist && pulse.waitlist.newCount > 0) {
+      actionAlerts.push({ label: 'Uncontacted Waitlist', count: pulse.waitlist.newCount, href: '/waitlist?status=NEW', tone: 'amber' });
     }
     if (canContent && pulse.cms.unpublishedPages > 0) {
-      actionAlerts.push({ label: 'Unpublished CMS Drafts', count: pulse.cms.unpublishedPages, href: '/website/publishing', tone: 'red' });
+      actionAlerts.push({ label: 'Unpublished Drafts', count: pulse.cms.unpublishedPages, href: '/website/publishing', tone: 'neutral' });
     }
   }
 
@@ -555,34 +660,43 @@ export default function Today() {
       : 0;
 
   return (
-    <div className="fade-in space-y-4">
+    <div className="fade-in space-y-5 pb-20">
       <PageHeader
         title={`Overview · ${me.name.split(' ')[0]}`}
-        description={`${todayFormatted} · ${me.jobTitle ? `${me.jobTitle} · ` : ''}${canPos && !canDesk ? 'Culinary & Operations' : (roleBadgeLabel[me.role] ?? me.role)} · Kapchorwa HQ (1,900m)`}
+        description={`${todayFormatted} · ${me.customRoleName || me.jobTitle || roleBadgeLabel[me.role] || me.role} · Kapchorwa HQ (1,900m)`}
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => refetchPulse()}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-xs font-semibold text-fg-muted transition hover:border-line-strong hover:text-fg"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-semibold text-fg-muted transition hover:border-line-strong hover:text-fg"
               title="Refresh live hotel pulse"
             >
               <RefreshCw className={cn('size-3.5', pulseFetching && 'animate-spin')} />
               <span className="hidden sm:inline">Live Sync</span>
             </button>
-            {canBookings && (
-              <Button size="sm" variant="secondary" href="/reservations?sort=latest" icon={<CalendarDays className="size-3.5" />}>
-                Reservations
-              </Button>
+            {canDesk && (pulse?.desk.lateArrivals ?? 0) > 0 && (
+              <Link
+                href="/desk"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/12 px-3 text-xs font-bold text-danger transition hover:bg-rose-500/20"
+              >
+                <AlertTriangle className="size-3.5" />
+                <span>Resolve {pulse?.desk.lateArrivals} Overdue</span>
+              </Link>
             )}
             {canDesk && (
-              <Button size="sm" href="/desk" icon={<ConciergeBell className="size-3.5" />}>
-                Front Desk
+              <Button size="sm" variant="secondary" href="/desk" icon={<ConciergeBell className="size-3.5" />}>
+                Check-In / Desk
               </Button>
             )}
             {canPos && (
-              <Button size="sm" href="/pos" icon={<UtensilsCrossed className="size-3.5" />}>
-                POS
+              <Button size="sm" variant="secondary" href="/pos" icon={<UtensilsCrossed className="size-3.5" />}>
+                Add POS Charge
+              </Button>
+            )}
+            {canRooms && !canDesk && (
+              <Button size="sm" variant="secondary" href="/housekeeping" icon={<SprayCan className="size-3.5" />}>
+                Housekeeping
               </Button>
             )}
             {canReq && !canDesk && !canBookings && (
@@ -592,10 +706,10 @@ export default function Today() {
             )}
             {can('bookings:write') && (
               <Button size="sm" variant="primary" href="/reservations/new" icon={<Plus className="size-3.5" />}>
-                New Booking
+                + New Booking
               </Button>
             )}
-          </>
+          </div>
         }
       />
 
@@ -611,7 +725,7 @@ export default function Today() {
                   type="button"
                   onClick={() => setLens(l.id)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
+                    'inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
                     active
                       ? 'bg-fg text-bg shadow-xs'
                       : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
@@ -625,9 +739,13 @@ export default function Today() {
                         'ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-bold tabular leading-tight',
                         l.tone === 'red'
                           ? 'bg-rose-500 text-white'
-                          : active
-                            ? 'bg-emerald-400/25 text-emerald-200'
-                            : 'bg-emerald-500/15 text-success',
+                          : l.tone === 'amber'
+                            ? active
+                              ? 'bg-amber-400 text-slate-950'
+                              : 'bg-amber-500/20 text-warning'
+                            : active
+                              ? 'bg-emerald-400/25 text-emerald-200'
+                              : 'bg-emerald-500/15 text-success',
                       )}
                     >
                       {l.badge}
@@ -637,22 +755,26 @@ export default function Today() {
               );
             })}
           </div>
-          <div className="hidden items-center gap-2 pr-2 text-[11px] text-fg-subtle xl:flex">
-            <span className="inline-flex items-center gap-1">
-              <span className="size-2 rounded-full bg-rose-500" /> Action Required
+          <div className="hidden items-center gap-3 pr-2.5 text-[11px] font-medium text-fg-subtle xl:flex">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-rose-500" /> Immediate / Overdue
             </span>
             <span>·</span>
-            <span className="inline-flex items-center gap-1">
-              <span className="size-2 rounded-full bg-emerald-500" /> Healthy / Active
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-amber-500" /> Pending Tasks
+            </span>
+            <span>·</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-emerald-500" /> Ready / Active
             </span>
           </div>
         </div>
       )}
 
-      {/* Priority Action Center Strip (Red Urgent vs Green Healthy) */}
+      {/* Priority Action Center Strip (Strict Urgency Tiers: Red Immediate, Amber Pending, Green Ready) */}
       {pulse && (
-        <div className="card flex flex-wrap items-center gap-2 px-3.5 py-2.5">
-          <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-fg-subtle mr-1">
+        <div className="card flex flex-wrap items-center gap-2 px-4 py-3">
+          <span className="mr-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
             <Sparkles className="size-3.5 text-fg-muted" />
             House Pulse:
           </span>
@@ -661,10 +783,13 @@ export default function Today() {
               <Link
                 key={a.label}
                 href={a.href}
-                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-fg transition hover:border-line-strong"
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] transition hover:opacity-90 tabular',
+                  TONE_PILL_CLASSES[a.tone],
+                )}
               >
-                <span className="size-1.5 rounded-full bg-rose-500" />
-                <span className="font-semibold tabular">{a.count}</span>
+                <span className={cn('size-1.5 rounded-full shrink-0', TONE_DOT_CLASSES[a.tone])} />
+                <span className="font-extrabold">{a.count}</span>
                 <span>{a.label}</span>
               </Link>
             ))
@@ -674,80 +799,94 @@ export default function Today() {
           {canRooms && pulse.rooms.vacantClean > 0 && (
             <Link
               href="/rack"
-              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-fg transition hover:border-line-strong"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] transition hover:opacity-90 tabular',
+                TONE_PILL_CLASSES.green,
+              )}
             >
               <span className="size-1.5 rounded-full bg-emerald-500" />
-              <span className="font-semibold tabular">{pulse.rooms.vacantClean}</span>
+              <span className="font-bold">{pulse.rooms.vacantClean}</span>
               <span>Clean Rooms Ready</span>
             </Link>
           )}
           {canDesk && pulse.desk.inHouse > 0 && (
             <Link
               href="/desk"
-              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-fg transition hover:border-line-strong"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] transition hover:opacity-90 tabular',
+                TONE_PILL_CLASSES.neutral,
+              )}
             >
               <span className="size-1.5 rounded-full bg-emerald-500" />
-              <span className="font-semibold tabular">{pulse.desk.inHouse}</span>
+              <span className="font-bold text-fg">{pulse.desk.inHouse}</span>
               <span>In-House ({pulse.desk.guestsInHouse} Guests)</span>
             </Link>
           )}
         </div>
       )}
 
-      {/* Priority Quick Actions Bar */}
+      {/* Priority Quick Actions Bar (Touch-Accessible) */}
       {criticalActions.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           {criticalActions.map((a) => (
             <Link
               key={a.href}
               href={a.href}
-              className="group flex items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-2.5 transition-all hover:border-line-strong hover:bg-surface-2/50"
+              className="group flex min-h-[58px] items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 transition-all hover:border-line-strong hover:bg-surface-2/60 hover:shadow-xs"
             >
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg">
-                <a.icon className="size-4" strokeWidth={1.8} />
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg transition-colors group-hover:bg-fg group-hover:text-bg">
+                <a.icon className="size-4" strokeWidth={1.9} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[12.5px] font-semibold leading-tight text-fg">
+                  <span className="truncate text-[13px] font-bold leading-tight text-fg">
                     {a.label}
                   </span>
                   {a.badgeCount !== undefined && a.badgeCount > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-1.5 py-0.2 text-[10px] font-semibold text-fg tabular">
-                      <span className={cn('size-1.5 rounded-full', a.badgeTone === 'red' ? 'bg-rose-500' : 'bg-emerald-500')} />
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.2 text-[10px] tabular',
+                        TONE_PILL_CLASSES[a.badgeTone ?? 'neutral'],
+                      )}
+                    >
+                      <span className={cn('size-1.5 rounded-full', TONE_DOT_CLASSES[a.badgeTone ?? 'neutral'])} />
                       {a.badgeCount}
                     </span>
                   )}
                 </span>
-                <span className="mt-0.5 block truncate text-[11px] leading-tight text-fg-muted">
+                <span className="mt-0.5 block truncate text-[11.5px] leading-tight text-fg-muted">
                   {a.sub}
                 </span>
               </span>
-              <ArrowRight className="size-3.5 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg" />
+              <ArrowRight className="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg" />
             </Link>
           ))}
         </div>
       )}
 
-      {/* 8-Card Operational KPI Matrix */}
+      {/* High-Contrast Operational KPI Matrix */}
       {pulseLoading || !pulse ? (
-        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-            <Skeleton key={i} className="h-24" />
+            <Skeleton key={i} className="h-28" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {canRooms && (
             <KpiCard
               label="Room Readiness"
               icon={BedDouble}
+              accent="emerald"
               value={`${pulse.rooms.vacantClean} / ${pulse.rooms.totalActive} Clean`}
               sub={`${pulse.rooms.occupied} occupied · ${pulse.rooms.vacantDirty} dirty · ${occupancyPct}% occ`}
               href="/rack"
               badge={
-                pulse.rooms.vacantDirty > 0
-                  ? { text: `${pulse.rooms.vacantDirty} dirty`, tone: 'red' }
-                  : { text: `${pulse.rooms.vacantClean} ready`, tone: 'green' }
+                pulse.rooms.vacantClean === 0 && pulse.rooms.totalActive > 0
+                  ? { text: '0 clean ready', tone: 'red' }
+                  : pulse.rooms.vacantDirty > 0
+                    ? { text: `${pulse.rooms.vacantDirty} to clean`, tone: 'amber' }
+                    : { text: `${pulse.rooms.vacantClean} ready`, tone: 'green' }
               }
             />
           )}
@@ -756,13 +895,16 @@ export default function Today() {
             <KpiCard
               label="Front Desk Today"
               icon={ConciergeBell}
+              accent="sky"
               value={`${pulse.desk.inHouse} In-House`}
               sub={`${pulse.desk.arrivalsToday} arriving · ${pulse.desk.departuresToday} departing · ${pulse.desk.guestsInHouse} guests`}
               href="/desk"
               badge={
-                pulse.desk.arrivalsToday + pulse.desk.lateArrivals > 0
-                  ? { text: `${pulse.desk.arrivalsToday + pulse.desk.lateArrivals} due in`, tone: 'red' }
-                  : { text: `${pulse.desk.inHouse} active`, tone: 'green' }
+                pulse.desk.lateArrivals > 0
+                  ? { text: `${pulse.desk.lateArrivals} overdue`, tone: 'red' }
+                  : pulse.desk.arrivalsToday > 0
+                    ? { text: `${pulse.desk.arrivalsToday} arriving`, tone: 'amber' }
+                    : { text: `${pulse.desk.inHouse} active`, tone: 'green' }
               }
             />
           )}
@@ -771,9 +913,10 @@ export default function Today() {
             <KpiCard
               label="Cleared Today"
               icon={Wallet}
+              accent="amber"
               value={money(pulse.finance.clearedTodayUgxMinor, 'UGX')}
               sub={
-                 BigInt(pulse.finance.clearedTodayUsdMinor) > 0n
+                BigInt(pulse.finance.clearedTodayUsdMinor) > 0n
                   ? `+ ${money(pulse.finance.clearedTodayUsdMinor, 'USD')} · ${pulse.finance.receiptsIssuedToday} receipts`
                   : `${pulse.finance.clearedTodayCount} payments · ${pulse.finance.receiptsIssuedToday} receipts today`
               }
@@ -790,13 +933,14 @@ export default function Today() {
             <KpiCard
               label="Reservations"
               icon={BookOpenText}
+              accent="indigo"
               value={`${pulse.reservations.confirmedCount} Confirmed`}
               sub={`${pulse.reservations.heldCount} held awaiting payment · ${pulse.reservations.upcoming7d} in next 7d`}
               href="/reservations"
               badge={
                 pulse.reservations.heldCount > 0
-                  ? { text: `${pulse.reservations.heldCount} held`, tone: 'red' }
-                  : { text: `${pulse.reservations.confirmedCount} confirmed`, tone: 'green' }
+                  ? { text: `${pulse.reservations.heldCount} held`, tone: 'amber' }
+                  : { text: `${pulse.reservations.confirmedCount} confirmed`, tone: 'neutral' }
               }
             />
           )}
@@ -805,12 +949,17 @@ export default function Today() {
             <KpiCard
               label={canClub ? 'POS & Health Club' : 'Kitchen & Bar POS'}
               icon={UtensilsCrossed}
+              accent="orange"
               value={money(pulse.operations.posRevenueTodayUgxMinor, 'UGX')}
-              sub={canClub ? `${pulse.operations.posCompletedToday} settled · ${pulse.operations.healthClubInsideNow} in Gym/Spa` : `${pulse.operations.posCompletedToday} settled · ${pulse.operations.posOpenOrders} active tabs`}
+              sub={
+                canClub
+                  ? `${pulse.operations.posCompletedToday} settled · ${pulse.operations.healthClubInsideNow} in Gym/Spa`
+                  : `${pulse.operations.posCompletedToday} settled · ${pulse.operations.posOpenOrders} active tabs`
+              }
               href="/pos"
               badge={
                 pulse.operations.posOpenOrders > 0
-                  ? { text: `${pulse.operations.posOpenOrders} open orders`, tone: 'red' }
+                  ? { text: `${pulse.operations.posOpenOrders} open tabs`, tone: 'amber' }
                   : { text: `${pulse.operations.posCompletedToday} settled`, tone: 'green' }
               }
             />
@@ -820,13 +969,16 @@ export default function Today() {
             <KpiCard
               label="Kitchen & Store Inventory"
               icon={Boxes}
+              accent="teal"
               value={`${pulse.operations.totalInventoryItems} Total Items`}
               sub={`${pulse.operations.lowStockCount} low-stock SKUs · ${pulse.operations.pendingRequisitions} requisitions pending`}
               href="/inventory"
               badge={
                 pulse.operations.lowStockCount > 0
                   ? { text: `${pulse.operations.lowStockCount} low stock`, tone: 'red' }
-                  : { text: 'Stock OK', tone: 'green' }
+                  : pulse.operations.pendingRequisitions > 0
+                    ? { text: `${pulse.operations.pendingRequisitions} reqs`, tone: 'amber' }
+                    : { text: 'Stock OK', tone: 'green' }
               }
             />
           )}
@@ -835,16 +987,19 @@ export default function Today() {
             <KpiCard
               label="Supply & Requisitions"
               icon={ClipboardCheck}
+              accent="teal"
               value={`${pulse.operations.pendingRequisitions} Pending`}
               sub={`${pulse.operations.lowStockCount} low-stock SKUs · ${pulse.operations.totalInventoryItems} total items`}
               href="/requisitions"
               badge={
-                pulse.operations.pendingRequisitions + pulse.operations.lowStockCount > 0
+                pulse.operations.lowStockCount + pulse.operations.urgentRequisitions > 0
                   ? {
-                      text: `${pulse.operations.pendingRequisitions + pulse.operations.lowStockCount} alerts`,
+                      text: `${pulse.operations.lowStockCount + pulse.operations.urgentRequisitions} urgent`,
                       tone: 'red',
                     }
-                  : { text: 'Stock OK', tone: 'green' }
+                  : pulse.operations.pendingRequisitions > 0
+                    ? { text: `${pulse.operations.pendingRequisitions} pending`, tone: 'amber' }
+                    : { text: 'Stock OK', tone: 'green' }
               }
             />
           )}
@@ -853,12 +1008,13 @@ export default function Today() {
             <KpiCard
               label="Inbox & Waitlist"
               icon={Inbox}
+              accent="violet"
               value={`${pulse.inbox.openCount} Open Threads`}
               sub={`${pulse.inbox.newCount} unread inbox · ${pulse.waitlist.newCount} uncontacted waitlist`}
               href="/inbox"
               badge={
                 pulse.inbox.newCount + pulse.waitlist.newCount > 0
-                  ? { text: `${pulse.inbox.newCount + pulse.waitlist.newCount} new`, tone: 'red' }
+                  ? { text: `${pulse.inbox.newCount + pulse.waitlist.newCount} awaiting reply`, tone: 'amber' }
                   : { text: 'All triaged', tone: 'green' }
               }
             />
@@ -868,34 +1024,77 @@ export default function Today() {
             <KpiCard
               label="Staff & Rosters"
               icon={Users}
+              accent="rose"
               value={`${pulse.hr.activeStaff} Active Staff`}
               sub={`${pulse.hr.shiftsToday} shifts today · ${pulse.hr.departmentsCount} departments · ${money(hrOverview?.totalMonthlyPayrollMinor || '0', 'UGX')} payroll`}
               href="/hr"
               badge={
                 pulse.hr.pendingLeaves > 0
-                  ? { text: `${pulse.hr.pendingLeaves} leave req`, tone: 'red' }
-                  : { text: `${pulse.hr.activeStaff} active`, tone: 'green' }
+                  ? { text: `${pulse.hr.pendingLeaves} leave req`, tone: 'amber' }
+                  : { text: `${pulse.hr.activeStaff} active`, tone: 'neutral' }
               }
             />
           )}
         </div>
       )}
 
-      {/* LIVE FRONT DESK & HOUSEKEEPING COCKPIT ROW */}
+      {/* UNIFIED ROOMS, HOUSEKEEPING & FRONT DESK COCKPIT (Grouped Side-by-Side with Subtle Visual Boundaries) */}
       {((showDesk && canDesk) || (showHk && canRooms)) && (
-        <div
-          className={cn(
-            'grid gap-4',
-            showDesk && canDesk && showHk && canRooms ? 'xl:grid-cols-[1.35fr_1fr]' : 'grid-cols-1',
-          )}
-        >
-          {/* Left: Live Front Desk Queue */}
-          {showDesk && canDesk && (
-            <Section
-              title="Front Desk Live Movement"
-              description="Today's check-ins, in-house stays, and scheduled departures"
-              actions={
-                <div className="flex items-center gap-2">
+        <div className="rounded-2xl border border-line-strong/80 bg-surface-2/25 p-3 sm:p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-emerald-500" />
+              <h2 className="text-xs font-extrabold uppercase tracking-wider text-fg">
+                Live Front-of-House & Room Readiness Cockpit
+              </h2>
+              <span className="hidden text-xs text-fg-muted sm:inline">
+                — Check-ins, physical Room Rack readiness, and floor housekeeping grouped side-by-side
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {canDesk && (
+                <Link
+                  href="/desk"
+                  className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-fg transition hover:border-line-strong"
+                >
+                  <ConciergeBell className="size-3.5" /> Front Desk
+                </Link>
+              )}
+              {canRooms && (
+                <>
+                  <Link
+                    href="/rack"
+                    className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-fg transition hover:border-line-strong"
+                  >
+                    <LayoutGrid className="size-3.5" /> Room Rack
+                  </Link>
+                  <Link
+                    href="/housekeeping"
+                    className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-fg transition hover:border-line-strong"
+                  >
+                    <SprayCan className="size-3.5" /> Housekeeping
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              'grid gap-4',
+              showDesk && canDesk && showHk && canRooms
+                ? 'xl:grid-cols-[1.25fr_0.9fr_1fr]'
+                : showHk && canRooms
+                  ? 'xl:grid-cols-2'
+                  : 'grid-cols-1',
+            )}
+          >
+            {/* Column 1: Front Desk Live Movement (Touch-Friendly Cards) */}
+            {showDesk && canDesk && (
+              <Section
+                title="1. Front Desk Live Movement"
+                description="Tap any guest card to check in, assign a room, or settle balance"
+                actions={
                   <div className="flex rounded-lg border border-line bg-surface-2/60 p-0.5 text-[11px] font-semibold">
                     {(
                       [
@@ -909,7 +1108,7 @@ export default function Today() {
                         type="button"
                         onClick={() => setDeskTab(tItem.id)}
                         className={cn(
-                          'rounded-md px-2.5 py-1 transition',
+                          'min-h-[32px] rounded-md px-2.5 py-1 transition',
                           deskTab === tItem.id ? 'bg-surface text-fg shadow-2xs' : 'text-fg-muted hover:text-fg',
                         )}
                       >
@@ -917,248 +1116,297 @@ export default function Today() {
                       </button>
                     ))}
                   </div>
-                  <Link href="/desk" className="flex items-center gap-1 text-xs font-semibold text-fg-muted hover:text-fg">
-                    Desk <ArrowRight className="size-3" />
-                  </Link>
-                </div>
-              }
-            >
-              {!deskBoard ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-12" />
-                  <Skeleton className="h-12" />
-                  <Skeleton className="h-12" />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {deskBoard.lateArrivals.length > 0 && (
-                    <div className="flex items-center justify-between rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs">
-                      <span className="flex items-center gap-2 font-semibold text-danger">
-                        <AlertTriangle className="size-4 shrink-0" />
-                        {deskBoard.lateArrivals.length} overdue arrival(s) from prior date awaiting check-in or no-show
-                      </span>
-                      <Link href="/desk" className="font-bold text-danger underline">
-                        Resolve →
-                      </Link>
-                    </div>
-                  )}
+                }
+              >
+                {!deskBoard ? (
+                  <div className="space-y-2.5">
+                    <Skeleton className="h-16" />
+                    <Skeleton className="h-16" />
+                    <Skeleton className="h-16" />
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {deskBoard.lateArrivals.length > 0 && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-500/40 bg-rose-500/12 p-3 text-xs">
+                        <span className="flex items-center gap-2 font-bold text-danger">
+                          <AlertTriangle className="size-4 shrink-0" />
+                          {deskBoard.lateArrivals.length} overdue arrival(s) from prior date awaiting check-in or no-show
+                        </span>
+                        <Link
+                          href="/desk"
+                          className="inline-flex min-h-[36px] items-center rounded-lg bg-rose-600 px-3 py-1.5 font-bold text-white shadow-2xs hover:bg-rose-500"
+                        >
+                          Resolve Now →
+                        </Link>
+                      </div>
+                    )}
 
-                  {(() => {
-                    const list =
-                      deskTab === 'ARRIVALS'
-                        ? deskBoard.arrivals
-                        : deskTab === 'IN_HOUSE'
-                          ? deskBoard.inHouse
-                          : deskBoard.departures;
+                    {(() => {
+                      const list =
+                        deskTab === 'ARRIVALS'
+                          ? deskBoard.arrivals
+                          : deskTab === 'IN_HOUSE'
+                            ? deskBoard.inHouse
+                            : deskBoard.departures;
 
-                    if (list.length === 0) {
+                      if (list.length === 0) {
+                        return (
+                          <div className="rounded-xl border border-dashed border-line py-8 text-center text-xs text-fg-muted">
+                            No stays in {deskTab.toLowerCase().replace('_', '-')} queue right now.
+                          </div>
+                        );
+                      }
+
                       return (
-                        <div className="rounded-lg border border-dashed border-line py-8 text-center text-xs text-fg-muted">
-                          No stays in {deskTab.toLowerCase().replace('_', '-')} queue right now.
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <ul className="divide-y divide-line">
-                        {list.slice(0, 6).map((stay) => {
-                          const assignedRooms = stay.rooms
-                            .flatMap((r) => r.assigned.map((a) => a.number))
-                            .join(', ');
-                          const balance = BigInt(stay.balanceMinor || '0');
-                          return (
-                            <li key={stay.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <Link
-                                    href={`/reservations/${stay.id}`}
-                                    className="font-semibold text-fg hover:underline"
-                                  >
-                                    {stay.guest.name}
-                                  </Link>
-                                  {stay.isVip && (
-                                    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-warning">
-                                      VIP
+                        <div className="grid gap-2.5">
+                          {list.slice(0, 5).map((stay) => {
+                            const assignedRooms = stay.rooms
+                              .flatMap((r) => r.assigned.map((a) => a.number))
+                              .join(', ');
+                            const balance = BigInt(stay.balanceMinor || '0');
+                            return (
+                              <div
+                                key={stay.id}
+                                className="flex flex-col justify-between gap-2.5 rounded-xl border border-line bg-surface-2/35 p-3.5 transition hover:border-line-strong sm:flex-row sm:items-center"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Link
+                                      href={`/reservations/${stay.id}`}
+                                      className="text-[13.5px] font-bold text-fg hover:underline"
+                                    >
+                                      {stay.guest.name}
+                                    </Link>
+                                    {stay.isVip && (
+                                      <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-extrabold text-warning">
+                                        VIP
+                                      </span>
+                                    )}
+                                    <span className="font-mono text-[11px] font-semibold text-fg-subtle">{stay.code}</span>
+                                    <Status value={stay.status} />
+                                  </div>
+                                  <p className="mt-1 text-xs text-fg-muted">
+                                    <span className="font-medium text-fg">
+                                      {stay.rooms.map((r) => `${r.quantity}× ${r.roomTypeName}`).join(', ')}
+                                    </span>{' '}
+                                    ·{' '}
+                                    {assignedRooms ? (
+                                      <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[11px] font-bold text-success">
+                                        Rm {assignedRooms}
+                                      </span>
+                                    ) : (
+                                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-bold text-warning">
+                                        Unassigned Room
+                                      </span>
+                                    )}{' '}
+                                    · {stay.nights}n ({dateShort(stay.arrival)} → {dateShort(stay.departure)})
+                                  </p>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 border-t border-line/60 pt-2 sm:border-t-0 sm:pt-0">
+                                  {balance > 0n ? (
+                                    <span className="rounded-full border border-amber-500/35 bg-amber-500/12 px-2.5 py-1 text-[11px] font-bold text-warning tabular">
+                                      Due {money(balance.toString(), stay.currency)}
+                                    </span>
+                                  ) : (
+                                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-success">
+                                      Paid
                                     </span>
                                   )}
-                                  <span className="font-mono text-[11px] text-fg-subtle">{stay.code}</span>
+                                  <Link
+                                    href={deskTab === 'ARRIVALS' ? '/desk' : `/reservations/${stay.id}`}
+                                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3.5 py-1.5 text-xs font-bold text-fg shadow-2xs transition hover:bg-fg hover:text-bg"
+                                  >
+                                    {deskTab === 'ARRIVALS' ? 'Check In →' : 'Manage →'}
+                                  </Link>
                                 </div>
-                                <p className="mt-0.5 text-[11.5px] text-fg-muted">
-                                  {stay.rooms.map((r) => `${r.quantity}× ${r.roomTypeName}`).join(', ')} ·{' '}
-                                  {assignedRooms ? (
-                                    <span className="font-semibold text-success">Room {assignedRooms}</span>
-                                  ) : (
-                                    <span className="font-semibold text-warning">Unassigned</span>
-                                  )}{' '}
-                                  · {stay.nights}n ({dateShort(stay.arrival)} → {dateShort(stay.departure)})
-                                </p>
                               </div>
-                              <div className="flex items-center gap-2">
-                                {balance > 0n ? (
-                                  <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold text-danger tabular">
-                                    Due {money(balance.toString(), stay.currency)}
-                                  </span>
-                                ) : (
-                                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-success">
-                                    Paid
-                                  </span>
-                                )}
-                                <Status value={stay.status} />
-                                <Button size="sm" variant="secondary" href={`/reservations/${stay.id}`}>
-                                  Open
-                                </Button>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    );
-                  })()}
-                </div>
-              )}
-            </Section>
-          )}
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </Section>
+            )}
 
-          {/* Right: Live Room Rack & Housekeeping Turnaround */}
-          {showHk && canRooms && pulse && (
-            <Section
-              title="Room Rack & Housekeeping"
-              description="Real-time physical room status & priority turnover queue"
-              actions={
-                <div className="flex items-center gap-3">
-                  <Link href="/rack" className="text-xs font-semibold text-fg-muted hover:text-fg">
-                    Rack
+            {/* Column 2: Room Readiness & Rack Summary */}
+            {showHk && canRooms && pulse && (
+              <Section
+                title="2. Room Readiness & Rack"
+                description="Physical inventory status across all active rooms"
+                actions={
+                  <Link href="/rack" className="flex items-center gap-1 text-xs font-bold text-fg-muted hover:text-fg">
+                    Open Rack <ArrowRight className="size-3" />
                   </Link>
-                  <Link href="/housekeeping" className="flex items-center gap-1 text-xs font-semibold text-fg-muted hover:text-fg">
-                    Housekeeping <ArrowRight className="size-3" />
-                  </Link>
-                </div>
-              }
-            >
-              <div className="space-y-3.5">
-                {/* Visual Room Status Bar */}
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between text-xs">
-                    <span className="font-semibold text-fg">
-                      {pulse.rooms.vacantClean} of {pulse.rooms.totalActive} Rooms Ready to Sell
-                    </span>
-                    <span className="font-mono text-[11px] font-semibold text-fg-muted tabular">
-                      {occupancyPct}% Occupied
-                    </span>
+                }
+              >
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-line bg-surface-2/40 p-3.5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-fg-muted">
+                          Ready to Check In
+                        </span>
+                        <p className="display mt-0.5 text-3xl font-extrabold text-fg tabular">
+                          {pulse.rooms.vacantClean}{' '}
+                          <span className="text-base font-semibold text-fg-muted">
+                            / {pulse.rooms.totalActive} Clean
+                          </span>
+                        </p>
+                      </div>
+                      <span className="rounded-lg bg-surface px-2.5 py-1 font-mono text-xs font-extrabold text-fg tabular border border-line">
+                        {occupancyPct}% Occ
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex h-3.5 w-full overflow-hidden rounded-full bg-surface">
+                      {pulse.rooms.totalActive > 0 && (
+                        <>
+                          <div
+                            style={{ width: `${(pulse.rooms.vacantClean / pulse.rooms.totalActive) * 100}%` }}
+                            className="bg-emerald-500 transition-all"
+                            title={`Vacant Clean / Inspected: ${pulse.rooms.vacantClean}`}
+                          />
+                          <div
+                            style={{ width: `${(pulse.rooms.occupied / pulse.rooms.totalActive) * 100}%` }}
+                            className="bg-sky-500 transition-all"
+                            title={`Occupied: ${pulse.rooms.occupied}`}
+                          />
+                          <div
+                            style={{ width: `${(pulse.rooms.vacantDirty / pulse.rooms.totalActive) * 100}%` }}
+                            className="bg-amber-500 transition-all"
+                            title={`Vacant Dirty: ${pulse.rooms.vacantDirty}`}
+                          />
+                          <div
+                            style={{ width: `${(pulse.rooms.blocked / pulse.rooms.totalActive) * 100}%` }}
+                            className="bg-slate-400 transition-all"
+                            title={`Blocked / Out of Order: ${pulse.rooms.blocked}`}
+                          />
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface-2">
-                    {pulse.rooms.totalActive > 0 && (
-                      <>
-                        <div
-                          style={{ width: `${(pulse.rooms.vacantClean / pulse.rooms.totalActive) * 100}%` }}
-                          className="bg-emerald-500 transition-all"
-                          title={`Vacant Clean / Inspected: ${pulse.rooms.vacantClean}`}
-                        />
-                        <div
-                          style={{ width: `${(pulse.rooms.occupied / pulse.rooms.totalActive) * 100}%` }}
-                          className="bg-sky-500 transition-all"
-                          title={`Occupied: ${pulse.rooms.occupied}`}
-                        />
-                        <div
-                          style={{ width: `${(pulse.rooms.vacantDirty / pulse.rooms.totalActive) * 100}%` }}
-                          className="bg-rose-500 transition-all"
-                          title={`Vacant Dirty: ${pulse.rooms.vacantDirty}`}
-                        />
-                        <div
-                          style={{ width: `${(pulse.rooms.blocked / pulse.rooms.totalActive) * 100}%` }}
-                          className="bg-slate-400 transition-all"
-                          title={`Blocked / Out of Order: ${pulse.rooms.blocked}`}
-                        />
-                      </>
-                    )}
-                  </div>
-                  <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+
+                  <div className="grid grid-cols-2 gap-2.5">
                     <Link
                       href="/rack"
-                      className="rounded-lg border border-line bg-surface-2/50 p-2 text-center transition hover:bg-surface-2"
+                      className="flex min-h-[68px] flex-col justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3 transition hover:bg-emerald-500/15"
                     >
-                      <span className="block text-lg font-bold text-fg tabular">{pulse.rooms.vacantClean}</span>
-                      <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-fg-muted">
-                        <span className="size-1.5 rounded-full bg-emerald-500" /> Vacant Clean
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-success">
+                        <span className="size-2 rounded-full bg-emerald-500" /> Vacant Clean
+                      </span>
+                      <span className="display text-2xl font-extrabold text-fg tabular">
+                        {pulse.rooms.vacantClean}
                       </span>
                     </Link>
+
                     <Link
                       href="/rack"
-                      className="rounded-lg border border-line bg-surface-2/50 p-2 text-center transition hover:bg-surface-2"
+                      className="flex min-h-[68px] flex-col justify-between rounded-xl border border-sky-500/30 bg-sky-500/8 p-3 transition hover:bg-sky-500/15"
                     >
-                      <span className="block text-lg font-bold text-fg tabular">{pulse.rooms.occupied}</span>
-                      <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-fg-muted">
-                        <span className="size-1.5 rounded-full bg-fg-subtle" /> Occupied
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-600 dark:text-sky-400">
+                        <span className="size-2 rounded-full bg-sky-500" /> Occupied
+                      </span>
+                      <span className="display text-2xl font-extrabold text-fg tabular">
+                        {pulse.rooms.occupied}
                       </span>
                     </Link>
+
                     <Link
                       href="/housekeeping"
-                      className="rounded-lg border border-line bg-surface-2/50 p-2 text-center transition hover:bg-surface-2"
+                      className="flex min-h-[68px] flex-col justify-between rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 transition hover:bg-amber-500/18"
                     >
-                      <span className="block text-lg font-bold text-fg tabular">{pulse.rooms.vacantDirty}</span>
-                      <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-fg-muted">
-                        <span className="size-1.5 rounded-full bg-rose-500" /> Vacant Dirty
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-warning">
+                        <span className="size-2 rounded-full bg-amber-500" /> Vacant Dirty
+                      </span>
+                      <span className="display text-2xl font-extrabold text-fg tabular">
+                        {pulse.rooms.vacantDirty}
                       </span>
                     </Link>
+
                     <Link
                       href="/housekeeping"
-                      className="rounded-lg border border-line bg-surface-2/50 p-2 text-center transition hover:bg-surface-2"
+                      className="flex min-h-[68px] flex-col justify-between rounded-xl border border-line bg-surface-2/60 p-3 transition hover:bg-surface-2"
                     >
-                      <span className="block text-lg font-bold text-fg tabular">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-fg-muted">
+                        <span className="size-2 rounded-full bg-amber-400" /> Active HK Tasks
+                      </span>
+                      <span className="display text-2xl font-extrabold text-fg tabular">
                         {pulse.rooms.hkTodoCount + pulse.rooms.hkDoneToInspect}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-fg-muted">
-                        <span className="size-1.5 rounded-full bg-amber-500" /> Active Tasks
-                      </span>
                     </Link>
                   </div>
                 </div>
+              </Section>
+            )}
 
-                {/* Priority Cleaning Queue */}
-                <div className="border-t border-line pt-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
-                      Today&apos;s Housekeeping Queue
-                    </span>
-                    <span className="text-[11px] text-fg-muted">
-                      {pulse.rooms.hkInspectedToday} inspected today
-                    </span>
-                  </div>
-                  {hkBoard && hkBoard.tasks.filter((tItem) => tItem.status !== 'INSPECTED' && tItem.status !== 'SKIPPED').length > 0 ? (
-                    <ul className="divide-y divide-line">
-                      {hkBoard.tasks
-                        .filter((tItem) => tItem.status !== 'INSPECTED' && tItem.status !== 'SKIPPED')
-                        .slice(0, 4)
-                        .map((task) => (
-                          <li key={task.id} className="flex items-center justify-between gap-2 py-2 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono font-bold text-fg">
+            {/* Column 3: Today's Housekeeping Floor Queue (Large Touch Targets for Tablet/Mobile) */}
+            {showHk && canRooms && pulse && (
+              <Section
+                title="3. Housekeeping Queue"
+                description={`${pulse.rooms.hkInspectedToday} rooms inspected today · Tap card to update room status`}
+                actions={
+                  <Link href="/housekeeping" className="flex items-center gap-1 text-xs font-bold text-fg-muted hover:text-fg">
+                    Full Board <ArrowRight className="size-3" />
+                  </Link>
+                }
+              >
+                {hkBoard && hkBoard.tasks.filter((tItem) => tItem.status !== 'INSPECTED' && tItem.status !== 'SKIPPED').length > 0 ? (
+                  <div className="grid gap-2.5">
+                    {hkBoard.tasks
+                      .filter((tItem) => tItem.status !== 'INSPECTED' && tItem.status !== 'SKIPPED')
+                      .slice(0, 5)
+                      .map((task) => (
+                        <Link
+                          key={task.id}
+                          href="/housekeeping"
+                          className="flex min-h-[60px] items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/40 p-3 transition hover:border-line-strong hover:bg-surface-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-lg border border-line-strong bg-surface px-2 py-0.5 font-mono text-xs font-extrabold text-fg">
                                 Rm {task.room.number}
                               </span>
-                              <span className="font-medium text-fg">{task.room.roomTypeName}</span>
+                              <span className="truncate text-xs font-bold text-fg">
+                                {task.room.roomTypeName}
+                              </span>
                               {task.arrivalToday && (
-                                <span className="rounded-full bg-rose-500 px-1.5 py-0.2 text-[9.5px] font-bold text-white">
+                                <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white">
                                   Arrival Today
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-fg-subtle">{task.kind}</span>
-                              <Status value={task.status} />
-                            </div>
-                          </li>
-                        ))}
-                    </ul>
-                  ) : (
-                    <div className="flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/8 px-3 py-2.5 text-xs font-medium text-success">
-                      <CheckCircle2 className="size-4 shrink-0" />
+                            <p className="mt-1 text-[11px] font-medium text-fg-muted">
+                              {task.kind} · {task.assignee?.name ? `Assigned: ${task.assignee.name}` : 'Unassigned cleaner'}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Status value={task.status} />
+                            <span className="inline-flex min-h-[36px] items-center rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-bold text-fg">
+                              {task.status === 'DONE' ? 'Inspect →' : 'Clean →'}
+                            </span>
+                          </div>
+                        </Link>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-8 text-center">
+                    <CheckCircle2 className="size-6 text-success" />
+                    <p className="text-xs font-bold text-success">
                       All scheduled room cleaning & inspection tasks are complete!
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Section>
-          )}
+                    </p>
+                    <Link
+                      href="/housekeeping"
+                      className="mt-1 inline-flex min-h-[36px] items-center rounded-lg border border-emerald-500/30 bg-surface px-3 py-1.5 text-xs font-semibold text-fg hover:bg-surface-2"
+                    >
+                      Open Housekeeping Board →
+                    </Link>
+                  </div>
+                )}
+              </Section>
+            )}
+          </div>
         </div>
       )}
 
@@ -1330,7 +1578,7 @@ export default function Today() {
                                 .slice(0, 2)
                                 .join('')}
                               {c.status === 'NEW' && (
-                                <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-rose-500 ring-2 ring-surface" />
+                                <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-amber-500 ring-2 ring-surface" />
                               )}
                             </span>
                             <span className="min-w-0 flex-1">
@@ -1376,7 +1624,7 @@ export default function Today() {
                           >
                             <span className="min-w-0 flex-1">
                               <span className="flex items-center gap-1.5 font-medium text-fg">
-                                {w.status === 'NEW' && <span className="size-2 rounded-full bg-rose-500" />}
+                                {w.status === 'NEW' && <span className="size-2 rounded-full bg-amber-500" />}
                                 {w.contact.name}
                               </span>
                               <span className="block text-[11px] text-fg-muted">
@@ -1397,6 +1645,93 @@ export default function Today() {
           )}
         </>
       )}
+
+      {/* STICKY FLOATING ACTION TOOLBAR (Consolidated Fast-Paced Check-In, POS & Floor Operations) */}
+      <div className="fixed bottom-4 left-1/2 z-30 flex max-w-[95vw] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-2xl border border-line-strong bg-surface/95 p-1.5 shadow-[var(--shadow-lift)] backdrop-blur-md">
+        {can('bookings:write') && (
+          <Link
+            href="/reservations/new?walkin=1"
+            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl bg-fg px-3.5 py-2 text-xs font-bold text-bg shadow-xs transition hover:opacity-90"
+          >
+            <Plus className="size-4" strokeWidth={2.5} />
+            <span>New Booking</span>
+          </Link>
+        )}
+        {canDesk && (pulse?.desk.lateArrivals ?? 0) > 0 && (
+          <Link
+            href="/desk"
+            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-rose-500"
+          >
+            <AlertTriangle className="size-3.5" />
+            <span>Overdue ({pulse?.desk.lateArrivals})</span>
+          </Link>
+        )}
+        {canDesk && (
+          <Link
+            href="/desk"
+            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2"
+          >
+            <ConciergeBell className="size-3.5 text-sky-500" />
+            <span>Check-In</span>
+            {(pulse?.desk.arrivalsToday ?? 0) > 0 && (
+              <span className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-extrabold text-warning tabular">
+                {pulse?.desk.arrivalsToday}
+              </span>
+            )}
+          </Link>
+        )}
+        {canPos && (
+          <Link
+            href="/pos"
+            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2"
+          >
+            <UtensilsCrossed className="size-3.5 text-orange-500" />
+            <span>Add POS Charge</span>
+            {(pulse?.operations.posOpenOrders ?? 0) > 0 && (
+              <span className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-extrabold text-warning tabular">
+                {pulse?.operations.posOpenOrders}
+              </span>
+            )}
+          </Link>
+        )}
+        {canRooms && (
+          <>
+            <Link
+              href="/rack"
+              className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2"
+            >
+              <LayoutGrid className="size-3.5 text-emerald-500" />
+              <span>Room Rack</span>
+              {pulse && (
+                <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.2 text-[10px] font-extrabold text-success tabular">
+                  {pulse.rooms.vacantClean} clean
+                </span>
+              )}
+            </Link>
+            <Link
+              href="/housekeeping"
+              className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2"
+            >
+              <SprayCan className="size-3.5 text-amber-500" />
+              <span>Housekeeping</span>
+              {(pulse?.rooms.vacantDirty ?? 0) + (pulse?.rooms.hkTodoCount ?? 0) > 0 && (
+                <span className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-extrabold text-warning tabular">
+                  {(pulse?.rooms.vacantDirty ?? 0) + (pulse?.rooms.hkTodoCount ?? 0)}
+                </span>
+              )}
+            </Link>
+          </>
+        )}
+        {can('users:manage') && (
+          <Link
+            href="/settings/users?view=roles"
+            className="hidden min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2 lg:inline-flex"
+          >
+            <ShieldCheck className="size-3.5 text-violet-500" />
+            <span>Roles & Access</span>
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

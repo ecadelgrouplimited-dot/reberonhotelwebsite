@@ -18,7 +18,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import type { AdminPulseDTO } from '@reberon/contracts';
+import { ROLE_LABELS, type AdminPulseDTO } from '@reberon/contracts';
 import { get, post, WEB_URL } from '@/lib/api';
 import { MeProvider, useMeQuery } from '@/lib/providers';
 import { cn } from '@/lib/cn';
@@ -30,7 +30,7 @@ import { WebsiteHealth } from './website-health';
 
 export interface BadgeInfo {
   count: number;
-  tone: 'red' | 'green';
+  tone: 'red' | 'amber' | 'green' | 'neutral';
   tooltip: string;
 }
 
@@ -47,17 +47,17 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (!pulse) return {};
   const map: Partial<Record<NavBadgeKey, BadgeInfo>> = {};
 
-  // 1. Command & Comms
+  // 1. Command & Comms — Amber for pending triage, Neutral for passive open threads, Red strictly for failures
   if (pulse.inbox.newCount > 0) {
     map.inbox = {
       count: pulse.inbox.newCount,
-      tone: 'red',
+      tone: 'amber',
       tooltip: `${pulse.inbox.newCount} new unread enquiries (${pulse.inbox.openCount} open total)`,
     };
   } else if (pulse.inbox.openCount > 0) {
     map.inbox = {
       count: pulse.inbox.openCount,
-      tone: 'green',
+      tone: 'neutral',
       tooltip: `${pulse.inbox.openCount} active threads · all new enquiries triaged`,
     };
   }
@@ -65,13 +65,13 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (pulse.waitlist.newCount > 0) {
     map.waitlist = {
       count: pulse.waitlist.newCount,
-      tone: 'red',
+      tone: 'amber',
       tooltip: `${pulse.waitlist.newCount} uncontacted first-stay signups (${pulse.waitlist.totalActive} active)`,
     };
   } else if (pulse.waitlist.totalActive > 0) {
     map.waitlist = {
       count: pulse.waitlist.totalActive,
-      tone: 'green',
+      tone: 'neutral',
       tooltip: `${pulse.waitlist.totalActive} waitlist signups contacted`,
     };
   }
@@ -84,7 +84,7 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
     };
   }
 
-  // 2. Front Desk & Stays
+  // 2. Front Desk & Stays — Red only if overdue arrivals; Amber for scheduled check-in/out tasks; Green for in-house
   const deskActionCount =
     pulse.desk.arrivalsToday +
     pulse.desk.lateArrivals +
@@ -93,8 +93,8 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (deskActionCount > 0) {
     map.desk = {
       count: deskActionCount,
-      tone: 'red',
-      tooltip: `${pulse.desk.arrivalsToday} arrivals, ${pulse.desk.departuresToday} departures, ${pulse.desk.lateArrivals} late, ${pulse.desk.pendingGuestRequests} guest requests`,
+      tone: pulse.desk.lateArrivals > 0 ? 'red' : 'amber',
+      tooltip: `${pulse.desk.arrivalsToday} arrivals, ${pulse.desk.departuresToday} departures, ${pulse.desk.lateArrivals} overdue, ${pulse.desk.pendingGuestRequests} guest requests`,
     };
   } else if (pulse.desk.inHouse > 0) {
     map.desk = {
@@ -107,13 +107,13 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (pulse.reservations.heldCount > 0) {
     map.reservations = {
       count: pulse.reservations.heldCount,
-      tone: 'red',
+      tone: 'amber',
       tooltip: `${pulse.reservations.heldCount} held booking(s) awaiting payment · ${pulse.reservations.confirmedCount} confirmed`,
     };
   } else if (pulse.reservations.confirmedCount > 0) {
     map.reservations = {
       count: pulse.reservations.confirmedCount,
-      tone: 'green',
+      tone: 'neutral',
       tooltip: `${pulse.reservations.confirmedCount} confirmed reservation(s)`,
     };
   }
@@ -130,7 +130,7 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (hkAttention > 0) {
     map.housekeeping = {
       count: hkAttention,
-      tone: 'red',
+      tone: pulse.rooms.vacantDirty > 0 && pulse.desk.arrivalsToday > pulse.rooms.vacantClean ? 'red' : 'amber',
       tooltip: `${pulse.rooms.vacantDirty} dirty room(s), ${pulse.rooms.hkTodoCount} task(s) to clean, ${pulse.rooms.hkDoneToInspect} awaiting inspection`,
     };
   }
@@ -155,7 +155,7 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (pulse.finance.pendingQuotations > 0) {
     map.quotations = {
       count: pulse.finance.pendingQuotations,
-      tone: 'red',
+      tone: 'amber',
       tooltip: `${pulse.finance.pendingQuotations} draft/sent quotation(s) awaiting client confirmation`,
     };
   }
@@ -164,7 +164,7 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (pulse.operations.posOpenOrders > 0) {
     map.pos = {
       count: pulse.operations.posOpenOrders,
-      tone: 'red',
+      tone: 'amber',
       tooltip: `${pulse.operations.posOpenOrders} active kitchen/bar order(s) in preparation`,
     };
   }
@@ -188,7 +188,7 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (pulse.operations.pendingRequisitions > 0) {
     map.requisitions = {
       count: pulse.operations.pendingRequisitions,
-      tone: 'red',
+      tone: pulse.operations.urgentRequisitions > 0 ? 'red' : 'amber',
       tooltip: `${pulse.operations.pendingRequisitions} requisition(s) awaiting approval (${pulse.operations.urgentRequisitions} urgent)`,
     };
   }
@@ -197,14 +197,14 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (pulse.hr.pendingLeaves > 0) {
     map.leave = {
       count: pulse.hr.pendingLeaves,
-      tone: 'red',
+      tone: 'amber',
       tooltip: `${pulse.hr.pendingLeaves} leave request(s) pending review`,
     };
   }
   if (pulse.hr.draftPayrolls > 0) {
     map.payroll = {
       count: pulse.hr.draftPayrolls,
-      tone: 'red',
+      tone: 'amber',
       tooltip: `${pulse.hr.draftPayrolls} draft payroll record(s) awaiting disbursement`,
     };
   }
@@ -213,7 +213,7 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
   if (pulse.cms.unpublishedPages > 0) {
     map.publishing = {
       count: pulse.cms.unpublishedPages,
-      tone: 'red',
+      tone: 'neutral',
       tooltip: `${pulse.cms.unpublishedPages} page(s) have unpublished draft changes`,
     };
   }
@@ -223,19 +223,35 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
 
 function NavBadge({ badge, compact = false }: { badge?: BadgeInfo; compact?: boolean }) {
   if (!badge || badge.count <= 0) return null;
-  const isRed = badge.tone === 'red';
+  const toneStyles: Record<BadgeInfo['tone'], { pill: string; dot: string }> = {
+    red: {
+      pill: 'bg-rose-500/22 text-rose-200 ring-1 ring-inset ring-rose-400/40',
+      dot: 'bg-rose-400',
+    },
+    amber: {
+      pill: 'bg-amber-500/20 text-amber-200 ring-1 ring-inset ring-amber-400/35',
+      dot: 'bg-amber-400',
+    },
+    green: {
+      pill: 'bg-emerald-500/18 text-emerald-200 ring-1 ring-inset ring-emerald-400/30',
+      dot: 'bg-emerald-400',
+    },
+    neutral: {
+      pill: 'bg-white/10 text-white/75 ring-1 ring-inset ring-white/15',
+      dot: 'bg-white/50',
+    },
+  };
+  const style = toneStyles[badge.tone];
   return (
     <span
       title={badge.tooltip}
       className={cn(
         'inline-flex items-center justify-center gap-1 rounded-full font-semibold tabular leading-none transition-all',
         compact ? 'h-4 min-w-4 px-1.5 text-[9.5px]' : 'h-4.5 min-w-[1.25rem] px-1.5 text-[10px]',
-        isRed
-          ? 'bg-rose-500/20 text-rose-200 ring-1 ring-inset ring-rose-400/35'
-          : 'bg-emerald-500/18 text-emerald-200 ring-1 ring-inset ring-emerald-400/30',
+        style.pill,
       )}
     >
-      <span className={cn('size-1.5 rounded-full', isRed ? 'bg-rose-400' : 'bg-emerald-400')} />
+      <span className={cn('size-1.5 rounded-full', style.dot)} />
       {badge.count}
     </span>
   );
@@ -330,19 +346,21 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     }
   };
 
-  // Total red urgent badges vs green active badges across visible items
+  // Total red critical badges, amber pending badges, and green active badges across visible items
   const totals = useMemo(() => {
     let red = 0;
+    let amber = 0;
     let green = 0;
     for (const g of visibleGroups) {
       for (const item of g.items) {
         const b = item.badge ? badges[item.badge] : undefined;
         if (!b) continue;
         if (b.tone === 'red') red += b.count;
-        else green += b.count;
+        else if (b.tone === 'amber') amber += b.count;
+        else if (b.tone === 'green') green += b.count;
       }
     }
-    return { red, green };
+    return { red, amber, green };
   }, [visibleGroups, badges]);
 
   return (
@@ -369,21 +387,32 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </button>
       </div>
 
-      {/* Live Notification Summary Strip */}
-      <div className="flex items-center justify-between gap-1.5 border-b border-white/8 bg-white/[0.03] px-3 py-2 text-[10.5px]">
+      {/* Live Notification Summary Strip (Strict Urgency Tiers) */}
+      <div className="flex items-center justify-between gap-1 border-b border-white/8 bg-white/[0.03] px-2.5 py-2 text-[10px]">
         <Link
           href="/"
           onClick={onNavigate}
-          className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 font-medium text-[var(--sidebar-muted)] transition hover:bg-white/5 hover:text-white"
-          title="Items needing staff attention across the House"
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-[var(--sidebar-muted)] transition hover:bg-white/5 hover:text-white"
+          title="Immediate overdue or critical operational alerts"
         >
-          <span className={cn('size-2 rounded-full', totals.red > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400')} />
-          <span className="font-semibold text-white tabular">{totals.red}</span>
-          <span>action{totals.red === 1 ? '' : 's'}</span>
+          <span className={cn('size-2 rounded-full', totals.red > 0 ? 'bg-rose-500 animate-pulse' : 'bg-white/25')} />
+          <span className={cn('font-semibold tabular', totals.red > 0 ? 'text-rose-300' : 'text-white/70')}>{totals.red}</span>
+          <span>urgent</span>
         </Link>
-        <span className="text-white/15">•</span>
+        <span className="text-white/15">·</span>
+        <Link
+          href="/"
+          onClick={onNavigate}
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-[var(--sidebar-muted)] transition hover:bg-white/5 hover:text-white"
+          title="Pending operational tasks (arrivals, unread inbox, cleaning)"
+        >
+          <span className={cn('size-2 rounded-full', totals.amber > 0 ? 'bg-amber-400' : 'bg-white/25')} />
+          <span className={cn('font-semibold tabular', totals.amber > 0 ? 'text-amber-300' : 'text-white/70')}>{totals.amber}</span>
+          <span>pending</span>
+        </Link>
+        <span className="text-white/15">·</span>
         <div
-          className="flex items-center gap-1.5 px-1.5 py-0.5 text-[var(--sidebar-muted)]"
+          className="flex items-center gap-1 px-1.5 py-0.5 text-[var(--sidebar-muted)]"
           title="Active operational counts (ready rooms, in-house stays, active staff)"
         >
           <span className="size-2 rounded-full bg-emerald-400" />
@@ -400,12 +429,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
           // Group-level badge rollup
           let groupRed = 0;
+          let groupAmber = 0;
           let groupGreen = 0;
           for (const i of g.items) {
             const b = i.badge ? badges[i.badge] : undefined;
             if (!b) continue;
             if (b.tone === 'red') groupRed += b.count;
-            else groupGreen += b.count;
+            else if (b.tone === 'amber') groupAmber += b.count;
+            else if (b.tone === 'green') groupGreen += b.count;
           }
 
           return (
@@ -434,11 +465,21 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     badge={{
                       count: groupRed,
                       tone: 'red',
-                      tooltip: `${groupRed} urgent item(s) in ${g.label}`,
+                      tooltip: `${groupRed} critical item(s) in ${g.label}`,
                     }}
                   />
                 )}
-                {!isOpen && groupRed === 0 && groupGreen > 0 && (
+                {!isOpen && groupRed === 0 && groupAmber > 0 && (
+                  <NavBadge
+                    compact
+                    badge={{
+                      count: groupAmber,
+                      tone: 'amber',
+                      tooltip: `${groupAmber} pending task(s) in ${g.label}`,
+                    }}
+                  />
+                )}
+                {!isOpen && groupRed === 0 && groupAmber === 0 && groupGreen > 0 && (
                   <NavBadge
                     compact
                     badge={{
@@ -554,29 +595,47 @@ function AccountMenu() {
     setDark(!dark);
   };
 
-  const urgentTotal =
+  const criticalTotal =
+    (pulse?.desk.lateArrivals ?? 0) +
+    (pulse?.operations.urgentRequisitions ?? 0) +
+    (pulse?.operations.lowStockCount ?? 0) +
+    (pulse?.feedback.openIssues ?? 0);
+
+  const pendingTotal =
     (pulse?.inbox.newCount ?? 0) +
     (pulse?.waitlist.newCount ?? 0) +
     (pulse?.desk.arrivalsToday ?? 0) +
-    (pulse?.desk.lateArrivals ?? 0) +
     (pulse?.desk.pendingGuestRequests ?? 0) +
     (pulse?.rooms.vacantDirty ?? 0) +
     (pulse?.operations.posOpenOrders ?? 0) +
     (pulse?.operations.pendingRequisitions ?? 0) +
     (pulse?.hr.pendingLeaves ?? 0);
 
+  const roleDisplay = me.customRoleName || me.jobTitle || ROLE_LABELS[me.role] || me.role;
+
   return (
     <div className="flex items-center gap-2">
       {pulse && (
         <div className="hidden items-center gap-1.5 md:flex">
+          {criticalTotal > 0 && (
+            <Link
+              href="/"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-500/35 bg-rose-500/10 px-2.5 text-[11.5px] font-semibold text-danger transition hover:border-rose-500/60"
+              title="Immediate overdue or critical operational issues"
+            >
+              <span className="size-2 rounded-full bg-rose-500 animate-pulse" />
+              <span className="tabular font-bold">{criticalTotal}</span>
+              <span>urgent</span>
+            </Link>
+          )}
           <Link
             href="/"
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[11.5px] font-medium text-fg-muted transition hover:border-line-strong hover:text-fg"
-            title="Live house queue summary"
+            title="Pending operational tasks across the House"
           >
-            <span className={cn('size-2 rounded-full', urgentTotal > 0 ? 'bg-rose-500' : 'bg-emerald-500')} />
-            <span className="tabular font-semibold text-fg">{urgentTotal}</span>
-            <span>{urgentTotal === 1 ? 'action' : 'actions'}</span>
+            <span className={cn('size-2 rounded-full', pendingTotal > 0 ? 'bg-amber-500' : 'bg-emerald-500')} />
+            <span className="tabular font-semibold text-fg">{pendingTotal}</span>
+            <span>{pendingTotal === 1 ? 'pending' : 'pending'}</span>
           </Link>
           {pulse.rooms.totalActive > 0 && (
             <Link
@@ -605,7 +664,7 @@ function AccountMenu() {
           <span className="grid size-8 place-items-center rounded-full bg-fg text-[12px] font-semibold text-bg">{initials}</span>
           <span className="hidden text-left leading-tight sm:block">
             <span className="block text-[13px] font-semibold">{me.name}</span>
-            <span className="block text-[11px] capitalize text-fg-subtle">{me.role.toLowerCase()}</span>
+            <span className="block text-[11px] text-fg-subtle">{roleDisplay}</span>
           </span>
         </button>
         {open && (
@@ -616,7 +675,7 @@ function AccountMenu() {
                 <p className="truncate text-[12.5px] font-semibold text-fg">{me.name}</p>
                 <p className="truncate text-[11.5px] text-fg-subtle">{me.email}</p>
                 <span className="mt-1 inline-block rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-fg-muted">
-                  {me.role}
+                  {roleDisplay}
                 </span>
               </div>
               <Link href="/account" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium hover:bg-surface-2">

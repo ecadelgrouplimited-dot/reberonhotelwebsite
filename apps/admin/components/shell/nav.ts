@@ -184,6 +184,7 @@ export const NAV: NavGroup[] = [
       { label: 'Message Templates', href: '/settings/messages', icon: MessagesSquare, perm: 'settings:read' },
       { label: 'Integrations & Vault', href: '/settings/integrations', icon: PlugZap, perm: 'vault:manage' },
       { label: 'People & Access', href: '/settings/users', icon: Users, perm: 'users:manage' },
+      { label: 'Roles & Permissions', href: '/settings/users?view=roles', icon: ShieldCheck, perm: 'users:manage' },
       { label: 'Audit Log', href: '/settings/audit', icon: ScrollText, perm: 'audit:read' },
     ],
   },

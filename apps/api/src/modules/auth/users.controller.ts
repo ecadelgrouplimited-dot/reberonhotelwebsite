@@ -1,7 +1,25 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, OnModuleInit, Param, Patch, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import argon2 from 'argon2';
-import { OWNER_ONLY, PERMISSIONS, zAdminSetPasswordInput, zInviteInput, zStaffCreateInput, zUserUpdateInput, type Permission, type SessionDTO, type UserDTO } from '@reberon/contracts';
+import {
+  OWNER_ONLY,
+  PERMISSIONS,
+  ROLES,
+  ROLE_DESCRIPTIONS,
+  ROLE_LABELS,
+  ROLE_PERMISSIONS,
+  zAdminSetPasswordInput,
+  zCreateRoleInput,
+  zInviteInput,
+  zStaffCreateInput,
+  zUpdateRoleInput,
+  zUserUpdateInput,
+  type Permission,
+  type Role,
+  type RoleDefinitionDTO,
+  type SessionDTO,
+  type UserDTO,
+} from '@reberon/contracts';
 import type { z } from 'zod';
 import type { User } from '@reberon/db';
 import { normalizePhone } from '@reberon/utils';
@@ -16,7 +34,42 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { ARGON_OPTS } from './auth.service.js';
 import { hashToken, newToken } from './tokens.js';
 
-const ROLE_WORD: Record<string, string> = { OWNER: 'owner', MANAGER: 'manager', DESK: 'front desk', HOUSEKEEPING: 'housekeeping' };
+const ROLE_WORD: Record<string, string> = {
+  OWNER: 'Owner & Proprietor',
+  MANAGER: 'General Manager',
+  HR: 'Human Resources',
+  ACCOUNTANT: 'Finance & Accounts',
+  DESK: 'Front Desk & Reception',
+  KITCHEN: 'Kitchen & Culinary',
+  BAR: 'Bar & Beverage',
+  GYM: 'Health Club & Spa',
+  HOUSEKEEPING: 'Housekeeping & Rooms',
+};
+
+const ROLE_DEFAULT_COLOR: Record<Role, string> = {
+  OWNER: 'violet',
+  MANAGER: 'indigo',
+  HR: 'rose',
+  ACCOUNTANT: 'emerald',
+  DESK: 'sky',
+  KITCHEN: 'amber',
+  BAR: 'orange',
+  GYM: 'teal',
+  HOUSEKEEPING: 'slate',
+};
+
+function computeGrantsAndRevokes(baseRole: Role, targetPermissions: string[]) {
+  if (baseRole === 'OWNER') return { grants: [] as string[], revokes: [] as string[] };
+  const preset = new Set<string>(ROLE_PERMISSIONS[baseRole] ?? []);
+  const target = new Set<string>(
+    targetPermissions.filter(
+      (p) => (PERMISSIONS as readonly string[]).includes(p) && !OWNER_ONLY.includes(p as Permission),
+    ),
+  );
+  const grants = [...target].filter((p) => !preset.has(p));
+  const revokes = [...preset].filter((p) => !target.has(p));
+  return { grants, revokes };
+}
 
 function device(ua: string | null) {
   if (!ua) return 'Unknown device';
@@ -26,18 +79,60 @@ function device(ua: string | null) {
 }
 
 /**
- * People and access. The role is a starting preset; the owner can add or take
- * away single permissions per person, keep someone as a staff record without
- * a login, limit the hours they can sign in, end access on a date, or directly
- * set/change passwords and dispatch credentials to their official email.
+ * People, Roles, and Access. Includes built-in hotel roles (Owner, Manager, HR,
+ * Accountant, Front Desk, Kitchen, Bar, Gym/Spa, Housekeeping) as well as custom
+ * hotel roles with dynamic permission presets.
  */
 @Controller('v1/admin/users')
-export class UsersController {
+export class UsersController implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
   ) {}
+
+  async onModuleInit() {
+    try {
+      // 1. Seed / synchronize built-in system RoleDefinitions
+      for (const r of ROLES) {
+        await this.prisma.roleDefinition.upsert({
+          where: { key: r },
+          create: {
+            key: r,
+            name: ROLE_LABELS[r],
+            description: ROLE_DESCRIPTIONS[r],
+            color: ROLE_DEFAULT_COLOR[r] ?? 'emerald',
+            baseRole: r,
+            permissions: [...ROLE_PERMISSIONS[r]],
+            isSystem: true,
+          },
+          update: {
+            isSystem: true,
+            baseRole: r,
+          },
+        });
+      }
+
+      // 2. Automatically upgrade existing specialized staff from legacy DESK + revokes to their dedicated native roles
+      const upgrades: { email: string; role: Role }[] = [
+        { email: 'kitchen@reberonhotel.com', role: 'KITCHEN' },
+        { email: 'bar@reberonhotel.com', role: 'BAR' },
+        { email: 'gym@reberonhotel.com', role: 'GYM' },
+        { email: 'hr@reberonhotel.com', role: 'HR' },
+      ];
+      for (const up of upgrades) {
+        const u = await this.prisma.user.findUnique({ where: { email: up.email } });
+        if (u && u.role === 'DESK' && u.revokes.length >= 10) {
+          await this.prisma.user.update({
+            where: { id: u.id },
+            data: { role: up.role, grants: [], revokes: [] },
+          });
+        }
+      }
+    } catch {
+      // Ignore if migration hasn't run yet during build
+    }
+  }
 
   private async dto(rows: User[]): Promise<UserDTO[]> {
     const live = rows.length
@@ -50,6 +145,8 @@ export class UsersController {
       phone: u.phone,
       jobTitle: u.jobTitle,
       role: u.role,
+      customRoleKey: u.customRoleKey ?? null,
+      customRoleName: u.customRoleName ?? null,
       status: u.status,
       canSignIn: u.canSignIn,
       signInFrom: u.signInFrom,
@@ -65,9 +162,220 @@ export class UsersController {
     }));
   }
 
-  /** The staff list is visible to anyone who can assign work (inbox, cleaning). */
+  /* ───── Roles & Permissions Management ───── */
+
+  @Get('roles')
+  @Requires('dashboard:view')
+  async listRoles(): Promise<RoleDefinitionDTO[]> {
+    const [defs, activeUsers] = await Promise.all([
+      this.prisma.roleDefinition.findMany({ orderBy: [{ isSystem: 'desc' }, { createdAt: 'asc' }] }),
+      this.prisma.user.findMany({
+        where: { deletedAt: null, status: { not: 'DISABLED' } },
+        select: { role: true, customRoleKey: true },
+      }),
+    ]);
+
+    const systemOrder = ROLES as readonly string[];
+    const sorted = [...defs].sort((a, b) => {
+      const ia = systemOrder.indexOf(a.key);
+      const ib = systemOrder.indexOf(b.key);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return sorted.map((d) => {
+      const usersCount = activeUsers.filter((u) =>
+        u.customRoleKey ? u.customRoleKey === d.key : u.role === d.key,
+      ).length;
+      return {
+        key: d.key,
+        name: d.name,
+        description: d.description,
+        color: d.color,
+        baseRole: d.baseRole,
+        permissions: d.key === 'OWNER' ? [...PERMISSIONS] : d.permissions,
+        isSystem: d.isSystem,
+        usersCount,
+        updatedAt: d.updatedAt.toISOString(),
+      };
+    });
+  }
+
+  @Post('roles')
+  @Requires('users:manage')
+  async createRole(
+    @Body(new ZodPipe(zCreateRoleInput)) body: z.infer<typeof zCreateRoleInput>,
+    @CurrentUser() me: AuthUser,
+    @Req() req: Request,
+  ): Promise<RoleDefinitionDTO> {
+    const rawKey =
+      body.key ||
+      body.name
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 36);
+    if (!rawKey || rawKey.length < 2) throw badRequest('Provide a valid role name');
+
+    const exists = await this.prisma.roleDefinition.findUnique({ where: { key: rawKey } });
+    if (exists) throw conflict(`A role with key "${rawKey}" already exists`);
+
+    const cleanPerms = body.permissions.filter(
+      (p) => (PERMISSIONS as readonly string[]).includes(p) && !OWNER_ONLY.includes(p as Permission),
+    );
+    if (!cleanPerms.includes('dashboard:view')) cleanPerms.unshift('dashboard:view');
+
+    const created = await this.prisma.roleDefinition.create({
+      data: {
+        key: rawKey,
+        name: body.name.trim(),
+        description: body.description.trim(),
+        color: body.color || 'emerald',
+        baseRole: body.baseRole === 'OWNER' ? 'MANAGER' : body.baseRole,
+        permissions: cleanPerms,
+        isSystem: false,
+      },
+    });
+
+    await this.audit.record({
+      actor: me,
+      action: 'role.create',
+      entityType: 'RoleDefinition',
+      entityId: created.id,
+      summary: `Created custom role "${created.name}" (${created.key}) with ${cleanPerms.length} permissions`,
+      req,
+    });
+
+    return {
+      key: created.key,
+      name: created.name,
+      description: created.description,
+      color: created.color,
+      baseRole: created.baseRole,
+      permissions: created.permissions,
+      isSystem: created.isSystem,
+      usersCount: 0,
+      updatedAt: created.updatedAt.toISOString(),
+    };
+  }
+
+  @Patch('roles/:key')
+  @Requires('users:manage')
+  async updateRole(
+    @Param('key') key: string,
+    @Body(new ZodPipe(zUpdateRoleInput)) body: z.infer<typeof zUpdateRoleInput>,
+    @CurrentUser() me: AuthUser,
+    @Req() req: Request,
+  ): Promise<RoleDefinitionDTO> {
+    const existing = await this.prisma.roleDefinition.findUnique({ where: { key } });
+    if (!existing) throw notFound('Role definition');
+    if (existing.key === 'OWNER') throw badRequest('The Owner role always holds all permissions and cannot be restricted');
+
+    const cleanPerms = body.permissions
+      ? body.permissions.filter(
+          (p) => (PERMISSIONS as readonly string[]).includes(p) && !OWNER_ONLY.includes(p as Permission),
+        )
+      : existing.permissions;
+
+    const nextBaseRole = existing.isSystem
+      ? existing.baseRole
+      : body.baseRole && body.baseRole !== 'OWNER'
+        ? body.baseRole
+        : existing.baseRole;
+
+    const updated = await this.prisma.roleDefinition.update({
+      where: { key },
+      data: {
+        name: body.name?.trim() ?? existing.name,
+        description: body.description !== undefined ? body.description.trim() : existing.description,
+        color: body.color ?? existing.color,
+        baseRole: nextBaseRole,
+        permissions: cleanPerms,
+      },
+    });
+
+    // Synchronize permissions to all users currently assigned to this role
+    if (body.syncToUsers !== false) {
+      const { grants, revokes } = computeGrantsAndRevokes(updated.baseRole, updated.permissions);
+      if (updated.isSystem) {
+        await this.prisma.user.updateMany({
+          where: { role: updated.baseRole, customRoleKey: null, deletedAt: null },
+          data: { grants, revokes },
+        });
+      } else {
+        await this.prisma.user.updateMany({
+          where: { customRoleKey: updated.key, deletedAt: null },
+          data: {
+            role: updated.baseRole,
+            customRoleName: updated.name,
+            grants,
+            revokes,
+          },
+        });
+      }
+    }
+
+    const usersCount = await this.prisma.user.count({
+      where: {
+        deletedAt: null,
+        status: { not: 'DISABLED' },
+        ...(updated.isSystem ? { role: updated.baseRole, customRoleKey: null } : { customRoleKey: updated.key }),
+      },
+    });
+
+    await this.audit.record({
+      actor: me,
+      action: 'role.update',
+      entityType: 'RoleDefinition',
+      entityId: updated.id,
+      summary: `Updated role "${updated.name}" (${updated.key}) — ${updated.permissions.length} permissions`,
+      req,
+    });
+
+    return {
+      key: updated.key,
+      name: updated.name,
+      description: updated.description,
+      color: updated.color,
+      baseRole: updated.baseRole,
+      permissions: updated.permissions,
+      isSystem: updated.isSystem,
+      usersCount,
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  @Delete('roles/:key')
+  @Requires('users:manage')
+  async deleteRole(@Param('key') key: string, @CurrentUser() me: AuthUser, @Req() req: Request) {
+    const existing = await this.prisma.roleDefinition.findUnique({ where: { key } });
+    if (!existing) throw notFound('Role definition');
+    if (existing.isSystem) throw badRequest('Built-in hotel roles cannot be deleted, but you can customize their permissions');
+
+    await this.prisma.user.updateMany({
+      where: { customRoleKey: key },
+      data: { customRoleKey: null, customRoleName: null },
+    });
+
+    await this.prisma.roleDefinition.delete({ where: { key } });
+
+    await this.audit.record({
+      actor: me,
+      action: 'role.delete',
+      entityType: 'RoleDefinition',
+      entityId: existing.id,
+      summary: `Deleted custom role "${existing.name}" (${existing.key})`,
+      req,
+    });
+
+    return { ok: true, deleted: true };
+  }
+
+  /** The staff list is visible to anyone who can assign work (inbox, cleaning, HR). */
   @Get()
-  @Requires('inbox:read')
+  @Requires('dashboard:view')
   async list() {
     const rows = await this.prisma.user.findMany({ where: { deletedAt: null }, orderBy: [{ status: 'asc' }, { name: 'asc' }] });
     return this.dto(rows);
@@ -87,11 +395,12 @@ export class UsersController {
     const token = newToken();
     await this.prisma.userToken.create({ data: { userId: user.id, kind: 'INVITE', tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 7 * 86_400_000) } });
     const url = `${env.ADMIN_URL}/accept-invite?token=${token}`;
+    const roleLabel = user.customRoleName || ROLE_WORD[user.role] || user.role;
     await this.notifications.email({
       to: user.email,
       subject: `${me.name} invited you to the Reberon Suite`,
       heading: 'You have been invited',
-      paragraphs: [`Hello ${user.name.split(' ')[0]},`, `${me.name} has given you access to the Reberon Hotel Suite (${ROLE_WORD[user.role]}). Choose a password to start. The link works for seven days.`],
+      paragraphs: [`Hello ${user.name.split(' ')[0]},`, `${me.name} has given you access to the Reberon Hotel Suite (${roleLabel}). Choose a password to start. The link works for seven days.`],
       action: { label: 'Accept and set a password', url },
     });
     return env.NODE_ENV === 'production' ? undefined : url;
@@ -100,19 +409,20 @@ export class UsersController {
   private async sendCredentialsEmail(user: User, plainPassword: string, me: AuthUser) {
     if (!user.email) throw badRequest('Add an official email address first before sending credentials');
     const loginUrl = `${env.ADMIN_URL}/login`;
+    const roleLabel = user.customRoleName || ROLE_WORD[user.role] || user.role;
     await this.notifications.email({
       to: user.email,
       subject: 'Your Reberon Hotel Suite login credentials',
       heading: 'Your Reberon Suite Access',
       paragraphs: [
         `Hello ${user.name.split(' ')[0]},`,
-        `${me.name} has configured your sign-in credentials for the Reberon Hotel Management Suite (${ROLE_WORD[user.role]}).`,
+        `${me.name} has configured your sign-in credentials for the Reberon Hotel Management Suite (${roleLabel}).`,
         'Use the official email and password below to sign in. Once signed in, you can change or reset your password at any time under Account settings.',
       ],
       facts: [
         ['Official Email', user.email],
         ['Password', plainPassword],
-        ['Role', ROLE_WORD[user.role] ?? user.role],
+        ['Role', roleLabel],
         ['Portal URL', loginUrl],
       ],
       action: { label: 'Sign in to Reberon Suite', url: loginUrl },
@@ -132,16 +442,47 @@ export class UsersController {
   @Requires('users:manage')
   async create(@Body(new ZodPipe(zStaffCreateInput)) body: z.infer<typeof zStaffCreateInput>, @CurrentUser() me: AuthUser, @Req() req: Request) {
     const existing = body.email ? await this.prisma.user.findUnique({ where: { email: body.email } }) : null;
-    // Only an invitation that was never accepted may be re-used.
     if (existing && !(existing.status === 'INVITED' && !existing.deletedAt)) throw conflict('Someone with that email is already on the staff list');
     const phone = body.phone ? (normalizePhone(body.phone) ?? body.phone) : null;
     const passwordHash = body.canSignIn && body.password ? await argon2.hash(body.password, ARGON_OPTS) : undefined;
     const status = !body.canSignIn ? 'ACTIVE' : passwordHash ? 'ACTIVE' : 'INVITED';
+
+    let finalRole: Role = body.role;
+    let customRoleKey: string | null = null;
+    let customRoleName: string | null = null;
+    let grants: string[] = [];
+    let revokes: string[] = [];
+
+    if (body.customRoleKey) {
+      const def = await this.prisma.roleDefinition.findUnique({ where: { key: body.customRoleKey } });
+      if (def) {
+        finalRole = def.baseRole;
+        if (!def.isSystem) {
+          customRoleKey = def.key;
+          customRoleName = def.name;
+        }
+        const gr = computeGrantsAndRevokes(def.baseRole, def.permissions);
+        grants = gr.grants;
+        revokes = gr.revokes;
+      }
+    } else {
+      const sysDef = await this.prisma.roleDefinition.findUnique({ where: { key: body.role } });
+      if (sysDef && sysDef.key !== 'OWNER') {
+        const gr = computeGrantsAndRevokes(body.role, sysDef.permissions);
+        grants = gr.grants;
+        revokes = gr.revokes;
+      }
+    }
+
     const fields = {
       name: body.name,
-      jobTitle: body.jobTitle ?? null,
+      jobTitle: body.jobTitle ?? customRoleName ?? null,
       phone,
-      role: body.role,
+      role: finalRole,
+      customRoleKey,
+      customRoleName,
+      grants,
+      revokes,
       canSignIn: body.canSignIn,
       ...(passwordHash ? { passwordHash, status: 'ACTIVE' as const, failedLogins: 0, lockedUntil: null } : {}),
     };
@@ -162,12 +503,13 @@ export class UsersController {
       }
     }
 
+    const roleLabel = customRoleName || ROLE_WORD[user.role] || user.role;
     await this.audit.record({
       actor: me,
       action: 'user.create',
       entityType: 'User',
       entityId: user.id,
-      summary: `Added ${user.name} (${ROLE_WORD[user.role]})${!body.canSignIn ? ', no sign-in' : body.password ? (credentialsEmailed ? ' with password and emailed credentials' : ' with password set') : ' and sent an invitation'}`,
+      summary: `Added ${user.name} (${roleLabel})${!body.canSignIn ? ', no sign-in' : body.password ? (credentialsEmailed ? ' with password and emailed credentials' : ' with password set') : ' and sent an invitation'}`,
       req,
     });
     return { user: (await this.dto([user]))[0], inviteUrl, credentialsEmailed };
@@ -237,12 +579,12 @@ export class UsersController {
     const before = await this.prisma.user.findFirst({ where: { id, deletedAt: null } });
     if (!before) throw notFound('Person');
     const self = id === me.id;
-    const accessFields = ['role', 'status', 'canSignIn', 'signInFrom', 'signInUntil', 'accessExpiresAt', 'grants', 'revokes'] as const;
+    const accessFields = ['role', 'customRoleKey', 'status', 'canSignIn', 'signInFrom', 'signInUntil', 'accessExpiresAt', 'grants', 'revokes'] as const;
     if (self && accessFields.some((k) => body[k] !== undefined && JSON.stringify(body[k]) !== JSON.stringify(k === 'accessExpiresAt' ? (before.accessExpiresAt?.toISOString() ?? null) : before[k]))) {
       throw badRequest('Ask another owner to change your own access');
     }
     // Never leave the hotel without an owner who can get in.
-    const losesOwner = before.role === 'OWNER' && ((body.role && body.role !== 'OWNER') || body.status === 'DISABLED' || body.canSignIn === false || body.accessExpiresAt);
+    const losesOwner = before.role === 'OWNER' && ((body.role && body.role !== 'OWNER') || body.customRoleKey || body.status === 'DISABLED' || body.canSignIn === false || body.accessExpiresAt);
     if (losesOwner) {
       const owners = await this.prisma.user.count({ where: { role: 'OWNER', status: 'ACTIVE', canSignIn: true, deletedAt: null, id: { not: id } } });
       if (!owners) throw badRequest('There must always be another owner who can sign in');
@@ -254,11 +596,29 @@ export class UsersController {
     const known = (xs?: string[]) => xs?.filter((p) => (PERMISSIONS as readonly string[]).includes(p) && !OWNER_ONLY.includes(p as Permission));
     if (body.email && body.email !== before.email && (await this.prisma.user.findUnique({ where: { email: body.email } }))) throw conflict('Someone else already uses that email');
 
-    const { password, sendCredentials, ...restBody } = body;
+    const { password, sendCredentials, customRoleKey, ...restBody } = body;
     const passwordHash = password ? await argon2.hash(password, ARGON_OPTS) : undefined;
+
+    let customRoleUpdate: { customRoleKey?: string | null; customRoleName?: string | null } = {};
+    if (customRoleKey !== undefined) {
+      if (customRoleKey) {
+        const def = await this.prisma.roleDefinition.findUnique({ where: { key: customRoleKey } });
+        if (def && !def.isSystem) {
+          customRoleUpdate = { customRoleKey: def.key, customRoleName: def.name };
+          restBody.role = def.baseRole;
+        } else {
+          customRoleUpdate = { customRoleKey: null, customRoleName: null };
+        }
+      } else {
+        customRoleUpdate = { customRoleKey: null, customRoleName: null };
+      }
+    } else if (restBody.role && restBody.role !== before.role) {
+      customRoleUpdate = { customRoleKey: null, customRoleName: null };
+    }
 
     const data = {
       ...restBody,
+      ...customRoleUpdate,
       phone: restBody.phone === undefined ? undefined : restBody.phone ? (normalizePhone(restBody.phone) ?? restBody.phone) : null,
       accessExpiresAt: restBody.accessExpiresAt === undefined ? undefined : restBody.accessExpiresAt ? new Date(restBody.accessExpiresAt) : null,
       grants: known(restBody.grants),
@@ -278,8 +638,10 @@ export class UsersController {
     const now = permissionsOf(user);
     const added = now.filter((p) => !was.includes(p));
     const removed = was.filter((p) => !now.includes(p));
+    const beforeRoleLabel = before.customRoleName || ROLE_WORD[before.role] || before.role;
+    const afterRoleLabel = user.customRoleName || ROLE_WORD[user.role] || user.role;
     const bits = [
-      body.role && body.role !== before.role ? `role ${ROLE_WORD[before.role]} → ${ROLE_WORD[body.role]}` : '',
+      beforeRoleLabel !== afterRoleLabel ? `role ${beforeRoleLabel} → ${afterRoleLabel}` : '',
       added.length ? `can now: ${added.join(', ')}` : '',
       removed.length ? `no longer: ${removed.join(', ')}` : '',
       body.canSignIn !== undefined && body.canSignIn !== before.canSignIn ? (body.canSignIn ? 'may sign in' : 'no sign-in') : '',
@@ -288,7 +650,7 @@ export class UsersController {
       body.accessExpiresAt !== undefined ? (body.accessExpiresAt ? `access ends ${body.accessExpiresAt.slice(0, 10)}` : 'no end date') : '',
       password ? (sendCredentials && user.email ? `password set & emailed to ${user.email}` : 'password set') : '',
     ].filter(Boolean);
-    await this.audit.record({ actor: me, action: 'user.update', entityType: 'User', entityId: id, summary: `${user.name}: ${bits.join('; ') || 'details updated'}`, before: { role: before.role, grants: before.grants, revokes: before.revokes, status: before.status }, after: restBody, req });
+    await this.audit.record({ actor: me, action: 'user.update', entityType: 'User', entityId: id, summary: `${user.name}: ${bits.join('; ') || 'details updated'}`, before: { role: before.role, customRoleKey: before.customRoleKey, grants: before.grants, revokes: before.revokes, status: before.status }, after: restBody, req });
     return (await this.dto([user]))[0];
   }
 

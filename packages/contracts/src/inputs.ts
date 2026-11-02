@@ -89,6 +89,7 @@ export const zUserUpdateInput = z.object({
   phone: z.string().trim().max(40).nullable().optional(),
   jobTitle: z.string().trim().max(80).nullable().optional(),
   role: z.enum(ROLES).optional(),
+  customRoleKey: z.string().trim().max(80).nullable().optional(),
   status: z.enum(['ACTIVE', 'DISABLED']).optional(),
   canSignIn: z.boolean().optional(),
   signInFrom: hhmm.nullable().optional(),
@@ -113,11 +114,30 @@ export const zStaffCreateInput = z
     phone: z.string().trim().max(40).optional(),
     email: z.string().trim().toLowerCase().email().optional().or(z.literal('').transform(() => undefined)),
     role: z.enum(ROLES),
+    customRoleKey: z.string().trim().max(80).nullable().optional(),
     canSignIn: z.boolean().default(true),
     password: zPasswordSchema.optional().or(z.literal('').transform(() => undefined)),
     sendCredentials: z.boolean().default(true),
   })
   .refine((v) => !v.canSignIn || !!v.email, { path: ['email'], message: 'An email is needed for sign-in access' });
+
+export const zCreateRoleInput = z.object({
+  name: z.string().trim().min(2, 'Role name is required').max(80),
+  key: z.string().trim().toUpperCase().regex(/^[A-Z0-9_]{2,40}$/, 'Use uppercase letters, numbers, and underscores').optional(),
+  description: z.string().trim().max(300).default(''),
+  color: z.string().trim().max(40).default('emerald'),
+  baseRole: z.enum(ROLES).default('DESK'),
+  permissions: z.array(z.string().max(40)).max(60),
+});
+
+export const zUpdateRoleInput = z.object({
+  name: z.string().trim().min(2).max(80).optional(),
+  description: z.string().trim().max(300).optional(),
+  color: z.string().trim().max(40).optional(),
+  baseRole: z.enum(ROLES).optional(),
+  permissions: z.array(z.string().max(40)).max(60).optional(),
+  syncToUsers: z.boolean().default(true),
+});
 
 /* ---------- Content ---------- */
 

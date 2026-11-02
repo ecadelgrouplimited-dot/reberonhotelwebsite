@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Copy, Eye, EyeOff, KeyRound, LogOut, Mail, MonitorSmartphone, Send, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
-import { ROLES, ROLE_DESCRIPTIONS, type Role, type SessionDTO, type UserDTO } from '@reberon/contracts';
+import { OWNER_ONLY, PERMISSIONS, ROLES, ROLE_DESCRIPTIONS, ROLE_PERMISSIONS, type Permission, type Role, type RoleDefinitionDTO, type SessionDTO, type UserDTO } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useMe } from '@/lib/providers';
 import { ago, dateTime } from '@/lib/format';
@@ -22,6 +22,7 @@ type Form = {
   phone: string;
   email: string;
   role: Role;
+  customRoleKey: string | null;
   canSignIn: boolean;
   hours: boolean;
   signInFrom: string;
@@ -37,6 +38,7 @@ const toForm = (u: UserDTO): Form => ({
   phone: u.phone ?? '',
   email: u.email ?? '',
   role: u.role,
+  customRoleKey: u.customRoleKey ?? null,
   canSignIn: u.canSignIn,
   hours: !!u.signInFrom,
   signInFrom: u.signInFrom ?? '07:00',
@@ -45,6 +47,17 @@ const toForm = (u: UserDTO): Form => ({
   grants: u.grants,
   revokes: u.revokes,
 });
+
+function computeGrantsRevokesFromPerms(baseRole: Role, targetPerms: string[]) {
+  if (baseRole === 'OWNER') return { grants: [] as string[], revokes: [] as string[] };
+  const preset = new Set<string>(ROLE_PERMISSIONS[baseRole] ?? []);
+  const target = new Set<string>(
+    targetPerms.filter((p) => (PERMISSIONS as readonly string[]).includes(p) && !OWNER_ONLY.includes(p as Permission)),
+  );
+  const grants = [...target].filter((p) => !preset.has(p));
+  const revokes = [...preset].filter((p) => !target.has(p));
+  return { grants, revokes };
+}
 
 function generateStrongPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
@@ -61,6 +74,7 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
   const isOwner = me.role === 'OWNER';
   const confirm = useConfirm();
   const { data: u } = useQuery({ queryKey: ['user', id], queryFn: () => get<UserDTO>(`/users/${id}`) });
+  const { data: rolesData } = useQuery({ queryKey: ['user-roles'], queryFn: () => get<RoleDefinitionDTO[]>('/users/roles') });
   const sessions = useQuery({ queryKey: ['user-sessions', id], queryFn: () => get<SessionDTO[]>(`/users/${id}/sessions`), enabled: !!u?.canSignIn });
   const [f, setF] = useState<Form | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -70,12 +84,14 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
 
   useEffect(() => { if (u) setF(toForm(u)); }, [u]);
   const self = id === me.id;
+  const allRoles = rolesData ?? [];
 
   const deleteAccount = useMutation({
     mutationFn: () => del(`/users/${id}`),
     onSuccess: () => {
       toast.success('Staff account permanently deleted');
       qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['user-roles'] });
       router.replace('/settings/users');
     },
     onError: (err) => {
@@ -94,6 +110,7 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
       if (!self) {
         Object.assign(body, {
           role: f!.role,
+          customRoleKey: f!.customRoleKey,
           canSignIn: f!.canSignIn,
           grants: f!.grants,
           revokes: f!.revokes,
@@ -111,6 +128,7 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
     onSuccess: (d) => {
       qc.setQueryData(['user', id], d);
       qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['user-roles'] });
       qc.invalidateQueries({ queryKey: ['user-sessions', id] });
       if (newPassword.trim().length >= 12) {
         setNewPassword('');
@@ -124,7 +142,6 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
 
   const setPasswordMut = useMutation({
     mutationFn: async () => {
-      // If email was edited in the form but not yet saved, save email first so credentials go to the right address
       if (f && f.email !== (u?.email ?? '')) {
         await patch<UserDTO>(`/users/${id}`, { email: f.email || null, canSignIn: true });
       }
@@ -151,6 +168,7 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
     onSuccess: (d) => {
       qc.setQueryData(['user', id], d);
       qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['user-roles'] });
       toast.success(d.status === 'DISABLED' ? 'Account disabled and signed out' : 'Account re-enabled');
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not change status'),
@@ -177,10 +195,34 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
   const dirty = JSON.stringify(f) !== JSON.stringify(toForm(u)) || newPassword.trim().length >= 12;
   const set = (p: Partial<Form>) => setF({ ...f, ...p });
 
+  const selectedRoleValue = f.customRoleKey || f.role;
+  const selectedRoleDef = allRoles.find((r) => r.key === selectedRoleValue);
+  const currentRoleLabel = selectedRoleDef?.name || u.customRoleName || ROLE_LABEL[u.role];
+
+  const handleSelectRole = (nextKey: string) => {
+    const def = allRoles.find((r) => r.key === nextKey);
+    if (def) {
+      const { grants, revokes } = computeGrantsRevokesFromPerms(def.baseRole, def.permissions);
+      set({
+        role: def.baseRole,
+        customRoleKey: def.isSystem ? null : def.key,
+        grants,
+        revokes,
+      });
+    } else if (ROLES.includes(nextKey as Role)) {
+      set({
+        role: nextKey as Role,
+        customRoleKey: null,
+        grants: [],
+        revokes: [],
+      });
+    }
+  };
+
   return (
     <div className="fade-in">
       <PageHeader
-        crumbs={[{ label: 'People & Access', href: '/settings/users' }, { label: u.name }]}
+        crumbs={[{ label: 'People, Roles & Access', href: '/settings/users' }, { label: u.name }]}
         title={
           <span className="flex flex-wrap items-center gap-2">
             {u.name}
@@ -196,7 +238,7 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
             {u.canSignIn && u.hasPassword && <Pill><KeyRound className="size-2.5" /> Password set</Pill>}
           </span>
         }
-        description={[u.jobTitle, ROLE_LABEL[u.role], u.email, u.canSignIn ? (u.lastLoginAt ? `last in ${ago(u.lastLoginAt)}` : 'never signed in') : null].filter(Boolean).join(' · ')}
+        description={[u.jobTitle, currentRoleLabel, u.email, u.canSignIn ? (u.lastLoginAt ? `last in ${ago(u.lastLoginAt)}` : 'never signed in') : null].filter(Boolean).join(' · ')}
         actions={
           <>
             {!self && (
@@ -230,17 +272,69 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
       )}
 
       <div className="grid items-start gap-4 xl:grid-cols-[1fr_24rem]">
-        <Section title="Role & Granular Permissions" description="Select a starting role preset or toggle individual permissions for this user.">
-          <div className="mb-4 max-w-sm">
-            <SelectInput label="Role Preset" value={f.role} disabled={self} onChange={(e) => set({ role: e.target.value as Role, grants: [], revokes: [] })}>
-              {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+        <Section
+          title="Role & Granular Permissions"
+          description="Select a built-in or custom hotel role preset, or toggle individual permissions for this user."
+          actions={
+            <Link
+              href="/settings/users?view=roles"
+              className="text-xs font-semibold text-brand hover:underline"
+            >
+              Manage Roles & Presets →
+            </Link>
+          }
+        >
+          <div className="mb-4 max-w-md">
+            <SelectInput
+              label="Role Preset"
+              value={selectedRoleValue}
+              disabled={self}
+              onChange={(e) => handleSelectRole(e.target.value)}
+            >
+              {allRoles.length > 0 ? (
+                <>
+                  <optgroup label="Built-In Hotel Roles">
+                    {allRoles
+                      .filter((r) => r.isSystem)
+                      .map((r) => (
+                        <option key={r.key} value={r.key}>
+                          {r.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                  {allRoles.some((r) => !r.isSystem) && (
+                    <optgroup label="Custom Hotel Roles">
+                      {allRoles
+                        .filter((r) => !r.isSystem)
+                        .map((r) => (
+                          <option key={r.key} value={r.key}>
+                            {r.name} (Custom)
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
+                </>
+              ) : (
+                ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABEL[r]}
+                  </option>
+                ))
+              )}
             </SelectInput>
             <p className="mt-1 text-xs text-fg-muted">
-              {ROLE_DESCRIPTIONS[f.role]}
-              {f.role !== u.role ? ' Changing the role resets custom permission overrides.' : ''}
+              {selectedRoleDef?.description || ROLE_DESCRIPTIONS[f.role]}
+              {selectedRoleValue !== (u.customRoleKey || u.role) ? ' Changing the role loads its default permissions.' : ''}
             </p>
           </div>
-          <AccessMatrix role={f.role} grants={f.grants} revokes={f.revokes} disabled={self} onChange={(n) => set(n)} />
+          <AccessMatrix
+            role={f.role}
+            customRoleName={selectedRoleDef && !selectedRoleDef.isSystem ? selectedRoleDef.name : null}
+            grants={f.grants}
+            revokes={f.revokes}
+            disabled={self}
+            onChange={(n) => set(n)}
+          />
         </Section>
 
         <aside className="grid gap-4 xl:sticky xl:top-16">

@@ -55,14 +55,45 @@ const ALL = [...PERMISSIONS];
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   OWNER: ALL,
   MANAGER: ALL.filter((p) => !['settings:features', 'users:manage', 'vault:manage', 'audit:read'].includes(p)),
+  HR: [
+    'dashboard:view', 'hr:manage', 'requisitions:request', 'requisitions:approve',
+    'expenses:manage', 'inbox:read', 'messages:read', 'reports:read',
+  ],
+  ACCOUNTANT: [
+    'dashboard:view', 'reports:read', 'payments:record', 'payments:refund',
+    'receipts:read', 'receipts:issue', 'receipts:void', 'quotations:manage',
+    'expenses:manage', 'requisitions:request', 'requisitions:approve',
+    'inventory:manage', 'rates:read', 'bookings:read', 'hr:manage',
+  ],
   DESK: [
     'dashboard:view', 'media:read', 'media:upload', 'inbox:read', 'inbox:write',
     'waitlist:read', 'waitlist:write', 'rooms:status', 'bookings:read', 'bookings:write',
     'rates:read', 'payments:record', 'desk:operate', 'rooms:inspect', 'guests:read',
     'guests:write', 'messages:read', 'receipts:read', 'receipts:issue',
-    'pos:operate', 'healthclub:operate', 'quotations:manage', 'inventory:manage', 'requisitions:request',
+    'pos:operate', 'healthclub:operate', 'quotations:manage', 'requisitions:request',
   ],
-  HOUSEKEEPING: ['rooms:status'],
+  KITCHEN: [
+    'dashboard:view', 'pos:operate', 'inventory:manage', 'requisitions:request',
+  ],
+  BAR: [
+    'dashboard:view', 'pos:operate', 'inventory:manage', 'requisitions:request',
+  ],
+  GYM: [
+    'dashboard:view', 'healthclub:operate', 'pos:operate', 'inventory:manage', 'requisitions:request',
+  ],
+  HOUSEKEEPING: ['dashboard:view', 'rooms:status', 'requisitions:request'],
+};
+
+export const ROLE_LABELS: Record<Role, string> = {
+  OWNER: 'Owner & Proprietor',
+  MANAGER: 'General Manager',
+  HR: 'Human Resources',
+  ACCOUNTANT: 'Finance & Accounts',
+  DESK: 'Front Desk & Reception',
+  KITCHEN: 'Kitchen & Culinary',
+  BAR: 'Bar & Beverage',
+  GYM: 'Health Club & Spa',
+  HOUSEKEEPING: 'Housekeeping & Rooms',
 };
 
 export function can(role: Role | undefined | null, permission: Permission): boolean {
@@ -151,8 +182,13 @@ export const PERMISSION_INFO: PermissionInfo[] = [
 
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  OWNER: 'Brief, money, rates, users. Everything — without needing to run the morning desk.',
-  MANAGER: 'Bookings, rates, inbox, rooms and the website. Not bank keys, not users.',
-  DESK: 'Arrivals, walk-ins, folio, notes, inbox. Cannot rewrite a rate plan.',
-  HOUSEKEEPING: 'Dirty and clean. Cannot see payments.',
+  OWNER: 'Executive proprietor access: brief, finance, rates, HR, integrations, audit trail, and full user/role administration.',
+  MANAGER: 'General Manager command: bookings, rates, HR & payroll, operations, inventory, requisitions, and website.',
+  HR: 'Human Resource Management: employee directory, departments, shift rosters, attendance, leave approvals, and Uganda PAYE/NSSF payroll.',
+  ACCOUNTANT: 'Finance & Accounting: financial reports, folios, receipts, quotations, expenses, payroll oversight, and requisition disbursement.',
+  DESK: 'Front Desk & Guest Services: check-in/out, reservations, room rack, guest folios, receipts, inbox, and waitlist.',
+  KITCHEN: 'Culinary & Kitchen Operations: kitchen POS orders, pantry & ingredient inventory, and store requisitions.',
+  BAR: 'Bar & Lounge Operations: beverage & bar POS tabs, cellar/bar stock levels, and store requisitions.',
+  GYM: 'Health Club, Gym & Spa: member check-ins, day passes, spa/gym POS charges, towel logs, and facility requisitions.',
+  HOUSEKEEPING: 'Housekeeping & Room Readiness: live cleaning queue, room status updates, linen checks, and supply requisitions.',
 };

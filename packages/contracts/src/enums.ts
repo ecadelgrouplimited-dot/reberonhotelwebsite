@@ -1,7 +1,17 @@
 /** Closed sets shared by api, web and admin. Must match Prisma enums in packages/db. */
 const e = <T extends string>(...v: T[]) => v;
 
-export const ROLES = e('OWNER', 'MANAGER', 'DESK', 'HOUSEKEEPING');
+export const ROLES = e(
+  'OWNER',
+  'MANAGER',
+  'HR',
+  'ACCOUNTANT',
+  'DESK',
+  'KITCHEN',
+  'BAR',
+  'GYM',
+  'HOUSEKEEPING',
+);
 export type Role = (typeof ROLES)[number];
 
 export const USER_STATUSES = e('ACTIVE', 'INVITED', 'DISABLED');

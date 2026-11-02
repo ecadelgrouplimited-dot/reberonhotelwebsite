@@ -17,7 +17,12 @@ datasource db {
 enum Role {
   OWNER
   MANAGER
+  HR
+  ACCOUNTANT
   DESK
+  KITCHEN
+  BAR
+  GYM
   HOUSEKEEPING
 }
 
@@ -25,6 +30,19 @@ enum UserStatus {
   ACTIVE
   INVITED
   DISABLED
+}
+
+model RoleDefinition {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  key         String   @unique
+  name        String
+  description String   @default("")
+  color       String   @default("emerald")
+  baseRole    Role     @default(DESK)
+  permissions String[] @default([])
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model User {
@@ -37,6 +55,8 @@ model User {
   passwordHash    String?
   /// The role is a starting preset; grants and revokes adjust it per person
   role            Role
+  customRoleKey   String?
+  customRoleName  String?
   grants          String[]   @default([])
   revokes         String[]   @default([])
   /// Off: a staff record only (assignable, named on documents), no House login
