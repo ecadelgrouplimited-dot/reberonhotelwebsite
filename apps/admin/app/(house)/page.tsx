@@ -55,6 +55,7 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Section, Skeleton, Status } from '@/components/ui/bits';
 import { BarList, ColumnChart } from '@/components/charts/charts';
+import { LiveOperationsConsole } from '@/components/house/live-console';
 
 const CHANNEL: Record<string, string> = {
   WEB_FORM: 'Website',
@@ -182,44 +183,56 @@ function KpiCard({
     <Link
       href={href}
       className={cn(
-        'card group relative flex flex-col justify-between p-4 transition-all hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md',
+        'card group relative flex flex-col justify-center px-3 py-2.5 transition-all duration-200 hover:border-line-strong hover:bg-surface-2/50 hover:shadow-md',
         accentStyle.border,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
+      {/* Compact Primary Row (Always visible) */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span
             className={cn(
-              'grid size-8 shrink-0 place-items-center rounded-lg transition-transform group-hover:scale-105',
+              'grid size-7 shrink-0 place-items-center rounded-md transition-transform group-hover:scale-105',
               accentStyle.iconBg,
               accentStyle.iconText,
             )}
           >
-            <Icon className="size-4" strokeWidth={2} />
+            <Icon className="size-3.5" strokeWidth={2} />
           </span>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-fg-muted">
-            {label}
+          <div className="min-w-0">
+            <span className="block truncate text-[10px] font-bold uppercase tracking-wider text-fg-muted">
+              {label}
+            </span>
+            <p className="truncate font-display text-[15px] font-extrabold leading-tight text-fg tabular">
+              {value}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          {badge && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] tabular',
+                TONE_PILL_CLASSES[badge.tone],
+              )}
+            >
+              <span className={cn('size-1.5 rounded-full shrink-0', TONE_DOT_CLASSES[badge.tone])} />
+              {badge.text}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Collapsible Detail Drawer — Unfolds cleanly on Hover / Focus */}
+      <div className="max-h-0 overflow-hidden opacity-0 transition-all duration-200 group-hover:mt-1.5 group-hover:max-h-12 group-hover:border-t group-hover:border-line/70 group-hover:pt-1.5 group-hover:opacity-100 group-focus-visible:mt-1.5 group-focus-visible:max-h-12 group-focus-visible:pt-1.5 group-focus-visible:opacity-100">
+        <div className="flex items-center justify-between gap-2 text-[11px] text-fg-muted">
+          <span className="truncate font-medium">{sub}</span>
+          <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-accent">
+            Open <ArrowRight className="size-3" />
           </span>
         </div>
-        {badge && (
-          <span
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] tabular',
-              TONE_PILL_CLASSES[badge.tone],
-            )}
-          >
-            <span className={cn('size-1.5 rounded-full shrink-0', TONE_DOT_CLASSES[badge.tone])} />
-            {badge.text}
-          </span>
-        )}
       </div>
-      <div className="mt-3.5 flex items-baseline justify-between gap-2">
-        <p className="display text-2xl font-extrabold tracking-tight text-fg sm:text-[28px] leading-none tabular">
-          {value}
-        </p>
-        <ArrowRight className="size-4 text-fg-subtle opacity-0 transition-all group-hover:translate-x-0.5 group-hover:text-fg group-hover:opacity-100" />
-      </div>
-      <p className="mt-2 truncate text-[12px] font-medium text-fg-muted">{sub}</p>
     </Link>
   );
 }
@@ -773,270 +786,324 @@ export default function Today() {
         </div>
       )}
 
-      {/* Priority Action Center Strip (Strict Urgency Tiers: Red Immediate, Amber Pending, Green Ready) */}
-      {pulse && (
-        <div className="card flex flex-wrap items-center gap-2 px-4 py-3">
-          <span className="mr-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
-            <Sparkles className="size-3.5 text-fg-muted" />
-            House Pulse:
-          </span>
-          {actionAlerts.length > 0 ? (
-            actionAlerts.map((a) => (
-              <Link
-                key={a.label}
-                href={a.href}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] transition hover:opacity-90 tabular',
-                  TONE_PILL_CLASSES[a.tone],
-                )}
-              >
-                <span className={cn('size-1.5 rounded-full shrink-0', TONE_DOT_CLASSES[a.tone])} />
-                <span className="font-extrabold">{a.count}</span>
-                <span>{a.label}</span>
-              </Link>
-            ))
-          ) : (
-            <StatusBadgePill tone="green" label="Zero urgent queues — all departments clear" />
-          )}
-          {canRooms && pulse.rooms.vacantClean > 0 && (
-            <Link
-              href="/rack"
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] transition hover:opacity-90 tabular',
-                TONE_PILL_CLASSES.green,
-              )}
-            >
-              <span className="size-1.5 rounded-full bg-emerald-500" />
-              <span className="font-bold">{pulse.rooms.vacantClean}</span>
-              <span>Clean Rooms Ready</span>
-            </Link>
-          )}
-          {canDesk && pulse.desk.inHouse > 0 && (
-            <Link
-              href="/desk"
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] transition hover:opacity-90 tabular',
-                TONE_PILL_CLASSES.neutral,
-              )}
-            >
-              <span className="size-1.5 rounded-full bg-emerald-500" />
-              <span className="font-bold text-fg">{pulse.desk.inHouse}</span>
-              <span>In-House ({pulse.desk.guestsInHouse} Guests)</span>
-            </Link>
-          )}
-        </div>
-      )}
+      {/* 1. TV-Style Interactive Live Operations Console (Dynamic Priority Queue & Real-Time Stream) */}
+      <LiveOperationsConsole />
 
-      {/* Priority Quick Actions Bar (Touch-Accessible) */}
+      {/* 2. Compact Hover-Expandable Quick-Launch Ribbon (Sorted by Live Urgency) */}
       {criticalActions.length > 0 && (
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          {criticalActions.map((a) => (
-            <Link
-              key={a.href}
-              href={a.href}
-              className="group flex min-h-[58px] items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 transition-all hover:border-line-strong hover:bg-surface-2/60 hover:shadow-xs"
-            >
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg transition-colors group-hover:bg-fg group-hover:text-bg">
-                <a.icon className="size-4" strokeWidth={1.9} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[13px] font-bold leading-tight text-fg">
-                    {a.label}
-                  </span>
-                  {a.badgeCount !== undefined && a.badgeCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {[...criticalActions]
+            .sort((a, b) => {
+              const weight = (t?: BadgeTone) =>
+                t === 'red' ? 3 : t === 'amber' ? 2 : t === 'green' ? 1 : 0;
+              return weight(b.badgeTone) - weight(a.badgeTone);
+            })
+            .map((a) => (
+              <Link
+                key={a.href}
+                href={a.href}
+                title={a.sub}
+                className="group inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-xs transition-all hover:border-line-strong hover:bg-surface-2 hover:shadow-xs"
+              >
+                <span className="grid size-6 shrink-0 place-items-center rounded-md bg-surface-2 text-fg transition-colors group-hover:bg-[#1A1E43] group-hover:text-white dark:group-hover:bg-[#D76E1B]">
+                  <a.icon className="size-3.5" strokeWidth={1.9} />
+                </span>
+                <span className="font-bold text-fg">{a.label}</span>
+                {a.badgeCount !== undefined && a.badgeCount > 0 && (
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.2 text-[10px] tabular',
+                      TONE_PILL_CLASSES[a.badgeTone ?? 'neutral'],
+                    )}
+                  >
                     <span
                       className={cn(
-                        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.2 text-[10px] tabular',
-                        TONE_PILL_CLASSES[a.badgeTone ?? 'neutral'],
+                        'size-1.5 rounded-full',
+                        TONE_DOT_CLASSES[a.badgeTone ?? 'neutral'],
                       )}
-                    >
-                      <span className={cn('size-1.5 rounded-full', TONE_DOT_CLASSES[a.badgeTone ?? 'neutral'])} />
-                      {a.badgeCount}
-                    </span>
-                  )}
+                    />
+                    {a.badgeCount}
+                  </span>
+                )}
+                <span className="hidden max-w-0 overflow-hidden whitespace-nowrap text-[11px] text-fg-muted opacity-0 transition-all duration-200 group-hover:max-w-[200px] group-hover:opacity-100 sm:inline">
+                  · {a.sub}
                 </span>
-                <span className="mt-0.5 block truncate text-[11.5px] leading-tight text-fg-muted">
-                  {a.sub}
-                </span>
-              </span>
-              <ArrowRight className="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg" />
-            </Link>
-          ))}
+              </Link>
+            ))}
         </div>
       )}
 
-      {/* High-Contrast Operational KPI Matrix */}
+      {/* 3. Dynamic Priority-Sorted Compact Hover-Collapsible KPI Strip */}
       {pulseLoading || !pulse ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-            <Skeleton key={i} className="h-28" />
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-14" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {canRooms && (
-            <KpiCard
-              label="Room Readiness"
-              icon={BedDouble}
-              accent="emerald"
-              value={`${pulse.rooms.vacantClean} / ${pulse.rooms.totalActive} Clean`}
-              sub={`${pulse.rooms.occupied} occupied · ${pulse.rooms.vacantDirty} dirty · ${occupancyPct}% occ`}
-              href="/rack"
-              badge={
-                pulse.rooms.vacantClean === 0 && pulse.rooms.totalActive > 0
-                  ? { text: '0 clean ready', tone: 'red' }
-                  : pulse.rooms.vacantDirty > 0
-                    ? { text: `${pulse.rooms.vacantDirty} to clean`, tone: 'amber' }
-                    : { text: `${pulse.rooms.vacantClean} ready`, tone: 'green' }
-              }
-            />
-          )}
-
-          {(canDesk || canBookings) && (
-            <KpiCard
-              label="Front Desk Today"
-              icon={ConciergeBell}
-              accent="sky"
-              value={`${pulse.desk.inHouse} In-House`}
-              sub={`${pulse.desk.arrivalsToday} arriving · ${pulse.desk.departuresToday} departing · ${pulse.desk.guestsInHouse} guests`}
-              href="/desk"
-              badge={
-                pulse.desk.lateArrivals > 0
-                  ? { text: `${pulse.desk.lateArrivals} overdue`, tone: 'red' }
-                  : pulse.desk.arrivalsToday > 0
-                    ? { text: `${pulse.desk.arrivalsToday} arriving`, tone: 'amber' }
-                    : { text: `${pulse.desk.inHouse} active`, tone: 'green' }
-              }
-            />
-          )}
-
-          {(canReports || can('receipts:read')) && (
-            <KpiCard
-              label="Cleared Today"
-              icon={Wallet}
-              accent="amber"
-              value={money(pulse.finance.clearedTodayUgxMinor, 'UGX')}
-              sub={
-                BigInt(pulse.finance.clearedTodayUsdMinor) > 0n
-                  ? `+ ${money(pulse.finance.clearedTodayUsdMinor, 'USD')} · ${pulse.finance.receiptsIssuedToday} receipts`
-                  : `${pulse.finance.clearedTodayCount} payments · ${pulse.finance.receiptsIssuedToday} receipts today`
-              }
-              href="/brief"
-              badge={
-                pulse.finance.clearedTodayCount > 0
-                  ? { text: `${pulse.finance.clearedTodayCount} paid`, tone: 'green' }
-                  : { text: '0 today', tone: 'neutral' }
-              }
-            />
-          )}
-
-          {canBookings && (
-            <KpiCard
-              label="Reservations"
-              icon={BookOpenText}
-              accent="indigo"
-              value={`${pulse.reservations.confirmedCount} Confirmed`}
-              sub={`${pulse.reservations.heldCount} held awaiting payment · ${pulse.reservations.upcoming7d} in next 7d`}
-              href="/reservations"
-              badge={
-                pulse.reservations.heldCount > 0
-                  ? { text: `${pulse.reservations.heldCount} held`, tone: 'amber' }
-                  : { text: `${pulse.reservations.confirmedCount} confirmed`, tone: 'neutral' }
-              }
-            />
-          )}
-
-          {canPos && (
-            <KpiCard
-              label={canClub ? 'POS & Health Club' : 'Kitchen & Bar POS'}
-              icon={UtensilsCrossed}
-              accent="orange"
-              value={money(pulse.operations.posRevenueTodayUgxMinor, 'UGX')}
-              sub={
-                canClub
-                  ? `${pulse.operations.posCompletedToday} settled · ${pulse.operations.healthClubInsideNow} in Gym/Spa`
-                  : `${pulse.operations.posCompletedToday} settled · ${pulse.operations.posOpenOrders} active tabs`
-              }
-              href="/pos"
-              badge={
-                pulse.operations.posOpenOrders > 0
-                  ? { text: `${pulse.operations.posOpenOrders} open tabs`, tone: 'amber' }
-                  : { text: `${pulse.operations.posCompletedToday} settled`, tone: 'green' }
-              }
-            />
-          )}
-
-          {canInv && (
-            <KpiCard
-              label="Kitchen & Store Inventory"
-              icon={Boxes}
-              accent="teal"
-              value={`${pulse.operations.totalInventoryItems} Total Items`}
-              sub={`${pulse.operations.lowStockCount} low-stock SKUs · ${pulse.operations.pendingRequisitions} requisitions pending`}
-              href="/inventory"
-              badge={
-                pulse.operations.lowStockCount > 0
-                  ? { text: `${pulse.operations.lowStockCount} low stock`, tone: 'red' }
-                  : pulse.operations.pendingRequisitions > 0
-                    ? { text: `${pulse.operations.pendingRequisitions} reqs`, tone: 'amber' }
-                    : { text: 'Stock OK', tone: 'green' }
-              }
-            />
-          )}
-
-          {canReq && !canInv && (
-            <KpiCard
-              label="Supply & Requisitions"
-              icon={ClipboardCheck}
-              accent="teal"
-              value={`${pulse.operations.pendingRequisitions} Pending`}
-              sub={`${pulse.operations.lowStockCount} low-stock SKUs · ${pulse.operations.totalInventoryItems} total items`}
-              href="/requisitions"
-              badge={
-                pulse.operations.lowStockCount + pulse.operations.urgentRequisitions > 0
-                  ? {
-                      text: `${pulse.operations.lowStockCount + pulse.operations.urgentRequisitions} urgent`,
-                      tone: 'red',
-                    }
-                  : pulse.operations.pendingRequisitions > 0
-                    ? { text: `${pulse.operations.pendingRequisitions} pending`, tone: 'amber' }
-                    : { text: 'Stock OK', tone: 'green' }
-              }
-            />
-          )}
-
-          {(canInbox || canWaitlist) && (
-            <KpiCard
-              label="Inbox & Waitlist"
-              icon={Inbox}
-              accent="violet"
-              value={`${pulse.inbox.openCount} Open Threads`}
-              sub={`${pulse.inbox.newCount} unread inbox · ${pulse.waitlist.newCount} uncontacted waitlist`}
-              href="/inbox"
-              badge={
-                pulse.inbox.newCount + pulse.waitlist.newCount > 0
-                  ? { text: `${pulse.inbox.newCount + pulse.waitlist.newCount} awaiting reply`, tone: 'amber' }
-                  : { text: 'All triaged', tone: 'green' }
-              }
-            />
-          )}
-
-          {canHr && (
-            <KpiCard
-              label="Staff & Rosters"
-              icon={Users}
-              accent="rose"
-              value={`${pulse.hr.activeStaff} Active Staff`}
-              sub={`${pulse.hr.shiftsToday} shifts today · ${pulse.hr.departmentsCount} departments · ${money(hrOverview?.totalMonthlyPayrollMinor || '0', 'UGX')} payroll`}
-              href="/hr"
-              badge={
-                pulse.hr.pendingLeaves > 0
-                  ? { text: `${pulse.hr.pendingLeaves} leave req`, tone: 'amber' }
-                  : { text: `${pulse.hr.activeStaff} active`, tone: 'neutral' }
-              }
-            />
-          )}
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          {(
+            [
+              canRooms
+                ? {
+                    key: 'rooms',
+                    priority:
+                      pulse.rooms.vacantClean === 0 && pulse.rooms.totalActive > 0
+                        ? 100
+                        : pulse.rooms.vacantDirty > 0
+                          ? 80
+                          : 40,
+                    node: (
+                      <KpiCard
+                        key="rooms"
+                        label="Room Readiness"
+                        icon={BedDouble}
+                        accent="emerald"
+                        value={`${pulse.rooms.vacantClean} / ${pulse.rooms.totalActive} Clean`}
+                        sub={`${pulse.rooms.occupied} occupied · ${pulse.rooms.vacantDirty} dirty · ${occupancyPct}% occ`}
+                        href="/rack"
+                        badge={
+                          pulse.rooms.vacantClean === 0 && pulse.rooms.totalActive > 0
+                            ? { text: '0 clean', tone: 'red' }
+                            : pulse.rooms.vacantDirty > 0
+                              ? { text: `${pulse.rooms.vacantDirty} dirty`, tone: 'amber' }
+                              : { text: `${pulse.rooms.vacantClean} ready`, tone: 'green' }
+                        }
+                      />
+                    ),
+                  }
+                : null,
+              canDesk || canBookings
+                ? {
+                    key: 'desk',
+                    priority:
+                      pulse.desk.lateArrivals > 0
+                        ? 110
+                        : pulse.desk.arrivalsToday > 0
+                          ? 85
+                          : 50,
+                    node: (
+                      <KpiCard
+                        key="desk"
+                        label="Front Desk Today"
+                        icon={ConciergeBell}
+                        accent="sky"
+                        value={`${pulse.desk.inHouse} In-House`}
+                        sub={`${pulse.desk.arrivalsToday} arriving · ${pulse.desk.departuresToday} departing · ${pulse.desk.guestsInHouse} guests`}
+                        href="/desk"
+                        badge={
+                          pulse.desk.lateArrivals > 0
+                            ? { text: `${pulse.desk.lateArrivals} overdue`, tone: 'red' }
+                            : pulse.desk.arrivalsToday > 0
+                              ? { text: `${pulse.desk.arrivalsToday} arriving`, tone: 'amber' }
+                              : { text: `${pulse.desk.inHouse} active`, tone: 'green' }
+                        }
+                      />
+                    ),
+                  }
+                : null,
+              canReports || can('receipts:read')
+                ? {
+                    key: 'cleared',
+                    priority: pulse.finance.clearedTodayCount > 0 ? 60 : 25,
+                    node: (
+                      <KpiCard
+                        key="cleared"
+                        label="Cleared Today"
+                        icon={Wallet}
+                        accent="amber"
+                        value={money(pulse.finance.clearedTodayUgxMinor, 'UGX')}
+                        sub={
+                          BigInt(pulse.finance.clearedTodayUsdMinor) > 0n
+                            ? `+ ${money(pulse.finance.clearedTodayUsdMinor, 'USD')} · ${pulse.finance.receiptsIssuedToday} receipts`
+                            : `${pulse.finance.clearedTodayCount} payments · ${pulse.finance.receiptsIssuedToday} receipts today`
+                        }
+                        href="/brief"
+                        badge={
+                          pulse.finance.clearedTodayCount > 0
+                            ? { text: `${pulse.finance.clearedTodayCount} paid`, tone: 'green' }
+                            : { text: '0 today', tone: 'neutral' }
+                        }
+                      />
+                    ),
+                  }
+                : null,
+              canBookings
+                ? {
+                    key: 'reservations',
+                    priority: pulse.reservations.heldCount > 0 ? 78 : 35,
+                    node: (
+                      <KpiCard
+                        key="reservations"
+                        label="Reservations"
+                        icon={BookOpenText}
+                        accent="indigo"
+                        value={`${pulse.reservations.confirmedCount} Confirmed`}
+                        sub={`${pulse.reservations.heldCount} held awaiting payment · ${pulse.reservations.upcoming7d} in next 7d`}
+                        href="/reservations"
+                        badge={
+                          pulse.reservations.heldCount > 0
+                            ? { text: `${pulse.reservations.heldCount} held`, tone: 'amber' }
+                            : {
+                                text: `${pulse.reservations.confirmedCount} confirmed`,
+                                tone: 'neutral',
+                              }
+                        }
+                      />
+                    ),
+                  }
+                : null,
+              canPos
+                ? {
+                    key: 'pos',
+                    priority: pulse.operations.posOpenOrders > 0 ? 82 : 45,
+                    node: (
+                      <KpiCard
+                        key="pos"
+                        label={canClub ? 'POS & Health Club' : 'Kitchen & Bar POS'}
+                        icon={UtensilsCrossed}
+                        accent="orange"
+                        value={money(pulse.operations.posRevenueTodayUgxMinor, 'UGX')}
+                        sub={
+                          canClub
+                            ? `${pulse.operations.posCompletedToday} settled · ${pulse.operations.healthClubInsideNow} in Gym/Spa`
+                            : `${pulse.operations.posCompletedToday} settled · ${pulse.operations.posOpenOrders} waiting payment`
+                        }
+                        href="/pos"
+                        badge={
+                          pulse.operations.posOpenOrders > 0
+                            ? {
+                                text: `${pulse.operations.posOpenOrders} waiting`,
+                                tone: 'amber',
+                              }
+                            : {
+                                text: `${pulse.operations.posCompletedToday} paid`,
+                                tone: 'green',
+                              }
+                        }
+                      />
+                    ),
+                  }
+                : null,
+              canInv
+                ? {
+                    key: 'inv',
+                    priority:
+                      pulse.operations.lowStockCount > 0
+                        ? 95
+                        : pulse.operations.pendingRequisitions > 0
+                          ? 75
+                          : 30,
+                    node: (
+                      <KpiCard
+                        key="inv"
+                        label="Store & Inventory"
+                        icon={Boxes}
+                        accent="teal"
+                        value={`${pulse.operations.totalInventoryItems} SKUs`}
+                        sub={`${pulse.operations.lowStockCount} low-stock SKUs · ${pulse.operations.pendingRequisitions} requisitions pending`}
+                        href="/inventory"
+                        badge={
+                          pulse.operations.lowStockCount > 0
+                            ? { text: `${pulse.operations.lowStockCount} low stock`, tone: 'red' }
+                            : pulse.operations.pendingRequisitions > 0
+                              ? {
+                                  text: `${pulse.operations.pendingRequisitions} reqs`,
+                                  tone: 'amber',
+                                }
+                              : { text: 'Stock OK', tone: 'green' }
+                        }
+                      />
+                    ),
+                  }
+                : null,
+              canReq && !canInv
+                ? {
+                    key: 'reqs',
+                    priority:
+                      pulse.operations.lowStockCount + pulse.operations.urgentRequisitions > 0
+                        ? 95
+                        : pulse.operations.pendingRequisitions > 0
+                          ? 75
+                          : 30,
+                    node: (
+                      <KpiCard
+                        key="reqs"
+                        label="Supply & Requisitions"
+                        icon={ClipboardCheck}
+                        accent="teal"
+                        value={`${pulse.operations.pendingRequisitions} Pending`}
+                        sub={`${pulse.operations.lowStockCount} low-stock SKUs · ${pulse.operations.totalInventoryItems} total items`}
+                        href="/requisitions"
+                        badge={
+                          pulse.operations.lowStockCount + pulse.operations.urgentRequisitions > 0
+                            ? {
+                                text: `${pulse.operations.lowStockCount + pulse.operations.urgentRequisitions} urgent`,
+                                tone: 'red',
+                              }
+                            : pulse.operations.pendingRequisitions > 0
+                              ? {
+                                  text: `${pulse.operations.pendingRequisitions} pending`,
+                                  tone: 'amber',
+                                }
+                              : { text: 'Stock OK', tone: 'green' }
+                        }
+                      />
+                    ),
+                  }
+                : null,
+              canInbox || canWaitlist
+                ? {
+                    key: 'inbox',
+                    priority: pulse.inbox.newCount + pulse.waitlist.newCount > 0 ? 72 : 20,
+                    node: (
+                      <KpiCard
+                        key="inbox"
+                        label="Inbox & Waitlist"
+                        icon={Inbox}
+                        accent="violet"
+                        value={`${pulse.inbox.openCount} Threads`}
+                        sub={`${pulse.inbox.newCount} unread inbox · ${pulse.waitlist.newCount} uncontacted waitlist`}
+                        href="/inbox"
+                        badge={
+                          pulse.inbox.newCount + pulse.waitlist.newCount > 0
+                            ? {
+                                text: `${pulse.inbox.newCount + pulse.waitlist.newCount} new`,
+                                tone: 'amber',
+                              }
+                            : { text: 'All triaged', tone: 'green' }
+                        }
+                      />
+                    ),
+                  }
+                : null,
+              canHr
+                ? {
+                    key: 'hr',
+                    priority: pulse.hr.pendingLeaves > 0 ? 70 : 15,
+                    node: (
+                      <KpiCard
+                        key="hr"
+                        label="Staff & Rosters"
+                        icon={Users}
+                        accent="rose"
+                        value={`${pulse.hr.activeStaff} Staff`}
+                        sub={`${pulse.hr.shiftsToday} shifts today · ${pulse.hr.departmentsCount} depts · ${money(hrOverview?.totalMonthlyPayrollMinor || '0', 'UGX')} payroll`}
+                        href="/hr"
+                        badge={
+                          pulse.hr.pendingLeaves > 0
+                            ? { text: `${pulse.hr.pendingLeaves} leave req`, tone: 'amber' }
+                            : { text: `${pulse.hr.activeStaff} active`, tone: 'neutral' }
+                        }
+                      />
+                    ),
+                  }
+                : null,
+            ] as ({ key: string; priority: number; node: React.ReactNode } | null)[]
+          )
+            .filter((x): x is { key: string; priority: number; node: React.ReactNode } => x !== null)
+            .sort((a, b) => b.priority - a.priority)
+            .map((item) => item.node)}
         </div>
       )}
 

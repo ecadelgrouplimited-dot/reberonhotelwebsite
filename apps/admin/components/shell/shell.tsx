@@ -28,6 +28,7 @@ import { Kbd, Skeleton } from '@/components/ui/bits';
 import { NAV, type NavBadgeKey } from './nav';
 import { CommandPalette } from './command-palette';
 import { WebsiteHealth } from './website-health';
+import { LiveAlertCenterButton } from './live-alerts';
 
 export interface BadgeInfo {
   count: number;
@@ -650,6 +651,7 @@ function AccountMenu() {
           )}
         </div>
       )}
+      <LiveAlertCenterButton />
       <button
         type="button"
         onClick={toggleTheme}

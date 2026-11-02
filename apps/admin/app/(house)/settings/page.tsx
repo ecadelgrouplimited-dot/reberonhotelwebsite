@@ -120,7 +120,8 @@ export default function SettingsPage() {
         title="Settings & Notification Hub"
         description="Configure hotel identity, official reberonhotel.com contact details, SMTP email delivery (alerts@reberonhotel.com), receipt headers, and website modules."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/settings/notifications"><Button size="sm" variant="secondary">Notifications & Recipients</Button></Link>
             <Link href="/settings/users"><Button size="sm" variant="secondary">People & Access</Button></Link>
             <Link href="/settings/messages"><Button size="sm" variant="secondary">Email Templates</Button></Link>
             <Link href="/settings/integrations"><Button size="sm" variant="secondary"><PlugZap className="size-3.5" /> All Integrations</Button></Link>

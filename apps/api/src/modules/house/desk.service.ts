@@ -289,49 +289,77 @@ export class DeskService {
       })
       .catch((e) => this.log.warn(`checkout announcement failed: ${(e as Error).message}`));
 
-    const staffRecipients = await this.prisma.user
-      .findMany({
-        where: {
-          status: 'ACTIVE',
-          deletedAt: null,
-          role: { in: ['OWNER', 'MANAGER', 'HOUSEKEEPING', 'DESK'] },
-        },
-        select: { email: true, name: true, role: true },
-      })
-      .catch(() => []);
+    const rulesRow = await this.prisma.setting.findUnique({ where: { key: 'notifications.rules' } }).catch(() => null);
+    const savedRules = Array.isArray(rulesRow?.value) ? (rulesRow!.value as Record<string, unknown>[]) : [];
+    const checkoutRule = savedRules.find((r) => r.id === 'GUEST_CHECK_OUT');
+    const targetRoles = Array.isArray(checkoutRule?.roles)
+      ? (checkoutRule.roles as string[])
+      : ['OWNER', 'MANAGER', 'HOUSEKEEPING', 'DESK', 'ACCOUNTANT'];
+    const targetUserIds = Array.isArray(checkoutRule?.recipientUserIds)
+      ? (checkoutRule.recipientUserIds as string[])
+      : [];
+    const customEmails = Array.isArray(checkoutRule?.customEmails)
+      ? (checkoutRule.customEmails as string[])
+      : [];
+    const emailAllowed = checkoutRule?.emailEnabled !== false;
 
-    for (const staff of staffRecipients) {
-      if (!staff.email) continue;
-      const isHk = staff.role === 'HOUSEKEEPING';
-      await this.notifications
-        .email({
-          to: staff.email,
-          subject: isHk
-            ? `[Housekeeping Action] Room ${roomNumbers} Checked Out — Departure Clean Required`
-            : `[Check-Out Alert] ${guestName} (${out.r.code}) · Room ${roomNumbers} · ${settledAmountStr}`,
-          heading: isHk
-            ? `Room ${roomNumbers} Vacated — Departure Clean Queued`
-            : `Guest Check-Out Completed (${out.r.code})`,
-          paragraphs: [
-            isHk
-              ? `${guestName} has just checked out of Room ${roomNumbers}. The room is now marked VACANT_DIRTY and prioritized on the Housekeeping Queue.`
-              : `${guestName} has been checked out of Room ${roomNumbers} by ${actor.name}. Final folio & receipt settled.`,
-          ],
-          facts: [
-            ['Reservation', out.r.code],
-            ['Guest', guestName],
-            ['Room(s) Vacated', roomNumbers],
-            ['Final Settled Total', settledAmountStr],
-            ['Checked Out By', actor.name],
-            ['Housekeeping Status', 'VACANT_DIRTY (Departure Task Created)'],
-          ],
-          action: {
-            label: isHk ? 'Open Housekeeping Queue' : 'Open The House Dashboard',
-            url: `${env.ADMIN_URL}/${isHk ? 'housekeeping' : 'desk'}`,
+    if (emailAllowed) {
+      const staffRecipients = await this.prisma.user
+        .findMany({
+          where: {
+            status: 'ACTIVE',
+            deletedAt: null,
+            OR: [
+              { role: { in: targetRoles as never[] } },
+              ...(targetUserIds.length > 0 ? [{ id: { in: targetUserIds } }] : []),
+            ],
           },
-          footnote: 'Automated Reberon Hotel Hierarchy & Housekeeping Dispatch.',
+          select: { email: true, name: true, role: true },
         })
-        .catch(() => undefined);
+        .catch(() => []);
+
+      const recipientMap = new Map<string, { email: string; role: string }>();
+      for (const s of staffRecipients) {
+        if (s.email) recipientMap.set(s.email.toLowerCase(), { email: s.email, role: s.role });
+      }
+      for (const ce of customEmails) {
+        if (ce && ce.includes('@') && !recipientMap.has(ce.toLowerCase())) {
+          recipientMap.set(ce.toLowerCase(), { email: ce, role: 'MANAGER' });
+        }
+      }
+
+      for (const staff of recipientMap.values()) {
+        const isHk = staff.role === 'HOUSEKEEPING';
+        await this.notifications
+          .email({
+            to: staff.email,
+            subject: isHk
+              ? `[Housekeeping Action] Room ${roomNumbers} Checked Out — Departure Clean Required`
+              : `[Check-Out Alert] ${guestName} (${out.r.code}) · Room ${roomNumbers} · ${settledAmountStr}`,
+            heading: isHk
+              ? `Room ${roomNumbers} Vacated — Departure Clean Queued`
+              : `Guest Check-Out Completed (${out.r.code})`,
+            paragraphs: [
+              isHk
+                ? `${guestName} has just checked out of Room ${roomNumbers}. The room is now marked VACANT_DIRTY and prioritized on the Housekeeping Queue.`
+                : `${guestName} has been checked out of Room ${roomNumbers} by ${actor.name}. Final folio & receipt settled.`,
+            ],
+            facts: [
+              ['Reservation', out.r.code],
+              ['Guest', guestName],
+              ['Room(s) Vacated', roomNumbers],
+              ['Final Settled Total', settledAmountStr],
+              ['Checked Out By', actor.name],
+              ['Housekeeping Status', 'VACANT_DIRTY (Departure Task Created)'],
+            ],
+            action: {
+              label: isHk ? 'Open Housekeeping Queue' : 'Open The House Dashboard',
+              url: `${env.ADMIN_URL}/${isHk ? 'housekeeping' : 'desk'}`,
+            },
+            footnote: 'Automated Reberon Hotel Hierarchy & Housekeeping Dispatch.',
+          })
+          .catch(() => undefined);
+      }
     }
 
     return this.booking.detail(id);

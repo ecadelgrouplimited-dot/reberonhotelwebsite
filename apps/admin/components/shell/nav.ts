@@ -181,6 +181,7 @@ export const NAV: NavGroup[] = [
     defaultOpen: false,
     items: [
       { label: 'Hotel Settings', href: '/settings', icon: Settings, perm: 'settings:read' },
+      { label: 'Notifications & Alerts', href: '/settings/notifications', icon: ConciergeBell, perm: 'settings:read' },
       { label: 'Message Templates', href: '/settings/messages', icon: MessagesSquare, perm: 'settings:read' },
       { label: 'Integrations & Vault', href: '/settings/integrations', icon: PlugZap, perm: 'vault:manage' },
       { label: 'People & Access', href: '/settings/users', icon: Users, perm: 'users:manage' },

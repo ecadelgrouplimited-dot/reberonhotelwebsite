@@ -22,7 +22,7 @@ export const OUT_STATUS: Record<string, [string, Tone]> = {
   SENT: ['Sent', 'green'],
   QUEUED: ['Sending', 'blue'],
   FAILED: ['Failed', 'red'],
-  NOT_CONNECTED: ['Not sent — not connected', 'amber'],
+  NOT_CONNECTED: ['Unavailable', 'neutral'],
   SKIPPED: ['Skipped', 'neutral'],
 };
 
@@ -39,8 +39,11 @@ export function MessageRow({
   compact?: boolean;
 }) {
   const I = CHANNEL_ICON[m.channel] ?? Mail;
-  const [label, tone] = OUT_STATUS[m.status] ?? [m.status, 'neutral'];
-  const [open, setOpen] = useState(m.status === 'NOT_CONNECTED' || m.status === 'FAILED');
+  const isUnverifiedChannel = m.status === 'NOT_CONNECTED';
+  const [label, tone] = isUnverifiedChannel
+    ? [m.channel === 'WHATSAPP' ? 'WhatsApp · Unverified' : 'SMS · Offline', 'neutral' as Tone]
+    : (OUT_STATUS[m.status] ?? [m.status, 'neutral']);
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const copyBody = (e: React.MouseEvent) => {
@@ -106,23 +109,39 @@ export function MessageRow({
         {/* Right side status, date, and quick action */}
         <div className="flex items-center gap-2">
           <span className="text-[11.5px] text-fg-subtle">{dateTime(m.sentAt ?? m.createdAt)}</span>
-          <Pill tone={tone} dot>
+          <Pill tone={tone} dot={!isUnverifiedChannel}>
             {label}
           </Pill>
 
+          {isUnverifiedChannel && m.fallbackUrl && (
+            <a
+              href={m.fallbackUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-0.5 text-[10.5px] font-medium text-fg-muted hover:border-accent hover:text-accent transition-colors"
+              title="Send manually via WhatsApp link"
+            >
+              <Send className="size-2.5" />
+              <span>Wa.me</span>
+            </a>
+          )}
+
           {/* Direct link to open this conversation in Inbox */}
-          <Link
-            href={inboxHref}
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-[11px] font-medium text-fg-muted hover:bg-surface-2 hover:text-fg transition-colors"
-            title="Open conversation in Inbox"
-          >
-            <MessageSquare className="size-3 text-fg-subtle" />
-            <span>Conversation</span>
-          </Link>
+          {!compact && (
+            <Link
+              href={inboxHref}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-[11px] font-medium text-fg-muted hover:bg-surface-2 hover:text-fg transition-colors"
+              title="Open conversation in Inbox"
+            >
+              <MessageSquare className="size-3 text-fg-subtle" />
+              <span>Conversation</span>
+            </Link>
+          )}
 
           <span className="text-fg-subtle">
-            {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
           </span>
         </div>
       </div>
@@ -196,7 +215,16 @@ export function MessageRow({
             </div>
 
             {m.error && m.status !== 'SENT' && (
-              <span className="text-[11.5px] text-danger font-medium">{m.error}</span>
+              <span
+                className={cn(
+                  'text-[11px]',
+                  isUnverifiedChannel ? 'text-fg-subtle italic' : 'text-danger font-medium',
+                )}
+              >
+                {isUnverifiedChannel
+                  ? `${m.channel === 'WHATSAPP' ? 'WhatsApp API' : 'SMS'} not verified yet — automatic dispatch paused`
+                  : m.error}
+              </span>
             )}
           </div>
         </div>

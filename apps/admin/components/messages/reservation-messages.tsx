@@ -20,13 +20,53 @@ export function ReservationMessages({ reservationId, hasEmail, hasPhone }: { res
   const qc = useQueryClient();
   const can = useCan();
   const [open, setOpen] = useState(false);
+  const [showUnavailable, setShowUnavailable] = useState(false);
   const list = useQuery({ queryKey: ['outbox', 'reservation', reservationId], queryFn: () => get<OutboundMessageDTO[]>(`/messages?reservationId=${reservationId}`), enabled: can('messages:read') });
   const retry = useMutation({ mutationFn: (id: string) => post(`/messages/${id}/retry`), onSuccess: () => qc.invalidateQueries({ queryKey: ['outbox'] }) });
   if (!can('messages:read')) return null;
+
+  const allMessages = list.data ?? [];
+  const activeMessages = allMessages.filter((m) => m.status !== 'NOT_CONNECTED');
+  const unavailableMessages = allMessages.filter((m) => m.status === 'NOT_CONNECTED');
+
   return (
     <Section title="Messages" description="Everything the guest was sent about this booking." actions={can('bookings:write') && <Button size="sm" icon={<Send className="size-3.5" />} onClick={() => setOpen(true)}>Send a message</Button>}>
-      {!list.data?.length ? <p className="text-[13px] text-fg-muted">Nothing sent yet.</p> : (
-        <ul className="-my-2 divide-y divide-line">{list.data.map((m) => <MessageRow key={m.id} m={m} compact onRetry={can('bookings:write') ? () => retry.mutate(m.id) : undefined} />)}</ul>
+      {!allMessages.length ? (
+        <p className="text-[13px] text-fg-muted">Nothing sent yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {activeMessages.length > 0 && (
+            <ul className="-my-1 divide-y divide-line">
+              {activeMessages.map((m) => (
+                <MessageRow key={m.id} m={m} compact onRetry={can('bookings:write') ? () => retry.mutate(m.id) : undefined} />
+              ))}
+            </ul>
+          )}
+          {unavailableMessages.length > 0 && (
+            <div className="rounded-lg border border-line/70 bg-surface-2/30 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setShowUnavailable(!showUnavailable)}
+                className="flex w-full items-center justify-between text-left text-[11.5px] text-fg-muted hover:text-fg"
+              >
+                <span>
+                  <strong className="font-semibold text-fg">{unavailableMessages.length}</strong>{' '}
+                  WhatsApp / SMS copy{unavailableMessages.length === 1 ? '' : 'ies'} unavailable (channels pending verification)
+                </span>
+                <span className="font-semibold text-accent underline">
+                  {showUnavailable ? 'Hide' : 'View manual links'}
+                </span>
+              </button>
+              {showUnavailable && (
+                <ul className="mt-2 divide-y divide-line border-t border-line pt-1.5">
+                  {unavailableMessages.map((m) => (
+                    <MessageRow key={m.id} m={m} compact onRetry={can('bookings:write') ? () => retry.mutate(m.id) : undefined} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
       )}
       <SendDialog open={open} onClose={() => setOpen(false)} reservationId={reservationId} hasEmail={hasEmail} hasPhone={hasPhone} />
     </Section>
