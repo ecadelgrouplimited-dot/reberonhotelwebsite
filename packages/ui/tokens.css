@@ -1,40 +1,54 @@
 /*
- * Highland design tokens — docs/planning/05-design-system.md
- * Tailwind v4: palette + scale live in @theme; semantic aliases are CSS variables
- * that flip for "Night on Elgon" (dark).
+ * Official Reberon Hotel Brand Design Tokens
+ * Extracted directly from the master vector logo:
+ * - Brand Copper (RH Monogram & Tagline): #D76E1B
+ * - Brand Royal Navy (Reberon Hotel Wordmark): #1A1E43
+ * - Brand Platinum Surface: #D5D6D6 / #F4F5F7
  */
 @theme {
   --font-display: var(--font-fraunces), 'Iowan Old Style', Georgia, serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: var(--font-mono-face), ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
-  --color-basalt-950: #121513;
-  --color-basalt-900: #1a1e1b;
-  --color-basalt-800: #262b27;
-  --color-basalt-700: #353b36;
-  --color-moss-900: #1e2b24;
-  --color-moss-700: #2f4a3a;
-  --color-moss-500: #4f6f58;
-  --color-moss-300: #8fa994;
-  --color-bamboo-400: #8fa06a;
-  --color-cherry-800: #6b1a1c;
-  --color-cherry-700: #7f1f21;
-  --color-cherry-600: #9e2a2b;
-  --color-cherry-400: #c9484a;
-  --color-roast-800: #3e281d;
-  --color-roast-600: #5a3a2a;
-  --color-gold-500: #cf8f2e;
-  --color-gold-400: #e0a54b;
-  --color-gold-200: #f3d9b1;
-  --color-sipi-400: #7fa7b5;
-  --color-mist-50: #f4f5f1;
-  --color-mist-100: #eceee8;
-  --color-parchment-100: #f6f1e7;
-  --color-parchment-200: #ede4d3;
-  --color-stone-200: #e2ded4;
-  --color-stone-300: #cfcbc0;
-  --color-stone-500: #7c786e;
-  --color-stone-600: #5f5b53;
+  /* Official Brand Scales */
+  --color-navy-950: #0E1126;
+  --color-navy-900: #1A1E43;
+  --color-navy-800: #232859;
+  --color-navy-700: #2F3672;
+  --color-copper-700: #A8520F;
+  --color-copper-600: #BF5E12;
+  --color-copper-500: #D76E1B;
+  --color-copper-400: #E88432;
+  --color-copper-200: #FAD7B8;
+
+  /* Mapped legacy tokens to Official Royal Navy & Brand Copper so zero dark-green remains */
+  --color-basalt-950: #0E1126;
+  --color-basalt-900: #1A1E43;
+  --color-basalt-800: #232859;
+  --color-basalt-700: #32386E;
+  --color-moss-900: #1A1E43;
+  --color-moss-700: #262C5E;
+  --color-moss-500: #3E4680;
+  --color-moss-300: #9DA4CC;
+  --color-bamboo-400: #E88432;
+  --color-cherry-800: #8C430C;
+  --color-cherry-700: #B35610;
+  --color-cherry-600: #D76E1B;
+  --color-cherry-400: #E88432;
+  --color-roast-800: #1A1E43;
+  --color-roast-600: #2F3672;
+  --color-gold-500: #D76E1B;
+  --color-gold-400: #E88432;
+  --color-gold-200: #FAD7B8;
+  --color-sipi-400: #6F82B8;
+  --color-mist-50: #F4F5F7;
+  --color-mist-100: #EAECEF;
+  --color-parchment-100: #EFEFF2;
+  --color-parchment-200: #E3E4E8;
+  --color-stone-200: #D5D6D6;
+  --color-stone-300: #BEBFC4;
+  --color-stone-500: #6E7491;
+  --color-stone-600: #4A506E;
 
   --text-step--1: clamp(0.83rem, 0.8rem + 0.1vw, 0.9rem);
   --text-step-0: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
@@ -47,7 +61,6 @@
 
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
-
 }
 
 /* Brand radii live outside Tailwind's scale so rounded-sm…3xl keep their defaults. */
@@ -81,78 +94,77 @@
 
 :root {
   color-scheme: light;
-  --bg: #f4f5f1;
-  --bg-warm: #f6f1e7;
-  --surface: #ffffff;
-  --surface-2: #eceee8;
-  --fg: #121513;
-  --fg-muted: #4a4f4b;
-  --fg-subtle: #7c786e;
-  --line: #e2ded4;
-  --line-strong: #cfcbc0;
-  --accent: #9e2a2b;
-  --accent-hover: #7f1f21;
-  --accent-fg: #ffffff;
-  --brand: #2f4a3a;
-  --focus: #cf8f2e;
-  --success: #2f6b45;
-  --warning: #b7791f;
-  --danger: #9e2a2b;
-  --info: #3f7a8c;
-  --shadow-soft: 0 1px 2px rgb(18 21 19 / 0.04), 0 8px 24px -8px rgb(18 21 19 / 0.12);
-  --shadow-lift: 0 2px 4px rgb(18 21 19 / 0.05), 0 24px 48px -16px rgb(18 21 19 / 0.22);
-  --glass: rgb(244 245 241 / 0.72);
+  --bg: #F4F5F7;
+  --bg-warm: #EAECEF;
+  --surface: #FFFFFF;
+  --surface-2: #E4E6EC;
+  --fg: #1A1E43;
+  --fg-muted: #424867;
+  --fg-subtle: #6E7491;
+  --line: #D5D6D6;
+  --line-strong: #B8BAC4;
+  --accent: #D76E1B;
+  --accent-hover: #BF5E12;
+  --accent-fg: #FFFFFF;
+  --brand: #1A1E43;
+  --focus: #D76E1B;
+  --success: #1F7A4C;
+  --warning: #D76E1B;
+  --danger: #B42318;
+  --info: #254E8A;
+  --shadow-soft: 0 1px 2px rgb(26 30 67 / 0.05), 0 8px 24px -8px rgb(26 30 67 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(26 30 67 / 0.06), 0 24px 48px -16px rgb(26 30 67 / 0.22);
+  --glass: rgb(244 245 247 / 0.78);
 }
-
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0e110f;
-  --bg-warm: #14120e;
-  --surface: #171b18;
-  --surface-2: #1f2420;
-  --fg: #eceae3;
-  --fg-muted: #b9b6ad;
-  --fg-subtle: #8a867b;
-  --line: #2a302b;
-  --line-strong: #3a413b;
-  --accent: #c9484a;
-  --accent-hover: #d9605f;
-  --accent-fg: #ffffff;
-  --brand: #8fa994;
-  --focus: #e0a54b;
-  --success: #6fb58a;
-  --warning: #e0a54b;
-  --danger: #e06a6b;
-  --info: #7fa7b5;
-  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -8px rgb(0 0 0 / 0.5);
-  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.3), 0 24px 48px -16px rgb(0 0 0 / 0.6);
-  --glass: rgb(14 17 15 / 0.7);
+  --bg: #0E1126;
+  --bg-warm: #131733;
+  --surface: #1A1E43;
+  --surface-2: #242957;
+  --fg: #F4F5F7;
+  --fg-muted: #C5C8DC;
+  --fg-subtle: #8E94B5;
+  --line: #2B3163;
+  --line-strong: #3D4582;
+  --accent: #D76E1B;
+  --accent-hover: #E88432;
+  --accent-fg: #FFFFFF;
+  --brand: #E88432;
+  --focus: #E88432;
+  --success: #47B881;
+  --warning: #E88432;
+  --danger: #F06A6A;
+  --info: #7FA7D8;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 24px -8px rgb(0 0 0 / 0.55);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.35), 0 24px 48px -16px rgb(0 0 0 / 0.65);
+  --glass: rgb(14 17 38 / 0.78);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #0e110f;
-    --bg-warm: #14120e;
-    --surface: #171b18;
-    --surface-2: #1f2420;
-    --fg: #eceae3;
-    --fg-muted: #b9b6ad;
-    --fg-subtle: #8a867b;
-    --line: #2a302b;
-    --line-strong: #3a413b;
-    --accent: #c9484a;
-    --accent-hover: #d9605f;
-    --accent-fg: #ffffff;
-    --brand: #8fa994;
-    --focus: #e0a54b;
-    --success: #6fb58a;
-    --warning: #e0a54b;
-    --danger: #e06a6b;
-    --info: #7fa7b5;
-    --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -8px rgb(0 0 0 / 0.5);
-    --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.3), 0 24px 48px -16px rgb(0 0 0 / 0.6);
-    --glass: rgb(14 17 15 / 0.7);
+    --bg: #0E1126;
+    --bg-warm: #131733;
+    --surface: #1A1E43;
+    --surface-2: #242957;
+    --fg: #F4F5F7;
+    --fg-muted: #C5C8DC;
+    --fg-subtle: #8E94B5;
+    --line: #2B3163;
+    --line-strong: #3D4582;
+    --accent: #D76E1B;
+    --accent-hover: #E88432;
+    --accent-fg: #FFFFFF;
+    --brand: #E88432;
+    --focus: #E88432;
+    --success: #47B881;
+    --warning: #E88432;
+    --danger: #F06A6A;
+    --info: #7FA7D8;
+    --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 24px -8px rgb(0 0 0 / 0.55);
+    --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.35), 0 24px 48px -16px rgb(0 0 0 / 0.65);
+    --glass: rgb(14 17 38 / 0.78);
   }
 }

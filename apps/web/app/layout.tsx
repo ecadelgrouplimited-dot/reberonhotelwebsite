@@ -23,8 +23,8 @@ const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono-face', 
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f4f5f1' },
-    { media: '(prefers-color-scheme: dark)', color: '#0e110f' },
+    { media: '(prefers-color-scheme: light)', color: '#F4F5F7' },
+    { media: '(prefers-color-scheme: dark)', color: '#1A1E43' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -39,6 +39,20 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t(site.seo.defaultDescription),
     applicationName: site.name,
     formatDetection: { telephone: true },
+    icons: {
+      icon: [
+        { url: '/favicon.ico', sizes: 'any' },
+        { url: '/icon.svg', type: 'image/svg+xml' },
+        { url: '/brand/icon-32x32.png', sizes: '32x32', type: 'image/png' },
+        { url: '/brand/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      ],
+      apple: [
+        { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      ],
+    },
+    openGraph: {
+      images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Reberon Hotel — Stay In Comfort, Leave With Memories' }],
+    },
   };
 }
 

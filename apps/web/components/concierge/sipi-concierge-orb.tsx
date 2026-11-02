@@ -3,6 +3,13 @@
 import React, { useId } from 'react';
 import { cn } from '@/lib/cn';
 
+const MONOGRAM_PATHS = [
+  'M 291.980469 154.832031 C 317.710938 156.78125 334.457031 187.140625 334.457031 216.847656 L 348.960938 216.847656 C 348.960938 163.941406 303.910156 158.609375 297.710938 150.070312 L 286.855469 150.070312 C 287.464844 152.484375 289.21875 154.550781 291.980469 154.832031 ',
+  'M 273.332031 75.683594 L 299.234375 75.683594 C 315.636719 75.683594 325.996094 86.527344 325.996094 109.511719 C 325.996094 132.496094 300.613281 139 290.773438 142.039062 C 289.527344 142.429688 288.585938 143.160156 287.910156 144.066406 L 299 144.066406 C 307.558594 136.039062 340.675781 133.546875 340.675781 104.089844 C 340.675781 78.71875 322.199219 73.300781 299.578125 73.300781 L 256.410156 73.300781 C 256.238281 73.515625 256.238281 73.515625 256.238281 73.949219 C 259 75.683594 259 81.757812 259 86.527344 L 259 144.066406 L 273.332031 144.066406 Z M 273.332031 75.683594 ',
+  'M 259.003906 203.621094 C 259.003906 208.175781 259.003906 214.246094 256.242188 216.195312 L 256.414062 216.847656 L 275.921875 216.847656 L 276.097656 216.195312 C 273.332031 214.246094 273.332031 208.175781 273.332031 203.621094 L 273.332031 150.070312 L 259.003906 150.070312 Z M 259.003906 203.621094 ',
+  'M 373.617188 209.238281 C 373.796875 209.417969 373.796875 209.773438 373.441406 209.773438 L 353.164062 209.773438 C 352.808594 209.773438 352.808594 209.417969 352.988281 209.238281 C 355.859375 207.621094 355.859375 202.597656 355.859375 198.832031 L 355.859375 148.234375 L 239.941406 148.234375 L 239.941406 198.832031 C 239.941406 202.597656 239.941406 207.621094 242.632812 209.238281 C 242.992188 209.417969 242.992188 209.773438 242.632812 209.773438 L 222.179688 209.773438 C 222 209.773438 221.820312 209.417969 222.179688 209.238281 C 225.050781 207.621094 225.050781 202.597656 225.050781 198.832031 L 225.050781 101.945312 C 225.050781 98 225.050781 92.976562 222.179688 91.539062 C 221.820312 91.359375 222 91 222.179688 91 L 242.632812 91 C 242.992188 91 242.992188 91.359375 242.632812 91.539062 C 239.941406 92.976562 239.941406 98 239.941406 101.945312 L 239.941406 145.902344 L 355.859375 145.902344 L 355.859375 101.945312 C 355.859375 98 355.859375 92.976562 352.988281 91.539062 C 352.808594 91.359375 352.808594 91 353.164062 91 L 373.441406 91 C 373.796875 91 373.796875 91.359375 373.617188 91.539062 C 370.75 92.976562 370.75 98 370.75 101.945312 L 370.75 198.832031 C 370.75 202.597656 370.75 207.621094 373.617188 209.238281 '
+];
+
 export interface SipiConciergeOrbProps {
   /** Preset size of the icon */
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
@@ -23,11 +30,10 @@ const SIZE_CLASSES: Record<NonNullable<SipiConciergeOrbProps['size']>, string> =
 };
 
 /**
- * Lively, interactive, blinking Sipi Concierge icon inspired by Sipi Falls & Mount Elgon:
- * - Deep basalt sanctuary canvas (#09110e) with a warm-gold to highland-emerald glowing frame
- * - Animated flowing golden & emerald waterfall/contour ribbons
- * - Twinkling golden stardust particles
- * - Interactive blinking concentric emerald beacon in the upper-right quadrant
+ * Official Reberon Hotel Sipi Concierge Emblem:
+ * - Royal Navy (#1A1E43 / #0E1126) canvas with Burnt Copper (#D76E1B) & Warm Amber (#E88432) glowing frame
+ * - Official RH Copper Monogram at the center
+ * - Animated contour waves & live beacon
  */
 export function SipiConciergeOrb({
   size = 'md',
@@ -41,7 +47,7 @@ export function SipiConciergeOrb({
     <span
       className={cn(
         'group/orb relative inline-flex shrink-0 items-center justify-center overflow-hidden select-none',
-        'bg-[#08100d] shadow-[0_0_24px_-4px_rgba(245,158,11,0.35),0_0_20px_-4px_rgba(16,185,129,0.3)]',
+        'bg-[#1A1E43] shadow-[0_0_24px_-4px_rgba(215,110,27,0.45),0_0_20px_-4px_rgba(26,30,67,0.6)]',
         'transition-transform duration-300',
         SIZE_CLASSES[size],
         className,
@@ -55,231 +61,89 @@ export function SipiConciergeOrb({
         className="h-full w-full"
       >
         <defs>
-          {/* Deep Highland Night Background */}
+          {/* Deep Royal Navy Background */}
           <radialGradient id={`bg-${uid}`} cx="50%" cy="50%" r="70%">
-            <stop offset="0%" stopColor="#11221c" />
-            <stop offset="55%" stopColor="#0a1410" />
-            <stop offset="100%" stopColor="#050a08" />
+            <stop offset="0%" stopColor="#242957" />
+            <stop offset="55%" stopColor="#1A1E43" />
+            <stop offset="100%" stopColor="#0E1126" />
           </radialGradient>
 
-          {/* Outer Squircle Border Gradient (Gold bottom-left -> Emerald top-right) */}
+          {/* Outer Squircle Border Gradient (Brand Copper -> Platinum/Amber) */}
           <linearGradient id={`border-${uid}`} x1="8%" y1="92%" x2="92%" y2="8%">
-            <stop offset="0%" stopColor="#f59e0b" />
-            <stop offset="45%" stopColor="#fbbf24" />
-            <stop offset="75%" stopColor="#34d399" />
-            <stop offset="100%" stopColor="#10b981" />
+            <stop offset="0%" stopColor="#D76E1B" />
+            <stop offset="50%" stopColor="#E88432" />
+            <stop offset="80%" stopColor="#FAD7B8" />
+            <stop offset="100%" stopColor="#D76E1B" />
           </linearGradient>
 
-          {/* Luminous Gold Stream Gradient */}
-          <linearGradient id={`gold-stream-${uid}`} x1="0%" y1="15%" x2="95%" y2="90%">
-            <stop offset="0%" stopColor="#b45309" stopOpacity="0.6" />
-            <stop offset="28%" stopColor="#f59e0b" />
-            <stop offset="52%" stopColor="#fef08a" />
-            <stop offset="78%" stopColor="#fbbf24" />
-            <stop offset="100%" stopColor="#d97706" stopOpacity="0.4" />
-          </linearGradient>
-
-          {/* Warm Amber Ribbon Gradient */}
-          <linearGradient id={`amber-stream-${uid}`} x1="0%" y1="40%" x2="85%" y2="95%">
-            <stop offset="0%" stopColor="#92400e" stopOpacity="0.4" />
-            <stop offset="40%" stopColor="#f59e0b" stopOpacity="0.95" />
-            <stop offset="70%" stopColor="#fde68a" />
-            <stop offset="100%" stopColor="#78350f" stopOpacity="0.2" />
-          </linearGradient>
-
-          {/* Highland Emerald Stream Gradient */}
-          <linearGradient id={`emerald-stream-${uid}`} x1="10%" y1="15%" x2="95%" y2="85%">
-            <stop offset="0%" stopColor="#065f46" stopOpacity="0.3" />
-            <stop offset="35%" stopColor="#10b981" stopOpacity="0.95" />
-            <stop offset="62%" stopColor="#a7f3d0" />
-            <stop offset="85%" stopColor="#059669" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#064e3b" stopOpacity="0.25" />
+          {/* Subtle Contour Wave Gradient */}
+          <linearGradient id={`copper-stream-${uid}`} x1="0%" y1="15%" x2="95%" y2="90%">
+            <stop offset="0%" stopColor="#D76E1B" stopOpacity="0.1" />
+            <stop offset="50%" stopColor="#E88432" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#D76E1B" stopOpacity="0.1" />
           </linearGradient>
 
           {/* Beacon Core Glow */}
           <radialGradient id={`beacon-glow-${uid}`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#6ee7b7" stopOpacity="0.95" />
-            <stop offset="45%" stopColor="#10b981" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="#059669" stopOpacity="0" />
+            <stop offset="0%" stopColor="#FAD7B8" stopOpacity="0.95" />
+            <stop offset="45%" stopColor="#D76E1B" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#1A1E43" stopOpacity="0" />
           </radialGradient>
-
-          {/* Soft Glow Filter */}
-          <filter id={`glow-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2.2" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
         </defs>
 
         {/* Background Canvas */}
         <rect x="2" y="2" width="96" height="96" rx="22" fill={`url(#bg-${uid})`} />
 
-        {/* Ambient Gold & Emerald Backlights */}
-        <circle cx="34" cy="56" r="28" fill="#f59e0b" fillOpacity="0.12" />
-        <circle cx="72" cy="28" r="22" fill="#10b981" fillOpacity="0.16" />
+        {/* Ambient Copper Backlight */}
+        <circle cx="50" cy="52" r="32" fill="#D76E1B" fillOpacity="0.14" />
 
-        {/* ── FLOWING SIPI FALLS & HIGHLAND CONTOUR RIBBONS ── */}
-        <g filter={`url(#glow-${uid})`}>
-          {/* Outer Emerald Contour Wave (Upper-Right Flow) */}
-          <path
-            d="M -4 22 C 26 16, 44 20, 56 38 C 68 56, 82 36, 104 42"
-            stroke={`url(#emerald-stream-${uid})`}
-            strokeWidth="4.5"
-            strokeLinecap="round"
-          >
-            <animate
-              attributeName="d"
-              dur={active ? '2.4s' : '4.8s'}
-              repeatCount="indefinite"
-              values="
-                M -4 22 C 26 16, 44 20, 56 38 C 68 56, 82 36, 104 42;
-                M -4 24 C 24 19, 46 17, 58 35 C 70 53, 84 40, 104 39;
-                M -4 22 C 26 16, 44 20, 56 38 C 68 56, 82 36, 104 42
-              "
-            />
-          </path>
-
-          {/* Secondary Emerald Cascade */}
-          <path
-            d="M 18 102 C 22 76, 38 66, 56 58 C 72 50, 70 80, 62 102"
-            stroke={`url(#emerald-stream-${uid})`}
-            strokeWidth="6"
-            strokeLinecap="round"
-            opacity="0.9"
-          >
-            <animate
-              attributeName="d"
-              dur={active ? '2.6s' : '5.2s'}
-              repeatCount="indefinite"
-              values="
-                M 18 102 C 22 76, 38 66, 56 58 C 72 50, 70 80, 62 102;
-                M 21 102 C 25 74, 41 64, 59 56 C 75 48, 67 82, 59 102;
-                M 18 102 C 22 76, 38 66, 56 58 C 72 50, 70 80, 62 102
-              "
-            />
-          </path>
-
-          {/* Deep Amber Lower Swirl */}
-          <path
-            d="M -4 80 C 14 62, 42 66, 46 54 C 50 44, 24 38, -4 28"
-            stroke={`url(#amber-stream-${uid})`}
-            strokeWidth="6.5"
-            strokeLinecap="round"
+        {/* Subtle Animated Highland Contour Waves */}
+        <path
+          d="M -4 26 C 26 18, 44 24, 58 38 C 72 52, 84 36, 104 42"
+          stroke={`url(#copper-stream-${uid})`}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        >
+          <animate
+            attributeName="d"
+            dur={active ? '2.4s' : '4.8s'}
+            repeatCount="indefinite"
+            values="
+              M -4 26 C 26 18, 44 24, 58 38 C 72 52, 84 36, 104 42;
+              M -4 28 C 24 22, 46 20, 60 35 C 74 50, 86 40, 104 39;
+              M -4 26 C 26 18, 44 24, 58 38 C 72 52, 84 36, 104 42
+            "
           />
+        </path>
 
-          {/* Main Luminous Gold S-Curve Waterfall */}
-          <path
-            d="M -4 18 C 28 18, 36 52, 52 54 C 70 56, 76 74, 68 102"
-            stroke={`url(#gold-stream-${uid})`}
-            strokeWidth="7.5"
-            strokeLinecap="round"
-          >
-            <animate
-              attributeName="d"
-              dur={active ? '2.2s' : '4.4s'}
-              repeatCount="indefinite"
-              values="
-                M -4 18 C 28 18, 36 52, 52 54 C 70 56, 76 74, 68 102;
-                M -4 16 C 31 20, 34 50, 54 52 C 72 54, 74 76, 65 102;
-                M -4 18 C 28 18, 36 52, 52 54 C 70 56, 76 74, 68 102
-              "
-            />
-          </path>
+        <path
+          d="M -4 78 C 24 68, 42 74, 58 62 C 74 50, 86 68, 104 64"
+          stroke={`url(#copper-stream-${uid})`}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
 
-          {/* Shimmering White-Gold Crest Highlight */}
-          <path
-            d="M 4 21 C 28 24, 38 49, 53 53 C 66 57, 42 74, 28 98"
-            stroke="#fef9c3"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeDasharray="18 10"
-            opacity="0.92"
-          >
-            <animate
-              attributeName="stroke-dashoffset"
-              from="56"
-              to="0"
-              dur={active ? '1.4s' : '2.8s'}
-              repeatCount="indefinite"
-            />
-          </path>
-
-          {/* Shimmering Mint-Emerald Crest Highlight */}
-          <path
-            d="M 22 23 C 42 25, 46 47, 60 53 C 74 59, 82 72, 76 98"
-            stroke="#a7f3d0"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeDasharray="14 12"
-            opacity="0.88"
-          >
-            <animate
-              attributeName="stroke-dashoffset"
-              from="0"
-              to="-52"
-              dur={active ? '1.6s' : '3.2s'}
-              repeatCount="indefinite"
-            />
-          </path>
+        {/* Official Reberon Hotel RH Copper Monogram Centered in 100x100 */}
+        <g transform="translate(50, 52) scale(0.42) translate(-297.8, -145.05)">
+          {MONOGRAM_PATHS.map((d, i) => (
+            <path key={i} d={d} fill="#D76E1B" fillRule="nonzero" />
+          ))}
         </g>
 
-        {/* ── TWINKLING STARDUST PARTICLES ── */}
-        <g>
-          <circle cx="22" cy="16" r="1.6" fill="#fde047">
-            <animate attributeName="opacity" values="0.2;1;0.2" dur="1.8s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="36" cy="20" r="1.3" fill="#fef08a">
-            <animate attributeName="opacity" values="0.9;0.2;0.9" dur="2.3s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="24" cy="48" r="1.8" fill="#fbbf24">
-            <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="16" cy="72" r="1.5" fill="#fde047">
-            <animate attributeName="opacity" values="1;0.25;1" dur="2.1s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="48" cy="36" r="1.5" fill="#6ee7b7">
-            <animate attributeName="opacity" values="0.2;0.95;0.2" dur="1.9s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="62" cy="68" r="1.7" fill="#34d399">
-            <animate attributeName="opacity" values="0.85;0.15;0.85" dur="1.7s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="76" cy="60" r="1.6" fill="#fde047">
-            <animate attributeName="opacity" values="0.25;1;0.25" dur="2.0s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="38" cy="84" r="1.4" fill="#6ee7b7">
-            <animate attributeName="opacity" values="0.9;0.2;0.9" dur="2.4s" repeatCount="indefinite" />
-          </circle>
-        </g>
-
-        {/* ── INTERACTIVE BLINKING EMERALD BEACON ORB (TOP-RIGHT) ── */}
-        <g transform="translate(72, 26)">
-          {/* Ambient radial halo */}
-          <circle cx="0" cy="0" r="18" fill={`url(#beacon-glow-${uid})`}>
+        {/* Live Blinking Copper Beacon (Top-Right) */}
+        <g transform="translate(79, 21)">
+          <circle cx="0" cy="0" r="10" fill={`url(#beacon-glow-${uid})`}>
             <animate
               attributeName="r"
-              values="15;20;15"
-              dur={active ? '1.1s' : '2.2s'}
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="opacity"
-              values="0.55;0.95;0.55"
+              values="8;13;8"
               dur={active ? '1.1s' : '2.2s'}
               repeatCount="indefinite"
             />
           </circle>
-
-          {/* Expanding Radar Ripple Ring 1 */}
-          <circle
-            cx="0"
-            cy="0"
-            r="9"
-            stroke="#34d399"
-            strokeWidth="1.3"
-            fill="none"
-          >
+          <circle cx="0" cy="0" r="5" stroke="#E88432" strokeWidth="1.2" fill="none">
             <animate
               attributeName="r"
-              values="8;17"
+              values="4;11"
               dur={active ? '1.2s' : '2.1s'}
               repeatCount="indefinite"
             />
@@ -290,75 +154,17 @@ export function SipiConciergeOrb({
               repeatCount="indefinite"
             />
           </circle>
-
-          {/* Expanding Radar Ripple Ring 2 (Staggered) */}
           <circle
             cx="0"
             cy="0"
-            r="9"
-            stroke="#6ee7b7"
-            strokeWidth="1"
-            fill="none"
-          >
-            <animate
-              attributeName="r"
-              values="8;19"
-              dur={active ? '1.2s' : '2.1s'}
-              begin="0.9s"
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="opacity"
-              values="0.65;0"
-              dur={active ? '1.2s' : '2.1s'}
-              begin="0.9s"
-              repeatCount="indefinite"
-            />
-          </circle>
-
-          {/* Static Precision Outer Ring */}
-          <circle
-            cx="0"
-            cy="0"
-            r="12.5"
-            stroke="#10b981"
-            strokeOpacity="0.45"
-            strokeWidth="1"
-            fill="none"
+            r="3.8"
+            fill="#D76E1B"
+            stroke="#FAD7B8"
+            strokeWidth="1.5"
           />
-
-          {/* Blinking Luminous Emerald Core Ring (Matches Demo Image) */}
-          <circle
-            cx="0"
-            cy="0"
-            r="8.2"
-            fill="#064e3b"
-            fillOpacity="0.65"
-            stroke="#6ee7b7"
-            strokeWidth="2.8"
-          >
-            <animate
-              attributeName="stroke"
-              values="#6ee7b7;#a7f3d0;#10b981;#6ee7b7"
-              dur={active ? '0.9s' : '1.8s'}
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="stroke-width"
-              values="2.5;3.4;2.5"
-              dur={active ? '0.9s' : '1.8s'}
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="opacity"
-              values="1;0.45;1;0.9;1"
-              dur={active ? '1.2s' : '2.6s'}
-              repeatCount="indefinite"
-            />
-          </circle>
         </g>
 
-        {/* Glowing Gold-to-Emerald Squircle Frame */}
+        {/* Glowing Brand Copper Squircle Frame */}
         <rect
           x="2"
           y="2"
@@ -373,8 +179,8 @@ export function SipiConciergeOrb({
 
       {showCornerPulse && (
         <span className="pointer-events-none absolute top-1 right-1 flex size-2.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-80" />
-          <span className="relative inline-flex size-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#E88432] opacity-80" />
+          <span className="relative inline-flex size-2.5 rounded-full bg-[#D76E1B] shadow-[0_0_8px_#D76E1B]" />
         </span>
       )}
     </span>

@@ -15,7 +15,7 @@ export function Footer({ site }: { site: SiteDTO }) {
       <div className="container-x relative">
         <div className="grid gap-14 lg:grid-cols-[1.3fr_2fr]">
           <div>
-            <Logo site={site} className="text-mist-50" />
+            <Logo site={site} variant="stacked" className="h-24 w-auto text-white" />
             <p className="mt-6 max-w-sm font-display text-step-2 leading-snug text-mist-50/90">{t(site.tagline)}</p>
             <p className="mt-4 text-sm text-fg-muted">{t(site.openingLabel)}</p>
             <div className="mt-8 flex flex-wrap gap-2">

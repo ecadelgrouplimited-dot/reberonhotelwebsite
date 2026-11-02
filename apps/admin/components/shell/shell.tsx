@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ReberonMonogramIcon } from './brand-logo';
 import {
   ChevronDown,
   ChevronRight,
@@ -366,15 +367,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col bg-[var(--sidebar)] text-[var(--sidebar-fg)] select-none">
       {/* Brand Header */}
-      <div className="flex h-13 shrink-0 items-center justify-between border-b border-white/8 px-3.5">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-3.5">
         <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5">
-          <svg viewBox="0 0 40 24" className="h-4.5 w-8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden>
-            <path d="M1 22 L11 9 L16 14 L24 3 L39 22" />
-            <circle cx="30" cy="6" r="2.2" fill="#e0a54b" stroke="none" />
-          </svg>
+          <div className="grid size-9 place-items-center rounded-lg border border-[#D76E1B]/35 bg-[#10132B] shadow-inner">
+            <ReberonMonogramIcon className="h-6 w-6" color="#D76E1B" />
+          </div>
           <span className="leading-none">
-            <span className="block text-[14px] font-bold tracking-tight text-white">Reberon</span>
-            <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--sidebar-muted)]">The House</span>
+            <span className="block font-display text-[14.5px] font-bold tracking-tight text-white">Reberon Hotel</span>
+            <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.18em] text-[#E88432]">The House · PMS</span>
           </span>
         </Link>
         <button

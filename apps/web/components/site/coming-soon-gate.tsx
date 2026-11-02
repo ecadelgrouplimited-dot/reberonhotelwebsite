@@ -37,6 +37,7 @@ import { formatMoney, whatsappLink } from '@reberon/utils';
 import { submitWaitlist, submitEnquiry, type FormState } from '@/app/actions';
 import { useIdempotencyKey } from '@/components/forms/use-idempotency';
 import { useSite } from './site-provider';
+import { Logo, ReberonMonogram } from './logo';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -231,14 +232,14 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
   const addressText = t(site.contact.address) || 'Kapchorwa, along the Mbale–Kapchorwa Highway, Mount Elgon, Eastern Uganda';
 
   return (
-    <div className="relative min-h-screen bg-[#080b09] text-[#f4f5f1] selection:bg-[#cf8f2e] selection:text-[#0b0e0c]">
+    <div className="relative min-h-screen bg-[#0E1126] text-[#F4F5F7] selection:bg-[#D76E1B] selection:text-white">
       {/* Topographic Contour Vectors & Ambient Atmospheric Glows */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <svg
           viewBox="0 0 1440 900"
           className="absolute -top-20 left-1/2 h-[1200px] w-[1800px] -translate-x-1/2 opacity-[0.06]"
           fill="none"
-          stroke="#cf8f2e"
+          stroke="#D76E1B"
           strokeWidth="1.2"
           aria-hidden="true"
         >
@@ -254,21 +255,21 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
         {/* Ambient Glow Orbs */}
         <div
           className="absolute -top-32 left-1/4 h-96 w-96 rounded-full blur-[140px] opacity-25"
-          style={{ background: 'radial-gradient(circle, #cf8f2e 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #D76E1B 0%, transparent 70%)' }}
         />
         <div
           className="absolute top-1/2 -right-20 h-[500px] w-[500px] rounded-full blur-[160px] opacity-15"
-          style={{ background: 'radial-gradient(circle, #b83b3b 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #1A1E43 0%, transparent 70%)' }}
         />
       </div>
 
       {/* Top Header Bar */}
-      <header className="relative z-20 border-b border-white/10 bg-[#080b09]/80 backdrop-blur-xl">
+      <header className="relative z-20 border-b border-white/10 bg-[#0E1126]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-8">
           {/* Logo & Altitude Marker */}
           <div className="flex items-center gap-3.5">
-            <div className="flex size-10 items-center justify-center rounded-xl border border-[#cf8f2e]/30 bg-[#cf8f2e]/10 text-[#cf8f2e]">
-              <Mountain className="size-5" />
+            <div className="flex size-11 items-center justify-center rounded-xl border border-[#D76E1B]/40 bg-[#1A1E43] shadow-inner">
+              <ReberonMonogram className="size-7" color="#D76E1B" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -287,7 +288,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
           <div className="flex items-center gap-2.5 sm:gap-4">
             {/* Live Highland Clock */}
             <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 font-mono text-xs text-white/80 md:flex">
-              <Clock className="size-3.5 text-[#cf8f2e]" />
+              <Clock className="size-3.5 text-[#D76E1B]" />
               <span>{kapchorwaTime || 'Kapchorwa GMT+3'}</span>
             </div>
 
@@ -297,12 +298,12 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
               onClick={toggleAmbientSound}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
                 audioPlaying
-                  ? 'border-[#cf8f2e] bg-[#cf8f2e]/15 text-[#cf8f2e] shadow-[0_0_15px_rgba(207,143,46,0.25)]'
+                  ? 'border-[#D76E1B] bg-[#D76E1B]/15 text-[#D76E1B] shadow-[0_0_15px_rgba(207,143,46,0.25)]'
                   : 'border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:text-white'
               }`}
               title={audioPlaying ? 'Mute mountain breeze audio' : 'Play high-altitude ambient breeze'}
             >
-              {audioPlaying ? <Volume2 className="size-3.5 animate-pulse text-[#cf8f2e]" /> : <VolumeX className="size-3.5" />}
+              {audioPlaying ? <Volume2 className="size-3.5 animate-pulse text-[#D76E1B]" /> : <VolumeX className="size-3.5" />}
               <span className="hidden sm:inline">{audioPlaying ? 'Highland Wind On' : 'Ambient Breeze'}</span>
             </button>
 
@@ -312,7 +313,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                 type="button"
                 onClick={() => setCurrency('UGX')}
                 className={`rounded-full px-2.5 py-1 transition cursor-pointer ${
-                  currency === 'UGX' ? 'bg-[#cf8f2e] text-[#080b09]' : 'text-white/60 hover:text-white'
+                  currency === 'UGX' ? 'bg-[#D76E1B] text-white' : 'text-white/60 hover:text-white'
                 }`}
               >
                 UGX
@@ -321,7 +322,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                 type="button"
                 onClick={() => setCurrency('USD')}
                 className={`rounded-full px-2.5 py-1 transition cursor-pointer ${
-                  currency === 'USD' ? 'bg-[#cf8f2e] text-[#080b09]' : 'text-white/60 hover:text-white'
+                  currency === 'USD' ? 'bg-[#D76E1B] text-white' : 'text-white/60 hover:text-white'
                 }`}
               >
                 USD
@@ -332,7 +333,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
             <button
               type="button"
               onClick={() => setLoginOpen(true)}
-              className="inline-flex items-center gap-2 rounded-full border border-[#cf8f2e]/40 bg-[#cf8f2e]/10 px-3.5 py-1.5 text-xs font-medium text-[#cf8f2e] transition hover:bg-[#cf8f2e]/20 cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-full border border-[#D76E1B]/40 bg-[#D76E1B]/10 px-3.5 py-1.5 text-xs font-medium text-[#D76E1B] transition hover:bg-[#D76E1B]/20 cursor-pointer"
             >
               <KeyRound className="size-3.5" />
               <span>Staff Preview</span>
@@ -347,10 +348,10 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
         <div className="relative overflow-hidden rounded-3xl border border-white/12 bg-gradient-to-b from-white/[0.05] via-white/[0.02] to-transparent p-6 backdrop-blur-2xl sm:p-10 lg:p-12">
           {/* Top Status & Milestone Bar */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
-            <div className="inline-flex items-center gap-2.5 rounded-full border border-[#cf8f2e]/30 bg-[#cf8f2e]/10 px-4 py-1.5 text-xs font-medium text-[#cf8f2e]">
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-[#D76E1B]/30 bg-[#D76E1B]/10 px-4 py-1.5 text-xs font-medium text-[#D76E1B]">
               <span className="relative flex size-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#cf8f2e] opacity-75" />
-                <span className="relative inline-flex size-2 rounded-full bg-[#cf8f2e]" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#D76E1B] opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-[#D76E1B]" />
               </span>
               <span>System Architectural Upgrades &amp; Luxury Calibration</span>
             </div>
@@ -367,7 +368,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
           {/* Hero Typography */}
           <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr_0.9fr] lg:items-center">
             <div>
-              <p className="font-mono text-xs uppercase tracking-widest text-[#cf8f2e]">
+              <p className="font-mono text-xs uppercase tracking-widest text-[#D76E1B]">
                 {t(site.openingLabel) || 'The Escarpment Sanctuary'} · Kapchorwa, Uganda
               </p>
               <h1 className="mt-3 font-display text-3xl font-light leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
@@ -385,7 +386,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                     setActiveTab('waitlist');
                     document.getElementById('feature-tabs')?.scrollIntoView({ behavior: 'smooth' });
                   }}
-                  className="inline-flex items-center gap-2 rounded-full bg-[#cf8f2e] px-6 py-3 text-sm font-semibold text-[#080b09] shadow-lg transition hover:bg-[#deb041] cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#D76E1B] px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-[#E88432] cursor-pointer"
                 >
                   <Sparkles className="size-4" />
                   <span>Join Priority Launch List</span>
@@ -407,18 +408,18 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                   href={`tel:${phone.replace(/\s+/g, '')}`}
                   className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/10"
                 >
-                  <Phone className="size-4 text-[#cf8f2e]" />
+                  <Phone className="size-4 text-[#D76E1B]" />
                   <span>Call {phone}</span>
                 </a>
               </div>
             </div>
 
             {/* Highland Status & Diagnostic HUD Card */}
-            <div className="rounded-2xl border border-white/10 bg-[#0e1310]/80 p-6 backdrop-blur-xl">
+            <div className="rounded-2xl border border-white/10 bg-[#141836]/80 p-6 backdrop-blur-xl">
               <div className="flex items-center justify-between border-b border-white/10 pb-4">
                 <div>
                   <h3 className="font-display text-lg text-white">Sanctuary Health &amp; Readiness</h3>
-                  <p className="font-mono text-[11px] text-[#cf8f2e]">Mount Elgon High-Altitude Station</p>
+                  <p className="font-mono text-[11px] text-[#D76E1B]">Mount Elgon High-Altitude Station</p>
                 </div>
                 <Radio className="size-4 text-emerald-400 animate-pulse" />
               </div>
@@ -427,11 +428,11 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
               <div className="mt-5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-white/70">Gateway Architecture &amp; Sync</span>
-                  <span className="font-mono font-semibold text-[#cf8f2e]">96% Complete</span>
+                  <span className="font-mono font-semibold text-[#D76E1B]">96% Complete</span>
                 </div>
                 <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#b83b3b] via-[#cf8f2e] to-emerald-400 transition-all duration-1000"
+                    className="h-full rounded-full bg-gradient-to-r from-[#1A1E43] via-[#D76E1B] to-emerald-400 transition-all duration-1000"
                     style={{ width: '96%' }}
                   />
                 </div>
@@ -457,8 +458,8 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                 </div>
                 <div className="flex items-center justify-between rounded-xl bg-white/[0.03] p-2.5">
                   <span className="text-white/70">Public Booking Engine</span>
-                  <span className="inline-flex items-center gap-1.5 text-[#cf8f2e]">
-                    <span className="size-2 rounded-full bg-[#cf8f2e] animate-ping" /> Security Calibration
+                  <span className="inline-flex items-center gap-1.5 text-[#D76E1B]">
+                    <span className="size-2 rounded-full bg-[#D76E1B] animate-ping" /> Security Calibration
                   </span>
                 </div>
               </div>
@@ -482,7 +483,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
               onClick={() => setActiveTab('waitlist')}
               className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition cursor-pointer ${
                 activeTab === 'waitlist'
-                  ? 'bg-[#cf8f2e] text-[#080b09] shadow-md'
+                  ? 'bg-[#D76E1B] text-white shadow-md'
                   : 'text-white/70 hover:bg-white/5 hover:text-white'
               }`}
             >
@@ -496,7 +497,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
               onClick={() => setActiveTab('suites')}
               className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition cursor-pointer ${
                 activeTab === 'suites'
-                  ? 'bg-[#cf8f2e] text-[#080b09] shadow-md'
+                  ? 'bg-[#D76E1B] text-white shadow-md'
                   : 'text-white/70 hover:bg-white/5 hover:text-white'
               }`}
             >
@@ -510,7 +511,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
               onClick={() => setActiveTab('concierge')}
               className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition cursor-pointer ${
                 activeTab === 'concierge'
-                  ? 'bg-[#cf8f2e] text-[#080b09] shadow-md'
+                  ? 'bg-[#D76E1B] text-white shadow-md'
                   : 'text-white/70 hover:bg-white/5 hover:text-white'
               }`}
             >
@@ -524,7 +525,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
               onClick={() => setActiveTab('enquiry')}
               className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition cursor-pointer ${
                 activeTab === 'enquiry'
-                  ? 'bg-[#cf8f2e] text-[#080b09] shadow-md'
+                  ? 'bg-[#D76E1B] text-white shadow-md'
                   : 'text-white/70 hover:bg-white/5 hover:text-white'
               }`}
             >
@@ -538,7 +539,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
           {activeTab === 'waitlist' && (
             <div className="mt-6 grid gap-8 lg:grid-cols-[1.1fr_1.3fr]">
               <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-xl sm:p-8">
-                <span className="font-mono text-xs uppercase tracking-widest text-[#cf8f2e]">Inaugural Access</span>
+                <span className="font-mono text-xs uppercase tracking-widest text-[#D76E1B]">Inaugural Access</span>
                 <h2 className="mt-2 font-display text-2xl font-normal text-white sm:text-3xl">
                   Claim your place on the First-Stay List.
                 </h2>
@@ -548,7 +549,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
 
                 <div className="mt-8 space-y-4">
                   <div className="flex items-start gap-3.5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#cf8f2e]/15 text-[#cf8f2e]">
+                    <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#D76E1B]/15 text-[#D76E1B]">
                       <Sparkles className="size-4" />
                     </div>
                     <div>
@@ -558,7 +559,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                   </div>
 
                   <div className="flex items-start gap-3.5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#cf8f2e]/15 text-[#cf8f2e]">
+                    <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#D76E1B]/15 text-[#D76E1B]">
                       <Calendar className="size-4" />
                     </div>
                     <div>
@@ -568,7 +569,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                   </div>
 
                   <div className="flex items-start gap-3.5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#cf8f2e]/15 text-[#cf8f2e]">
+                    <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#D76E1B]/15 text-[#D76E1B]">
                       <ShieldCheck className="size-4" />
                     </div>
                     <div>
@@ -580,7 +581,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
               </div>
 
               {/* Waitlist Form Card */}
-              <div className="rounded-3xl border border-white/12 bg-[#0e1310]/90 p-6 backdrop-blur-2xl sm:p-8">
+              <div className="rounded-3xl border border-white/12 bg-[#141836]/90 p-6 backdrop-blur-2xl sm:p-8">
                 {waitlistState.status === 'success' && waitlistState.reference ? (
                   <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center sm:p-8">
                     <div className="mx-auto grid size-12 place-items-center rounded-full bg-emerald-500/20 text-emerald-400">
@@ -593,7 +594,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
 
                     <div className="mt-6 inline-flex items-center gap-3 rounded-2xl border border-white/15 bg-black/40 px-5 py-3 font-mono text-sm">
                       <span className="text-white/60">Reference:</span>
-                      <strong className="text-[#cf8f2e]">{waitlistState.reference}</strong>
+                      <strong className="text-[#D76E1B]">{waitlistState.reference}</strong>
                       <button
                         type="button"
                         onClick={() => handleCopyReference(waitlistState.reference!)}
@@ -628,7 +629,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                     <div className="grid gap-4 sm:grid-cols-2">
                       <label className="grid gap-1.5 text-xs">
                         <span className="font-medium text-white/80">
-                          Your Name <span className="text-[#cf8f2e]">*</span>
+                          Your Name <span className="text-[#D76E1B]">*</span>
                         </span>
                         <input
                           type="text"
@@ -637,7 +638,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           autoComplete="name"
                           defaultValue={waitlistState.values?.name}
                           placeholder="e.g. Sarah Chelangat"
-                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white placeholder:text-white/30 focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white placeholder:text-white/30 focus:border-[#D76E1B] focus:outline-none"
                         />
                         {waitlistState.fieldErrors?.name && (
                           <span className="text-[11px] text-red-400">{waitlistState.fieldErrors.name}</span>
@@ -646,7 +647,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
 
                       <label className="grid gap-1.5 text-xs">
                         <span className="font-medium text-white/80">
-                          Phone or WhatsApp <span className="text-[#cf8f2e]">*</span>
+                          Phone or WhatsApp <span className="text-[#D76E1B]">*</span>
                         </span>
                         <input
                           type="tel"
@@ -656,7 +657,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           autoComplete="tel"
                           defaultValue={waitlistState.values?.phone}
                           placeholder="07xx xxx xxx or +256..."
-                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white placeholder:text-white/30 focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white placeholder:text-white/30 focus:border-[#D76E1B] focus:outline-none"
                         />
                         {waitlistState.fieldErrors?.phone && (
                           <span className="text-[11px] text-red-400">{waitlistState.fieldErrors.phone}</span>
@@ -673,7 +674,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           autoComplete="email"
                           defaultValue={waitlistState.values?.email}
                           placeholder="you@example.com"
-                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white placeholder:text-white/30 focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white placeholder:text-white/30 focus:border-[#D76E1B] focus:outline-none"
                         />
                       </label>
 
@@ -682,7 +683,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         <select
                           name="roomTypeSlug"
                           defaultValue={waitlistState.values?.roomTypeSlug ?? ''}
-                          className="h-11 rounded-xl border border-white/15 bg-[#121614] px-3 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-[#1A1E43] px-3 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         >
                           <option value="">Any available room / No preference</option>
                           {allRooms.map((r) => (
@@ -701,7 +702,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           type="date"
                           name="preferredFrom"
                           defaultValue={waitlistState.values?.preferredFrom}
-                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         />
                       </label>
 
@@ -711,7 +712,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           type="date"
                           name="preferredTo"
                           defaultValue={waitlistState.values?.preferredTo}
-                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         />
                       </label>
                     </div>
@@ -722,7 +723,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           type="checkbox"
                           name="flexibleDates"
                           defaultChecked={waitlistState.values?.flexibleDates === 'on'}
-                          className="size-4 rounded border-white/20 bg-black/40 text-[#cf8f2e] focus:ring-0"
+                          className="size-4 rounded border-white/20 bg-black/40 text-[#D76E1B] focus:ring-0"
                         />
                         <span>My dates are flexible</span>
                       </label>
@@ -735,7 +736,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           min={1}
                           max={20}
                           defaultValue={waitlistState.values?.adults ?? '2'}
-                          className="h-10 rounded-xl border border-white/15 bg-black/40 px-3 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-10 rounded-xl border border-white/15 bg-black/40 px-3 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         />
                       </label>
 
@@ -747,7 +748,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           min={0}
                           max={20}
                           defaultValue={waitlistState.values?.children ?? '0'}
-                          className="h-10 rounded-xl border border-white/15 bg-black/40 px-3 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-10 rounded-xl border border-white/15 bg-black/40 px-3 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         />
                       </label>
                     </div>
@@ -759,7 +760,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         rows={2}
                         defaultValue={waitlistState.values?.note}
                         placeholder="e.g. High-altitude running retreat, anniversary weekend, Sipi Falls guided hike..."
-                        className="rounded-xl border border-white/15 bg-black/40 p-3 text-sm text-white placeholder:text-white/30 focus:border-[#cf8f2e] focus:outline-none"
+                        className="rounded-xl border border-white/15 bg-black/40 p-3 text-sm text-white placeholder:text-white/30 focus:border-[#D76E1B] focus:outline-none"
                       />
                     </label>
 
@@ -770,7 +771,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         name="consent"
                         defaultChecked
                         required
-                        className="mt-0.5 size-4 rounded border-white/20 bg-black/40 text-[#cf8f2e] focus:ring-0"
+                        className="mt-0.5 size-4 rounded border-white/20 bg-black/40 text-[#D76E1B] focus:ring-0"
                       />
                       <span>
                         I agree to receive a notification on WhatsApp or email when Reberon Hotel reservation dates open.
@@ -783,7 +784,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                     <button
                       type="submit"
                       disabled={waitlistPending}
-                      className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#cf8f2e] px-6 text-sm font-semibold text-[#080b09] transition hover:bg-[#deb041] disabled:opacity-50 cursor-pointer"
+                      className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#D76E1B] px-6 text-sm font-semibold text-white transition hover:bg-[#E88432] disabled:opacity-50 cursor-pointer"
                     >
                       {waitlistPending ? (
                         <>
@@ -820,7 +821,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                       type="button"
                       onClick={() => setCurrency('UGX')}
                       className={`rounded-full px-3 py-1 font-semibold transition cursor-pointer ${
-                        currency === 'UGX' ? 'bg-[#cf8f2e] text-[#080b09]' : 'text-white/60 hover:text-white'
+                        currency === 'UGX' ? 'bg-[#D76E1B] text-white' : 'text-white/60 hover:text-white'
                       }`}
                     >
                       UGX
@@ -829,7 +830,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                       type="button"
                       onClick={() => setCurrency('USD')}
                       className={`rounded-full px-3 py-1 font-semibold transition cursor-pointer ${
-                        currency === 'USD' ? 'bg-[#cf8f2e] text-[#080b09]' : 'text-white/60 hover:text-white'
+                        currency === 'USD' ? 'bg-[#D76E1B] text-white' : 'text-white/60 hover:text-white'
                       }`}
                     >
                       USD
@@ -848,16 +849,16 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                   return (
                     <div
                       key={room.slug}
-                      className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-white/12 bg-white/[0.03] transition hover:border-[#cf8f2e]/40 hover:bg-white/[0.05]"
+                      className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-white/12 bg-white/[0.03] transition hover:border-[#D76E1B]/40 hover:bg-white/[0.05]"
                     >
                       <div className="p-6">
                         {/* Header & Badges */}
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className="font-mono text-[10px] uppercase tracking-wider text-[#cf8f2e]">
+                            <span className="font-mono text-[10px] uppercase tracking-wider text-[#D76E1B]">
                               {room.roomCount ? `${room.roomCount} Available` : 'Sanctuary Suite'}
                             </span>
-                            <h3 className="mt-1 font-display text-xl text-white group-hover:text-[#cf8f2e] transition">
+                            <h3 className="mt-1 font-display text-xl text-white group-hover:text-[#D76E1B] transition">
                               {t(room.name)}
                             </h3>
                           </div>
@@ -872,21 +873,21 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         {/* Room Amenities & Specs */}
                         <div className="mt-5 grid grid-cols-2 gap-2 border-y border-white/10 py-4 font-mono text-[11px] text-white/75">
                           <div className="flex items-center gap-1.5">
-                            <Users className="size-3.5 text-[#cf8f2e]" />
+                            <Users className="size-3.5 text-[#D76E1B]" />
                             <span>Sleeps {room.sleepsAdults}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <Bed className="size-3.5 text-[#cf8f2e]" />
+                            <Bed className="size-3.5 text-[#D76E1B]" />
                             <span>{t(room.bedConfig) || 'King / Twin'}</span>
                           </div>
                           {room.sizeSqm && (
                             <div className="flex items-center gap-1.5">
-                              <Layers className="size-3.5 text-[#cf8f2e]" />
+                              <Layers className="size-3.5 text-[#D76E1B]" />
                               <span>{room.sizeSqm} m²</span>
                             </div>
                           )}
                           <div className="flex items-center gap-1.5">
-                            <Mountain className="size-3.5 text-[#cf8f2e]" />
+                            <Mountain className="size-3.5 text-[#D76E1B]" />
                             <span>{room.view ? t(room.view) : 'Highland View'}</span>
                           </div>
                         </div>
@@ -894,13 +895,13 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         {/* Signature High Altitude Perks */}
                         <ul className="mt-4 space-y-1.5 text-xs text-white/60">
                           <li className="flex items-center gap-2">
-                            <Check className="size-3 text-[#cf8f2e]" /> Fresh Mount Elgon Arabica French Press
+                            <Check className="size-3 text-[#D76E1B]" /> Fresh Mount Elgon Arabica French Press
                           </li>
                           <li className="flex items-center gap-2">
-                            <Check className="size-3 text-[#cf8f2e]" /> High-pressure hot water rain shower
+                            <Check className="size-3 text-[#D76E1B]" /> High-pressure hot water rain shower
                           </li>
                           <li className="flex items-center gap-2">
-                            <Check className="size-3 text-[#cf8f2e]" /> Escarpment balcony &amp; birding vistas
+                            <Check className="size-3 text-[#D76E1B]" /> Escarpment balcony &amp; birding vistas
                           </li>
                         </ul>
                       </div>
@@ -918,7 +919,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         <button
                           type="button"
                           onClick={() => handleEnquireForRoom(room.slug)}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-[#cf8f2e]/15 px-3.5 py-2 text-xs font-semibold text-[#cf8f2e] border border-[#cf8f2e]/30 transition hover:bg-[#cf8f2e] hover:text-[#080b09] cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-full bg-[#D76E1B]/15 px-3.5 py-2 text-xs font-semibold text-[#D76E1B] border border-[#D76E1B]/30 transition hover:bg-[#D76E1B] hover:text-white cursor-pointer"
                         >
                           <span>Reserve Hold</span>
                           <ArrowRight className="size-3" />
@@ -936,7 +937,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
             <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {/* Phone Desk Card */}
               <div className="rounded-3xl border border-white/12 bg-white/[0.03] p-6 backdrop-blur-xl">
-                <div className="grid size-12 place-items-center rounded-2xl bg-[#cf8f2e]/15 text-[#cf8f2e]">
+                <div className="grid size-12 place-items-center rounded-2xl bg-[#D76E1B]/15 text-[#D76E1B]">
                   <Phone className="size-6" />
                 </div>
                 <h3 className="mt-4 font-display text-xl text-white">Front Desk Hotline</h3>
@@ -948,7 +949,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                     href={`tel:${phone.replace(/\s+/g, '')}`}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/20 transition"
                   >
-                    <Phone className="size-4 text-[#cf8f2e]" />
+                    <Phone className="size-4 text-[#D76E1B]" />
                     <span>Call {phone}</span>
                   </a>
                 </div>
@@ -969,7 +970,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                       href={whatsappLink(wa, 'Hello Reberon Hotel Concierge, I am contacting you for assistance with upcoming accommodation.')}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-[#080b09] hover:bg-emerald-400 transition"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-400 transition"
                     >
                       <MessageCircle className="size-4" />
                       <span>Open WhatsApp Chat</span>
@@ -980,14 +981,14 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
 
               {/* Physical Address & Directions Card */}
               <div className="rounded-3xl border border-white/12 bg-white/[0.03] p-6 backdrop-blur-xl md:col-span-2 lg:col-span-1">
-                <div className="grid size-12 place-items-center rounded-2xl bg-[#cf8f2e]/15 text-[#cf8f2e]">
+                <div className="grid size-12 place-items-center rounded-2xl bg-[#D76E1B]/15 text-[#D76E1B]">
                   <MapPin className="size-6" />
                 </div>
                 <h3 className="mt-4 font-display text-xl text-white">Location &amp; Coordinates</h3>
                 <p className="mt-2 text-xs leading-relaxed text-white/65">
                   {addressText}
                 </p>
-                <p className="mt-2 font-mono text-[11px] text-[#cf8f2e]">
+                <p className="mt-2 font-mono text-[11px] text-[#D76E1B]">
                   GPS: 1°23&apos;55&quot; N, 34°27&apos;01&quot; E · 1,900 m ASL
                 </p>
                 <div className="mt-6">
@@ -997,7 +998,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                     rel="noreferrer"
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold text-white hover:border-white/30 hover:bg-white/10 transition"
                   >
-                    <Compass className="size-4 text-[#cf8f2e]" />
+                    <Compass className="size-4 text-[#D76E1B]" />
                     <span>Get Directions on Maps</span>
                   </a>
                 </div>
@@ -1009,7 +1010,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
           {activeTab === 'enquiry' && (
             <div className="mt-6 grid gap-8 lg:grid-cols-[1.1fr_1.3fr]">
               <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-xl sm:p-8">
-                <span className="font-mono text-xs uppercase tracking-widest text-[#cf8f2e]">Direct Request</span>
+                <span className="font-mono text-xs uppercase tracking-widest text-[#D76E1B]">Direct Request</span>
                 <h2 className="mt-2 font-display text-2xl font-normal text-white sm:text-3xl">
                   Send an Enquiry Directly to the Desk.
                 </h2>
@@ -1030,7 +1031,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
               </div>
 
               {/* Enquiry Form */}
-              <div className="rounded-3xl border border-white/12 bg-[#0e1310]/90 p-6 backdrop-blur-2xl sm:p-8">
+              <div className="rounded-3xl border border-white/12 bg-[#141836]/90 p-6 backdrop-blur-2xl sm:p-8">
                 {enquiryState.status === 'success' && enquiryState.reference ? (
                   <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center sm:p-8">
                     <div className="mx-auto grid size-12 place-items-center rounded-full bg-emerald-500/20 text-emerald-400">
@@ -1043,7 +1044,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
 
                     <div className="mt-6 inline-flex items-center gap-3 rounded-2xl border border-white/15 bg-black/40 px-5 py-3 font-mono text-sm">
                       <span className="text-white/60">Reference:</span>
-                      <strong className="text-[#cf8f2e]">{enquiryState.reference}</strong>
+                      <strong className="text-[#D76E1B]">{enquiryState.reference}</strong>
                       <button
                         type="button"
                         onClick={() => handleCopyReference(enquiryState.reference!)}
@@ -1074,7 +1075,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                     <div className="grid gap-4 sm:grid-cols-2">
                       <label className="grid gap-1.5 text-xs">
                         <span className="font-medium text-white/80">
-                          Your Name <span className="text-[#cf8f2e]">*</span>
+                          Your Name <span className="text-[#D76E1B]">*</span>
                         </span>
                         <input
                           type="text"
@@ -1082,7 +1083,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           required
                           defaultValue={enquiryState.values?.name}
                           placeholder="Your Full Name"
-                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         />
                         {enquiryState.fieldErrors?.name && (
                           <span className="text-[11px] text-red-400">{enquiryState.fieldErrors.name}</span>
@@ -1094,7 +1095,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         <select
                           name="intent"
                           defaultValue={enquiryState.values?.intent ?? 'STAY'}
-                          className="h-11 rounded-xl border border-white/15 bg-[#121614] px-3 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-[#1A1E43] px-3 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         >
                           <option value="STAY">A Room or Suite Stay</option>
                           <option value="EVENT">Event, Wedding or Hall</option>
@@ -1112,7 +1113,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           name="phone"
                           defaultValue={enquiryState.values?.phone}
                           placeholder="07xx xxx xxx"
-                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         />
                         {enquiryState.fieldErrors?.phone && (
                           <span className="text-[11px] text-red-400">{enquiryState.fieldErrors.phone}</span>
@@ -1126,7 +1127,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                           name="email"
                           defaultValue={enquiryState.values?.email}
                           placeholder="you@domain.com"
-                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         />
                       </label>
                     </div>
@@ -1137,7 +1138,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         <select
                           name="roomTypeSlug"
                           defaultValue={enquiryRoomSlug || enquiryState.values?.roomTypeSlug || ''}
-                          className="h-11 rounded-xl border border-white/15 bg-[#121614] px-3 text-sm text-white focus:border-[#cf8f2e] focus:outline-none"
+                          className="h-11 rounded-xl border border-white/15 bg-[#1A1E43] px-3 text-sm text-white focus:border-[#D76E1B] focus:outline-none"
                         >
                           <option value="">No preference / Custom setup</option>
                           {allRooms.map((r) => (
@@ -1155,7 +1156,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                             type="date"
                             name="arrival"
                             defaultValue={enquiryState.values?.arrival}
-                            className="h-11 rounded-xl border border-white/15 bg-black/40 px-2.5 text-xs text-white focus:border-[#cf8f2e] focus:outline-none"
+                            className="h-11 rounded-xl border border-white/15 bg-black/40 px-2.5 text-xs text-white focus:border-[#D76E1B] focus:outline-none"
                           />
                         </label>
                         <label className="grid gap-1 text-xs">
@@ -1164,7 +1165,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                             type="date"
                             name="departure"
                             defaultValue={enquiryState.values?.departure}
-                            className="h-11 rounded-xl border border-white/15 bg-black/40 px-2.5 text-xs text-white focus:border-[#cf8f2e] focus:outline-none"
+                            className="h-11 rounded-xl border border-white/15 bg-black/40 px-2.5 text-xs text-white focus:border-[#D76E1B] focus:outline-none"
                           />
                         </label>
                       </div>
@@ -1172,7 +1173,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
 
                     <label className="grid gap-1.5 text-xs">
                       <span className="font-medium text-white/80">
-                        Your Message <span className="text-[#cf8f2e]">*</span>
+                        Your Message <span className="text-[#D76E1B]">*</span>
                       </span>
                       <textarea
                         name="message"
@@ -1180,7 +1181,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         required
                         defaultValue={enquiryState.values?.message}
                         placeholder="Please describe your requested dates, number of guests, or special arrangement..."
-                        className="rounded-xl border border-white/15 bg-black/40 p-3 text-sm text-white placeholder:text-white/30 focus:border-[#cf8f2e] focus:outline-none"
+                        className="rounded-xl border border-white/15 bg-black/40 p-3 text-sm text-white placeholder:text-white/30 focus:border-[#D76E1B] focus:outline-none"
                       />
                       {enquiryState.fieldErrors?.message && (
                         <span className="text-[11px] text-red-400">{enquiryState.fieldErrors.message}</span>
@@ -1194,7 +1195,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                         name="consent"
                         defaultChecked
                         required
-                        className="mt-0.5 size-4 rounded border-white/20 bg-black/40 text-[#cf8f2e] focus:ring-0"
+                        className="mt-0.5 size-4 rounded border-white/20 bg-black/40 text-[#D76E1B] focus:ring-0"
                       />
                       <span>
                         I agree to be contacted by Reberon Hotel staff regarding this request.
@@ -1207,7 +1208,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                     <button
                       type="submit"
                       disabled={enquiryPending}
-                      className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#cf8f2e] px-6 text-sm font-semibold text-[#080b09] transition hover:bg-[#deb041] disabled:opacity-50 cursor-pointer"
+                      className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#D76E1B] px-6 text-sm font-semibold text-white transition hover:bg-[#E88432] disabled:opacity-50 cursor-pointer"
                     >
                       {enquiryPending ? (
                         <>
@@ -1230,7 +1231,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
       </main>
 
       {/* Footer */}
-      <footer className="relative z-20 mt-16 border-t border-white/10 bg-[#080b09]/90 px-4 py-8 text-xs text-white/50 backdrop-blur-xl sm:px-8">
+      <footer className="relative z-20 mt-16 border-t border-white/10 bg-[#0E1126]/90 px-4 py-8 text-xs text-white/50 backdrop-blur-xl sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="font-display font-medium text-white/80">{site.name}</span>
@@ -1268,10 +1269,10 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
             className="fixed inset-0 bg-black/80 backdrop-blur-md"
             onClick={() => setLoginOpen(false)}
           />
-          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-white/15 bg-[#101512] p-6 shadow-2xl sm:p-8">
+          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-white/15 bg-[#1A1E43] p-6 shadow-2xl sm:p-8">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-2.5">
-                <div className="grid size-9 place-items-center rounded-xl bg-[#cf8f2e]/15 text-[#cf8f2e]">
+                <div className="grid size-9 place-items-center rounded-xl bg-[#D76E1B]/15 text-[#D76E1B]">
                   <ShieldCheck className="size-5" />
                 </div>
                 <div>
@@ -1310,7 +1311,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                   placeholder="name@reberonhotel.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white placeholder:text-white/30 focus:border-[#cf8f2e] focus:outline-none"
+                  className="h-11 rounded-xl border border-white/15 bg-black/40 px-3.5 text-sm text-white placeholder:text-white/30 focus:border-[#D76E1B] focus:outline-none"
                 />
               </label>
 
@@ -1324,7 +1325,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-white/15 bg-black/40 pl-3.5 pr-10 text-sm text-white placeholder:text-white/30 focus:border-[#cf8f2e] focus:outline-none"
+                    className="h-11 w-full rounded-xl border border-white/15 bg-black/40 pl-3.5 pr-10 text-sm text-white placeholder:text-white/30 focus:border-[#D76E1B] focus:outline-none"
                   />
                   <button
                     type="button"
@@ -1343,7 +1344,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                     type="checkbox"
                     checked={rememberEmail}
                     onChange={(e) => setRememberEmail(e.target.checked)}
-                    className="size-3.5 rounded border-white/20 bg-black/40 text-[#cf8f2e] focus:ring-0"
+                    className="size-3.5 rounded border-white/20 bg-black/40 text-[#D76E1B] focus:ring-0"
                   />
                   <span>Remember email</span>
                 </label>
@@ -1352,7 +1353,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
                   href="https://reberonhotel.com:8443"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#cf8f2e] hover:underline"
+                  className="text-[#D76E1B] hover:underline"
                 >
                   The House (PMS)
                 </a>
@@ -1361,7 +1362,7 @@ export function ComingSoonGate({ site, rooms = [] }: { site: SiteDTO; rooms?: Ro
               <button
                 type="submit"
                 disabled={busy || !email || !password}
-                className="mt-2 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#cf8f2e] px-5 text-sm font-semibold text-[#080b09] transition hover:bg-[#deb041] disabled:opacity-50 cursor-pointer"
+                className="mt-2 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#D76E1B] px-5 text-sm font-semibold text-white transition hover:bg-[#E88432] disabled:opacity-50 cursor-pointer"
               >
                 {busy ? (
                   <>
@@ -1399,7 +1400,7 @@ export function StaffPreviewBar({ userName, userEmail }: { userName: string; use
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-[70] flex items-center gap-3 rounded-full border border-white/15 bg-[#121614]/95 py-2 pl-4 pr-2 text-xs text-white shadow-2xl backdrop-blur-md print:hidden">
+    <div className="fixed bottom-4 left-4 z-[70] flex items-center gap-3 rounded-full border border-white/15 bg-[#1A1E43]/95 py-2 pl-4 pr-2 text-xs text-white shadow-2xl backdrop-blur-md print:hidden">
       <span className="relative flex size-2.5">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
         <span className="relative inline-flex size-2.5 rounded-full bg-emerald-400" />

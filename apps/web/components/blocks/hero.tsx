@@ -81,8 +81,8 @@ export function Hero({ block, media, site, ctx, index }: BlockProps<HeroData>) {
     >
       <div className="absolute inset-0 -z-10">
         {slides.length ? <HeroSlides slides={slides} /> : null}
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(18_21_19/.55)_0%,rgb(18_21_19/.08)_32%,rgb(18_21_19/.2)_58%,rgb(18_21_19/.78)_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(18_21_19/.5)_0%,rgb(18_21_19/.15)_45%,transparent_70%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(14_17_38/.58)_0%,rgb(14_17_38/.08)_32%,rgb(14_17_38/.22)_58%,rgb(14_17_38/.82)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(14_17_38/.52)_0%,rgb(14_17_38/.15)_45%,transparent_70%)]" />
       </div>
 
       {mist && (
@@ -92,12 +92,12 @@ export function Hero({ block, media, site, ctx, index }: BlockProps<HeroData>) {
           <svg viewBox="0 0 1600 200" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-full w-full">
             <defs>
               <linearGradient id="r1" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#2f4a3a" stopOpacity=".55" />
-                <stop offset="1" stopColor="#1e2b24" stopOpacity=".9" />
+                <stop offset="0" stopColor="#262C5E" stopOpacity=".55" />
+                <stop offset="1" stopColor="#1A1E43" stopOpacity=".9" />
               </linearGradient>
               <linearGradient id="r2" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#1e2b24" stopOpacity=".85" />
-                <stop offset="1" stopColor="#121513" />
+                <stop offset="0" stopColor="#1A1E43" stopOpacity=".85" />
+                <stop offset="1" stopColor="#0E1126" />
               </linearGradient>
             </defs>
             <path d={ridge(1.3, 120, 34)} fill="url(#r1)" />

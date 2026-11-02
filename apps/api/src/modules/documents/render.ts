@@ -116,56 +116,56 @@ export function renderDocument(d: RenderInput): string {
 <style nonce="${d.nonce}">
   @page { size: ${narrow ? '80mm auto' : 'A4'}; margin: ${narrow ? '4mm' : '14mm'}; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #ECE8DF; color: #121513; font: ${narrow ? '12px' : '13.5px'}/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; background: #F4F5F7; color: #1A1E43; font: ${narrow ? '12px' : '13.5px'}/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sheet { position: relative; width: ${narrow ? '72mm' : '180mm'}; min-height: ${narrow ? 'auto' : '250mm'}; margin: 24px auto; background: #fff; padding: ${narrow ? '4mm' : '14mm 16mm'}; box-shadow: 0 10px 40px -20px rgb(0 0 0 / .35); overflow: hidden; }
-  header { display: flex; ${narrow ? 'flex-direction: column; text-align: center; gap: 2mm;' : 'justify-content: space-between; gap: 10mm;'} border-bottom: 2px solid #121513; padding-bottom: ${narrow ? '3mm' : '6mm'}; }
+  header { display: flex; ${narrow ? 'flex-direction: column; text-align: center; gap: 2mm;' : 'justify-content: space-between; gap: 10mm;'} border-bottom: 2px solid #1A1E43; padding-bottom: ${narrow ? '3mm' : '6mm'}; }
   .brand-head { display: inline-flex; align-items: center; ${narrow ? 'justify-content: center;' : ''} gap: 8px; margin-bottom: 3px; }
-  .brand-logo { width: ${narrow ? '26px' : '32px'}; height: ${narrow ? '16px' : '20px'}; flex-shrink: 0; }
+  .brand-logo { width: ${narrow ? '28px' : '38px'}; height: ${narrow ? '28px' : '36px'}; flex-shrink: 0; }
   .brand b { display: block; font: 600 ${narrow ? '17px' : '23px'}/1.1 Georgia, "Times New Roman", serif; letter-spacing: .01em; }
-  .brand span { display: block; color: #55594F; font-size: ${narrow ? '10.5px' : '12px'}; }
+  .brand span { display: block; color: #424867; font-size: ${narrow ? '10.5px' : '12px'}; }
   .doc { text-align: ${narrow ? 'center' : 'right'}; }
-  .doc .t { font-size: ${narrow ? '13px' : '12px'}; letter-spacing: .18em; text-transform: uppercase; color: #9E2A2B; font-weight: 700; }
+  .doc .t { font-size: ${narrow ? '13px' : '12px'}; letter-spacing: .18em; text-transform: uppercase; color: #D76E1B; font-weight: 700; }
   .doc .no { font: 600 ${narrow ? '15px' : '18px'}/1.3 ui-monospace, "SFMono-Regular", Menlo, monospace; }
-  .doc .dt { color: #55594F; font-size: 12px; }
-  .copy { display: inline-block; margin-top: 1mm; padding: 1px 8px; border: 1px solid #121513; font-size: 10.5px; letter-spacing: .15em; font-weight: 700; }
+  .doc .dt { color: #424867; font-size: 12px; }
+  .copy { display: inline-block; margin-top: 1mm; padding: 1px 8px; border: 1px solid #1A1E43; font-size: 10.5px; letter-spacing: .15em; font-weight: 700; }
   .to { display: grid; grid-template-columns: ${narrow ? '1fr' : '1fr 1fr'}; gap: 4mm; margin: ${narrow ? '3mm 0' : '7mm 0'}; }
-  .to h4, h3 { margin: 0 0 1mm; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #8A867B; font-weight: 600; }
+  .to h4, h3 { margin: 0 0 1mm; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6E7491; font-weight: 600; }
   .to p { margin: 0; }
-  .amount { display: flex; justify-content: space-between; align-items: baseline; border: 1.5px solid #121513; background: #FAF8F3; padding: ${narrow ? '3mm' : '5mm 6mm'}; margin-top: ${narrow ? '2mm' : '4mm'}; }
-  .amount span { color: #55594F; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: .1em; }
+  .amount { display: flex; justify-content: space-between; align-items: baseline; border: 1.5px solid #1A1E43; background: #F4F5F7; padding: ${narrow ? '3mm' : '5mm 6mm'}; margin-top: ${narrow ? '2mm' : '4mm'}; }
+  .amount span { color: #424867; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: .1em; }
   .amount b { font-size: ${narrow ? '20px' : '28px'}; font-variant-numeric: tabular-nums; }
   .words { margin: 2mm 0 0; font-style: italic; color: #33372F; }
   .facts { margin: ${narrow ? '3mm' : '6mm'} 0 0; display: grid; gap: 1.5mm; }
-  .facts div { display: flex; justify-content: space-between; gap: 4mm; border-bottom: 1px dotted #CFCBC0; padding-bottom: 1.5mm; }
-  .facts dt { color: #55594F; } .facts dd { margin: 0; text-align: right; }
+  .facts div { display: flex; justify-content: space-between; gap: 4mm; border-bottom: 1px dotted #D5D6D6; padding-bottom: 1.5mm; }
+  .facts dt { color: #424867; } .facts dd { margin: 0; text-align: right; }
   table.lines { width: 100%; border-collapse: collapse; margin-top: 3mm; }
-  .lines th { text-align: left; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #8A867B; font-weight: 600; border-bottom: 1px solid #121513; padding: 1.5mm 0; }
-  .lines td { padding: 1.6mm 0; border-bottom: 1px solid #E7E2D6; vertical-align: top; }
-  .lines .d { width: ${narrow ? '18mm' : '28mm'}; color: #55594F; white-space: nowrap; padding-right: 3mm; }
+  .lines th { text-align: left; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #6E7491; font-weight: 600; border-bottom: 1px solid #1A1E43; padding: 1.5mm 0; }
+  .lines td { padding: 1.6mm 0; border-bottom: 1px solid #E4E6EC; vertical-align: top; }
+  .lines .d { width: ${narrow ? '18mm' : '28mm'}; color: #424867; white-space: nowrap; padding-right: 3mm; }
   .lines .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; padding-left: 3mm; }
   .lines tfoot td { border: 0; }
-  .lines .sum td { font-weight: 700; border-top: 1px solid #121513; padding-top: 2mm; }
-  .lines .vat td { color: #55594F; font-size: 12px; }
+  .lines .sum td { font-weight: 700; border-top: 1px solid #1A1E43; padding-top: 2mm; }
+  .lines .vat td { color: #424867; font-size: 12px; }
   h3 { margin-top: 5mm; }
-  .total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4mm; padding: 3mm 0; border-top: 2px solid #121513; font-size: ${narrow ? '14px' : '16px'}; }
+  .total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4mm; padding: 3mm 0; border-top: 2px solid #1A1E43; font-size: ${narrow ? '14px' : '16px'}; }
   .total b { font-size: ${narrow ? '17px' : '22px'}; }
-  footer { margin-top: ${narrow ? '4mm' : '10mm'}; padding-top: 4mm; border-top: 1px solid #CFCBC0; color: #55594F; font-size: 11.5px; ${narrow ? 'text-align:center;' : 'display:flex; justify-content:space-between; align-items:center; gap:6mm;'} }
+  footer { margin-top: ${narrow ? '4mm' : '10mm'}; padding-top: 4mm; border-top: 1px solid #D5D6D6; color: #424867; font-size: 11.5px; ${narrow ? 'text-align:center;' : 'display:flex; justify-content:space-between; align-items:center; gap:6mm;'} }
   footer p { margin: 0 0 1.2mm; }
   footer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
   .qr-box { ${narrow ? 'margin: 3mm auto 0;' : 'flex-shrink: 0;'} text-align: center; }
   .qr-box a { text-decoration: none; color: inherit; display: inline-block; }
-  .qr-box svg { border: 1.5px solid #121513; border-radius: 6px; background: #fff; display: block; margin: 0 auto; }
-  .qr-box span { display: block; font-size: 9.5px; font-weight: 600; color: #121513; letter-spacing: .06em; text-transform: uppercase; margin-top: 3px; }
+  .qr-box svg { border: 1.5px solid #1A1E43; border-radius: 6px; background: #fff; display: block; margin: 0 auto; }
+  .qr-box span { display: block; font-size: 9.5px; font-weight: 600; color: #1A1E43; letter-spacing: .06em; text-transform: uppercase; margin-top: 3px; }
   .credit { margin-top: 2.5mm; font-size: 10px; color: #7C786E; }
-  .check { font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: .08em; color: #121513; background: #F4F1EA; padding: 1px 5px; border-radius: 3px; }
-  .note { margin-top: 4mm; padding: 2.5mm 3.5mm; background: #F4F1EA; border-left: 3px solid #121513; font-size: 12px; }
+  .check { font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: .08em; color: #1A1E43; background: #EAECEF; padding: 1px 5px; border-radius: 3px; }
+  .note { margin-top: 4mm; padding: 2.5mm 3.5mm; background: #EAECEF; border-left: 3px solid #1A1E43; font-size: 12px; }
   .void { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
   .void span { transform: rotate(-24deg); font: 700 ${narrow ? '42px' : '110px'}/1 Georgia, serif; color: rgb(158 42 43 / .18); border: 6px solid rgb(158 42 43 / .18); padding: 0 6mm; letter-spacing: .1em; }
-  .voidnote { color: #9E2A2B; font-weight: 600; }
+  .voidnote { color: #D76E1B; font-weight: 600; }
   .toolbar { position: sticky; top: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px; background: rgb(236 232 223 / .92); backdrop-filter: blur(6px); z-index: 10; border-bottom: 1px solid #D8D3C8; }
-  .toolbar button, .toolbar a { font: 600 13px system-ui, sans-serif; padding: 8px 16px; border-radius: 999px; border: 1px solid #121513; background: #121513; color: #fff; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
-  .toolbar a { background: transparent; color: #121513; }
-  .toolbar button:hover { background: #262B27; }
+  .toolbar button, .toolbar a { font: 600 13px system-ui, sans-serif; padding: 8px 16px; border-radius: 999px; border: 1px solid #1A1E43; background: #1A1E43; color: #fff; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .toolbar a { background: transparent; color: #1A1E43; }
+  .toolbar button:hover { background: #D76E1B; }
   .toolbar a:hover { background: #E2DED4; }
   @media print {
     body { background: #fff !important; }
@@ -184,10 +184,8 @@ export function renderDocument(d: RenderInput): string {
     <header>
       <div class="brand">
         <div class="brand-head">
-          <svg viewBox="0 0 40 24" class="brand-logo" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">
-            <path d="M1 22 L11 9 L16 14 L24 3 L39 22" />
-            <path d="M6 22 L13 15.5" opacity=".5" />
-            <circle cx="30" cy="6" r="2.2" fill="#CF8F2E" stroke="none" />
+          <svg viewBox="214 65 168 160" class="brand-logo" fill="none" aria-hidden="true">
+            <path d="M 291.980469 154.832031 C 317.710938 156.78125 334.457031 187.140625 334.457031 216.847656 L 348.960938 216.847656 C 348.960938 163.941406 303.910156 158.609375 297.710938 150.070312 L 286.855469 150.070312 C 287.464844 152.484375 289.21875 154.550781 291.980469 154.832031 " fill="#D76E1B" fill-rule="nonzero"/><path d="M 273.332031 75.683594 L 299.234375 75.683594 C 315.636719 75.683594 325.996094 86.527344 325.996094 109.511719 C 325.996094 132.496094 300.613281 139 290.773438 142.039062 C 289.527344 142.429688 288.585938 143.160156 287.910156 144.066406 L 299 144.066406 C 307.558594 136.039062 340.675781 133.546875 340.675781 104.089844 C 340.675781 78.71875 322.199219 73.300781 299.578125 73.300781 L 256.410156 73.300781 C 256.238281 73.515625 256.238281 73.515625 256.238281 73.949219 C 259 75.683594 259 81.757812 259 86.527344 L 259 144.066406 L 273.332031 144.066406 Z M 273.332031 75.683594 " fill="#D76E1B" fill-rule="nonzero"/><path d="M 259.003906 203.621094 C 259.003906 208.175781 259.003906 214.246094 256.242188 216.195312 L 256.414062 216.847656 L 275.921875 216.847656 L 276.097656 216.195312 C 273.332031 214.246094 273.332031 208.175781 273.332031 203.621094 L 273.332031 150.070312 L 259.003906 150.070312 Z M 259.003906 203.621094 " fill="#D76E1B" fill-rule="nonzero"/><path d="M 373.617188 209.238281 C 373.796875 209.417969 373.796875 209.773438 373.441406 209.773438 L 353.164062 209.773438 C 352.808594 209.773438 352.808594 209.417969 352.988281 209.238281 C 355.859375 207.621094 355.859375 202.597656 355.859375 198.832031 L 355.859375 148.234375 L 239.941406 148.234375 L 239.941406 198.832031 C 239.941406 202.597656 239.941406 207.621094 242.632812 209.238281 C 242.992188 209.417969 242.992188 209.773438 242.632812 209.773438 L 222.179688 209.773438 C 222 209.773438 221.820312 209.417969 222.179688 209.238281 C 225.050781 207.621094 225.050781 202.597656 225.050781 198.832031 L 225.050781 101.945312 C 225.050781 98 225.050781 92.976562 222.179688 91.539062 C 221.820312 91.359375 222 91 222.179688 91 L 242.632812 91 C 242.992188 91 242.992188 91.359375 242.632812 91.539062 C 239.941406 92.976562 239.941406 98 239.941406 101.945312 L 239.941406 145.902344 L 355.859375 145.902344 L 355.859375 101.945312 C 355.859375 98 355.859375 92.976562 352.988281 91.539062 C 352.808594 91.359375 352.808594 91 353.164062 91 L 373.441406 91 C 373.796875 91 373.796875 91.359375 373.617188 91.539062 C 370.75 92.976562 370.75 98 370.75 101.945312 L 370.75 198.832031 C 370.75 202.597656 370.75 207.621094 373.617188 209.238281 " fill="#D76E1B" fill-rule="nonzero"/>
           </svg>
           <b>${esc(x.hotel.name)}</b>
         </div>

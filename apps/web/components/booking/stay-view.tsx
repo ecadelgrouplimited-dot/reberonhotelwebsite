@@ -22,6 +22,7 @@ import { t } from '@reberon/contracts/text';
 import { formatMoney, whatsappLink, type Currency } from '@reberon/utils';
 import { cn } from '@/lib/cn';
 import { useSite } from '@/components/site/site-provider';
+import { Logo } from '@/components/site/logo';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const money = (m: string, c: string) => formatMoney(BigInt(m), c as Currency).replace(/\.00$/, '');
@@ -116,22 +117,8 @@ export function StayView({ code, token, waitForPayment }: { code: string; token:
       <div className="hidden print:block mb-6 pb-4 border-b-2 border-stone-900">
         <div className="flex items-start justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2.5">
-              <svg
-                viewBox="0 0 40 24"
-                className="h-6 w-10 text-stone-900"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M1 22 L11 9 L16 14 L24 3 L39 22" />
-                <path d="M6 22 L13 15.5" opacity=".5" />
-                <circle cx="30" cy="6" r="2.2" fill="#CF8F2E" stroke="none" />
-              </svg>
-              <span className="font-display text-2xl font-bold tracking-tight text-stone-900">{site.name}</span>
+            <div className="flex items-center gap-2.5 text-[#1A1E43]">
+              <Logo site={site} className="text-[#1A1E43]" />
             </div>
             <p className="mt-1 text-xs text-stone-600">{t(site.contact.address) || 'Kapchorwa, Mount Elgon, Uganda'}</p>
             <p className="text-xs text-stone-600">

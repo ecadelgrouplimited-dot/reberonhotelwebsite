@@ -19,12 +19,12 @@ export function MapEmbed({ lat, lng, zoom, label }: { lat: number; lng: number; 
           <button type="button" onClick={() => setLive(true)} className="group absolute inset-0 text-mist-50" aria-label="Load the interactive map">
             <svg viewBox="0 0 800 500" className="absolute inset-0 size-full" preserveAspectRatio="xMidYMid slice" aria-hidden>
               {Array.from({ length: 16 }, (_, i) => (
-                <ellipse key={i} cx={420 + Math.sin(i) * 14} cy={250 + Math.cos(i) * 8} rx={40 + i * 34} ry={24 + i * 21} fill="none" stroke="#8fa994" strokeOpacity={0.12 + (i % 3) * 0.05} transform={`rotate(${-14 + i * 1.6} 420 250)`} />
+                <ellipse key={i} cx={420 + Math.sin(i) * 14} cy={250 + Math.cos(i) * 8} rx={40 + i * 34} ry={24 + i * 21} fill="none" stroke="#9DA4CC" strokeOpacity={0.14 + (i % 3) * 0.05} transform={`rotate(${-14 + i * 1.6} 420 250)`} />
               ))}
-              <path d="M40 470 C 200 380, 260 330, 380 280 S 520 250, 420 250" fill="none" stroke="#e0a54b" strokeWidth="3" strokeDasharray="8 8" opacity=".7" />
+              <path d="M40 470 C 200 380, 260 330, 380 280 S 520 250, 420 250" fill="none" stroke="#D76E1B" strokeWidth="3" strokeDasharray="8 8" opacity=".8" />
             </svg>
             <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">
-              <span className="relative grid size-14 place-items-center rounded-full bg-accent shadow-[0_0_0_10px_rgb(158_42_43/.2)]">
+              <span className="relative grid size-14 place-items-center rounded-full bg-accent shadow-[0_0_0_10px_rgb(215_110_27/.25)]">
                 <MapPin className="size-6" />
                 <span className="absolute inset-0 animate-ping rounded-full bg-accent/40" />
               </span>

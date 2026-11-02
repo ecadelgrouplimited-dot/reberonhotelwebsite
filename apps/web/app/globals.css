@@ -67,8 +67,8 @@
 
 @layer components {
 .tone-warm { background: var(--bg-warm); }
-.tone-moss { background: var(--color-moss-900); color: var(--color-mist-50); --bg: #1e2b24; --fg: #f4f5f1; --fg-muted: #c9d1c8; --fg-subtle: #9fab9f; --line: rgb(244 245 241 / .14); --line-strong: rgb(244 245 241 / .26); --brand: var(--color-gold-400); --surface: rgb(244 245 241 / .06); --surface-2: rgb(244 245 241 / .1); }
-.tone-dark { background: var(--color-basalt-950); color: var(--color-mist-50); --bg: #121513; --fg: #f4f5f1; --fg-muted: #bdbab1; --fg-subtle: #8a867b; --line: rgb(244 245 241 / .12); --line-strong: rgb(244 245 241 / .24); --brand: var(--color-gold-400); --surface: rgb(244 245 241 / .05); --surface-2: rgb(244 245 241 / .09); }
+.tone-moss { background: #1A1E43; color: #F4F5F7; --bg: #1A1E43; --fg: #F4F5F7; --fg-muted: #C5C8DC; --fg-subtle: #9DA4CC; --line: rgb(244 245 247 / .14); --line-strong: rgb(244 245 247 / .26); --brand: #E88432; --surface: rgb(244 245 247 / .06); --surface-2: rgb(244 245 247 / .1); }
+.tone-dark { background: #0E1126; color: #F4F5F7; --bg: #0E1126; --fg: #F4F5F7; --fg-muted: #C5C8DC; --fg-subtle: #8E94B5; --line: rgb(244 245 247 / .12); --line-strong: rgb(244 245 247 / .24); --brand: #E88432; --surface: rgb(244 245 247 / .05); --surface-2: rgb(244 245 247 / .09); }
 }
 
 /* ───────────── Buttons ───────────── */
@@ -97,7 +97,7 @@
   transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.35s var(--ease-out-soft), box-shadow 0.35s;
   will-change: transform;
 }
-.btn:hover { --btn-bg: var(--accent-hover); box-shadow: 0 10px 30px -12px rgb(158 42 43 / 0.55); }
+.btn:hover { --btn-bg: var(--accent-hover); box-shadow: 0 10px 30px -12px rgb(215 110 27 / 0.55); }
 .btn:active { transform: scale(0.97); }
 .btn-secondary { --btn-bg: transparent; --btn-fg: currentColor; --btn-bd: color-mix(in oklab, currentColor 35%, transparent); }
 .btn-secondary:hover { --btn-bg: color-mix(in oklab, currentColor 8%, transparent); --btn-bd: currentColor; box-shadow: none; }
@@ -284,18 +284,19 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
     --bg: #ffffff !important;
     --bg-warm: #ffffff !important;
     --surface: #ffffff !important;
-    --surface-2: #f7f7f5 !important;
-    --fg: #121513 !important;
-    --fg-muted: #3a3e3b !important;
-    --fg-subtle: #5f5c55 !important;
-    --line: #dcd7ce !important;
-    --line-strong: #b5b1a8 !important;
-    --brand: #1e2b24 !important;
+    --surface-2: #F4F5F7 !important;
+    --fg: #1A1E43 !important;
+    --fg-muted: #424867 !important;
+    --fg-subtle: #6E7491 !important;
+    --line: #D5D6D6 !important;
+    --line-strong: #B8BAC4 !important;
+    --brand: #1A1E43 !important;
+    --accent: #D76E1B !important;
     --shadow-soft: none !important;
     --shadow-lift: none !important;
     background-color: #ffffff !important;
     background-image: none !important;
-    color: #121513 !important;
+    color: #1A1E43 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
