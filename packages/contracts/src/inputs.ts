@@ -109,6 +109,7 @@ export const zAdminSetPasswordInput = z.object({
 /** A person on the staff list. They sign in only if canSignIn (then an email is needed for the invitation or credentials). */
 export const zStaffCreateInput = z
   .object({
+    staffProfileId: z.string().uuid().optional(),
     name: z.string().trim().min(2).max(120),
     jobTitle: z.string().trim().max(80).optional(),
     phone: z.string().trim().max(40).optional(),

@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
+  AlertTriangle,
+  ArrowRight,
+  Building2,
   CheckCircle2,
   Clock,
   Copy,
@@ -15,11 +18,13 @@ import {
   Lock,
   Mail,
   Plus,
+  RefreshCw,
   Search,
   Shield,
   ShieldCheck,
   Sparkles,
   Trash2,
+  UserCheck,
   UserPlus,
   UserRound,
   Users,
@@ -30,6 +35,7 @@ import {
   ROLES,
   ROLE_DESCRIPTIONS,
   ROLE_PERMISSIONS,
+  type HrEmployeeForAccessDTO,
   type Role,
   type RoleDefinitionDTO,
   type UserDTO,
@@ -204,7 +210,7 @@ export default function PeoplePage() {
                 setAdding(true);
               }}
             >
-              Add Staff Member
+              Assign Employee to Role
             </Button>
           </div>
         }
@@ -379,7 +385,7 @@ export default function PeoplePage() {
                           setAdding(true);
                         }}
                       >
-                        Add Staff in Role
+                        Assign Employee to Role
                       </Button>
                       <div className="flex items-center gap-1.5">
                         {!isOwnerRole && (
@@ -886,100 +892,195 @@ function AddDialog({
 }) {
   const qc = useQueryClient();
   const router = useRouter();
-  const [f, setF] = useState({
-    name: '',
-    jobTitle: '',
-    phone: '',
-    email: '',
-    selectedRoleKey: initialRoleKey,
-    canSignIn: true,
-    credentialMode: 'password' as 'password' | 'invite',
-    password: generateStrongPassword(),
-    sendCredentials: true,
+
+  // Fetch existing HR employees from the HR module
+  const { data: hrEmployees = [], isLoading: hrLoading } = useQuery({
+    queryKey: ['hr-employees-for-access'],
+    queryFn: () => get<HrEmployeeForAccessDTO[]>('/users/hr-employees'),
+    enabled: open,
   });
+
+  const [empSearch, setEmpSearch] = useState('');
+  const [empFilter, setEmpFilter] = useState<'ALL' | 'UNASSIGNED' | 'ASSIGNED'>('ALL');
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+  const [selectedRoleKey, setSelectedRoleKey] = useState<string>(initialRoleKey);
+  const [email, setEmail] = useState('');
+  const [canSignIn, setCanSignIn] = useState(true);
+  const [credentialMode, setCredentialMode] = useState<'password' | 'invite'>('password');
+  const [password, setPassword] = useState(() => generateStrongPassword());
+  const [sendCredentials, setSendCredentials] = useState(true);
+  const [updatePasswordOnRoleChange, setUpdatePasswordOnRoleChange] = useState(false);
   const [showPw, setShowPw] = useState(true);
   const [link, setLink] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setF((prev) => ({ ...prev, selectedRoleKey: initialRoleKey }));
+      setSelectedRoleKey(initialRoleKey);
     }
   }, [open, initialRoleKey]);
 
-  const selectedDef = roles.find((r) => r.key === f.selectedRoleKey);
+  const selectedEmployee = hrEmployees.find((e) => e.staffProfileId === selectedStaffId) ?? null;
+
+  // Auto-populate fields whenever an HR employee is selected
+  const handleSelectEmployee = (empId: string) => {
+    setSelectedStaffId(empId);
+    const emp = hrEmployees.find((e) => e.staffProfileId === empId);
+    if (!emp) return;
+    setEmail(emp.email ?? emp.existingUser?.email ?? '');
+    if (emp.existingUser) {
+      setCanSignIn(emp.existingUser.canSignIn);
+      setUpdatePasswordOnRoleChange(false);
+    } else {
+      setCanSignIn(Boolean(emp.email));
+    }
+  };
+
+  const selectedDef = roles.find((r) => r.key === selectedRoleKey);
   const isCustom = selectedDef ? !selectedDef.isSystem : false;
   const resolvedBaseRole: Role = selectedDef
     ? selectedDef.baseRole
-    : (ROLES.includes(f.selectedRoleKey as Role) ? (f.selectedRoleKey as Role) : 'DESK');
+    : ROLES.includes(selectedRoleKey as Role)
+      ? (selectedRoleKey as Role)
+      : 'DESK';
+  const targetRoleDisplayName = selectedDef?.name || ROLE_LABEL[resolvedBaseRole] || selectedRoleKey;
+
+  const existingUser = selectedEmployee?.existingUser ?? null;
+  const currentRoleKey = existingUser
+    ? existingUser.customRoleKey || existingUser.role
+    : null;
+  const isSameRole = Boolean(existingUser && currentRoleKey === selectedRoleKey);
+  const isRoleChange = Boolean(existingUser && currentRoleKey !== selectedRoleKey);
+
+  const filteredEmployees = hrEmployees.filter((emp) => {
+    if (empFilter === 'UNASSIGNED' && emp.existingUser) return false;
+    if (empFilter === 'ASSIGNED' && !emp.existingUser) return false;
+    if (empSearch.trim()) {
+      const q = empSearch.trim().toLowerCase();
+      const hay = `${emp.fullName} ${emp.employeeNumber} ${emp.jobTitle} ${emp.departmentName} ${emp.email ?? ''} ${emp.phone} ${emp.existingUser?.roleDisplayName ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const unassignedCount = hrEmployees.filter((e) => !e.existingUser).length;
+  const assignedCount = hrEmployees.filter((e) => !!e.existingUser).length;
 
   const m = useMutation({
-    mutationFn: () =>
-      post<{ user: UserDTO; inviteUrl?: string; credentialsEmailed?: boolean }>('/users', {
-        name: f.name,
-        jobTitle: f.jobTitle || undefined,
-        phone: f.phone || undefined,
-        email: f.email || undefined,
+    mutationFn: () => {
+      if (!selectedEmployee) throw new Error('Select an employee from HR first');
+      const shouldSendPassword =
+        canSignIn &&
+        credentialMode === 'password' &&
+        (!existingUser || updatePasswordOnRoleChange || !existingUser.hasPassword);
+
+      return post<{ user: UserDTO; inviteUrl?: string; credentialsEmailed?: boolean }>('/users', {
+        staffProfileId: selectedEmployee.staffProfileId,
+        name: selectedEmployee.fullName,
+        jobTitle: selectedEmployee.jobTitle || undefined,
+        phone: selectedEmployee.phone || undefined,
+        email: email.trim() || undefined,
         role: resolvedBaseRole,
-        customRoleKey: isCustom ? f.selectedRoleKey : null,
-        canSignIn: f.canSignIn,
-        password: f.canSignIn && f.credentialMode === 'password' ? f.password : undefined,
-        sendCredentials: f.canSignIn && f.credentialMode === 'password' ? f.sendCredentials : true,
-      }),
+        customRoleKey: isCustom ? selectedRoleKey : null,
+        canSignIn,
+        password: shouldSendPassword ? password : undefined,
+        sendCredentials: shouldSendPassword ? sendCredentials : false,
+      });
+    },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: ['user-roles'] });
-      if (!f.canSignIn) {
-        toast.success(`${f.name} added to staff directory`);
-      } else if (f.credentialMode === 'password') {
+      qc.invalidateQueries({ queryKey: ['hr-employees-for-access'] });
+      qc.invalidateQueries({ queryKey: ['hr-staff'] });
+
+      if (existingUser) {
         toast.success(
-          r.credentialsEmailed
-            ? `Account active & credentials emailed to ${f.email}`
-            : `Account active with password set`,
+          `Changed ${selectedEmployee?.fullName}'s role from ${existingUser.roleDisplayName} to ${targetRoleDisplayName}`,
+        );
+      } else if (!canSignIn) {
+        toast.success(`${selectedEmployee?.fullName} assigned to ${targetRoleDisplayName}`);
+      } else if (r.credentialsEmailed) {
+        toast.success(
+          `${selectedEmployee?.fullName} assigned to ${targetRoleDisplayName} & credentials emailed to ${email}`,
         );
       } else {
-        toast.success(`Invitation sent to ${f.email}`);
+        toast.success(`${selectedEmployee?.fullName} assigned to ${targetRoleDisplayName}`);
       }
+
       if (r.inviteUrl) setLink(r.inviteUrl);
       else {
         close();
-        router.push(`/settings/users/${r.user.id}`);
       }
     },
     onError: (e) =>
       toast.error(
         e instanceof ApiError
           ? (e.errors[0]?.message ?? e.message)
-          : 'Could not add staff member',
+          : 'Could not assign role to employee',
       ),
   });
 
   const close = () => {
-    setF({
-      name: '',
-      jobTitle: '',
-      phone: '',
-      email: '',
-      selectedRoleKey: 'DESK',
-      canSignIn: true,
-      credentialMode: 'password',
-      password: generateStrongPassword(),
-      sendCredentials: true,
-    });
+    setSelectedStaffId('');
+    setEmpSearch('');
+    setEmpFilter('ALL');
+    setEmail('');
+    setCanSignIn(true);
+    setCredentialMode('password');
+    setPassword(generateStrongPassword());
+    setSendCredentials(true);
+    setUpdatePasswordOnRoleChange(false);
     setLink(null);
     onClose();
   };
 
-  const passwordValid = !f.canSignIn || f.credentialMode === 'invite' || f.password.length >= 12;
+  const needsPasswordValidation =
+    canSignIn &&
+    credentialMode === 'password' &&
+    (!existingUser || updatePasswordOnRoleChange || !existingUser.hasPassword);
+  const passwordValid = !needsPasswordValidation || password.length >= 12;
 
   return (
     <Dialog
       open={open}
       onClose={close}
-      title="Add Staff Member"
-      description="Create a staff profile, assign a built-in or custom hotel role, and set or email their official @reberonhotel.com credentials."
+      title="Assign HR Employee to Role"
+      description="Select an existing employee from the Human Resource Directory to grant system access or change their current hotel role."
       footer={
         link ? (
           <Button onClick={close}>Done</Button>
+        ) : isSameRole ? (
+          <>
+            <Button variant="secondary" onClick={close}>
+              Keep Current Role & Exit
+            </Button>
+            {existingUser && (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  const uid = existingUser.id;
+                  close();
+                  router.push(`/settings/users/${uid}`);
+                }}
+              >
+                Manage Granular Access →
+              </Button>
+            )}
+          </>
+        ) : isRoleChange ? (
+          <>
+            <Button variant="secondary" onClick={close}>
+              Keep Current Role ({existingUser?.roleDisplayName}) & Exit
+            </Button>
+            <Button
+              variant="primary"
+              loading={m.isPending}
+              disabled={(canSignIn && !email.trim()) || !passwordValid}
+              onClick={() => m.mutate()}
+              icon={<RefreshCw className="size-3.5" />}
+            >
+              Change Role to {targetRoleDisplayName}
+            </Button>
+          </>
         ) : (
           <>
             <Button variant="ghost" onClick={close}>
@@ -988,16 +1089,17 @@ function AddDialog({
             <Button
               variant="primary"
               loading={m.isPending}
-              disabled={f.name.trim().length < 2 || (f.canSignIn && !f.email) || !passwordValid}
+              disabled={!selectedEmployee || (canSignIn && !email.trim()) || !passwordValid}
               onClick={() => m.mutate()}
+              icon={<UserCheck className="size-3.5" />}
             >
-              {!f.canSignIn
-                ? 'Add Staff Record'
-                : f.credentialMode === 'password'
-                  ? f.sendCredentials
-                    ? 'Create & Email Credentials'
-                    : 'Create with Password'
-                  : 'Add & Send Invite Link'}
+              {!canSignIn
+                ? `Assign to ${targetRoleDisplayName}`
+                : credentialMode === 'password'
+                  ? sendCredentials
+                    ? 'Assign Role & Email Credentials'
+                    : 'Assign Role & Set Password'
+                  : 'Assign Role & Send Invite'}
             </Button>
           </>
         )
@@ -1010,41 +1112,23 @@ function AddDialog({
           </p>
           <button
             type="button"
-            className="flex items-center gap-2 break-all rounded-lg bg-surface-2 px-3 py-2 text-left font-mono text-xs"
             onClick={() => {
               navigator.clipboard.writeText(link);
               toast.success('Copied');
             }}
+            className="flex items-center gap-2 break-all rounded-lg bg-surface-2 px-3 py-2 text-left font-mono text-xs"
           >
             <Copy className="size-3.5 shrink-0" /> {link}
           </button>
         </div>
       ) : (
-        <div className="grid gap-3.5">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextInput
-              label="Full Name"
-              required
-              value={f.name}
-              onChange={(e) => setF({ ...f, name: e.target.value })}
-              placeholder="e.g. Mercy Chekwoti"
-            />
-            <TextInput
-              label="Job Title"
-              value={f.jobTitle}
-              onChange={(e) => setF({ ...f, jobTitle: e.target.value })}
-              placeholder="HR Manager, Receptionist, Head Chef…"
-            />
-            <TextInput
-              label="Phone"
-              value={f.phone}
-              onChange={(e) => setF({ ...f, phone: e.target.value })}
-              placeholder="+256 700 000 000"
-            />
+        <div className="grid max-h-[72vh] gap-4 overflow-y-auto pr-1">
+          {/* Step 1: Target Role Preset */}
+          <div className="rounded-xl border border-line bg-surface-2/40 p-3">
             <SelectInput
-              label="Role (Preset)"
-              value={f.selectedRoleKey}
-              onChange={(e) => setF({ ...f, selectedRoleKey: e.target.value })}
+              label="1. Target Hotel Role to Assign"
+              value={selectedRoleKey}
+              onChange={(e) => setSelectedRoleKey(e.target.value)}
             >
               {roles.length > 0 ? (
                 <>
@@ -1053,7 +1137,7 @@ function AddDialog({
                       .filter((r) => r.isSystem)
                       .map((r) => (
                         <option key={r.key} value={r.key}>
-                          {r.name}
+                          {r.name} ({r.permissions.length} permissions)
                         </option>
                       ))}
                   </optgroup>
@@ -1063,7 +1147,7 @@ function AddDialog({
                         .filter((r) => !r.isSystem)
                         .map((r) => (
                           <option key={r.key} value={r.key}>
-                            {r.name} (Custom)
+                            {r.name} — Custom ({r.permissions.length} permissions)
                           </option>
                         ))}
                     </optgroup>
@@ -1077,131 +1161,364 @@ function AddDialog({
                 ))
               )}
             </SelectInput>
+            <p className="mt-1.5 text-[11.5px] text-fg-muted">
+              {selectedDef?.description || ROLE_DESCRIPTIONS[resolvedBaseRole]}
+            </p>
           </div>
-          <p className="-mt-1 text-xs text-fg-muted">
-            {selectedDef?.description || ROLE_DESCRIPTIONS[resolvedBaseRole]}
-          </p>
 
-          <Switch
-            label="Signs in to the House"
-            hint={
-              f.canSignIn
-                ? 'Grants portal login access with an official email and password.'
-                : 'Staff record only (can be assigned housekeeping tasks & shifts without a login).'
-            }
-            checked={f.canSignIn}
-            onChange={(v) => setF({ ...f, canSignIn: v })}
-          />
+          {/* Step 2: Select Employee from HR Directory */}
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="label">
+                2. Select Employee from HR Directory ({hrEmployees.length} total) *
+              </label>
+              <Link
+                href="/hr"
+                onClick={close}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand hover:underline"
+              >
+                <Plus className="size-3" /> New employee? Add in HR Module first →
+              </Link>
+            </div>
 
-          <TextInput
-            label={f.canSignIn ? 'Official Email (Sign-In ID)' : 'Email (Optional)'}
-            type="email"
-            required={f.canSignIn}
-            placeholder="name@reberonhotel.com"
-            value={f.email}
-            onChange={(e) => setF({ ...f, email: e.target.value })}
-          />
+            {/* Quick Dropdown Selector */}
+            <select
+              value={selectedStaffId}
+              onChange={(e) => handleSelectEmployee(e.target.value)}
+              className="input font-medium"
+            >
+              <option value="">— Choose an HR employee from dropdown or search below —</option>
+              {unassignedCount > 0 && (
+                <optgroup label={`Available — No Access Role Yet (${unassignedCount})`}>
+                  {hrEmployees
+                    .filter((e) => !e.existingUser)
+                    .map((emp) => (
+                      <option key={emp.staffProfileId} value={emp.staffProfileId}>
+                        {emp.fullName} ({emp.employeeNumber}) — {emp.jobTitle} · {emp.departmentName}
+                      </option>
+                    ))}
+                </optgroup>
+              )}
+              {assignedCount > 0 && (
+                <optgroup label={`Already Assigned an Access Role (${assignedCount})`}>
+                  {hrEmployees
+                    .filter((e) => !!e.existingUser)
+                    .map((emp) => (
+                      <option key={emp.staffProfileId} value={emp.staffProfileId}>
+                        {emp.fullName} ({emp.employeeNumber}) — Current Role: {emp.existingUser?.roleDisplayName}
+                      </option>
+                    ))}
+                </optgroup>
+              )}
+            </select>
 
-          {f.canSignIn && (
-            <div className="grid gap-3 rounded-xl border border-line bg-surface-2/40 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold">Password & Credential Setup</span>
-                <div className="flex rounded-lg border border-line bg-surface p-0.5 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() => setF({ ...f, credentialMode: 'password' })}
-                    className={cn(
-                      'rounded-md px-2 py-0.5 font-medium transition',
-                      f.credentialMode === 'password'
-                        ? 'bg-fg text-bg'
-                        : 'text-fg-muted hover:text-fg',
-                    )}
-                  >
-                    Set Password Now
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setF({ ...f, credentialMode: 'invite' })}
-                    className={cn(
-                      'rounded-md px-2 py-0.5 font-medium transition',
-                      f.credentialMode === 'invite'
-                        ? 'bg-fg text-bg'
-                        : 'text-fg-muted hover:text-fg',
-                    )}
-                  >
-                    Send Invite Link
-                  </button>
+            {/* Interactive Search & Filter List */}
+            <div className="rounded-xl border border-line bg-surface p-2.5">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-subtle" />
+                  <input
+                    type="text"
+                    value={empSearch}
+                    onChange={(e) => setEmpSearch(e.target.value)}
+                    placeholder="Search HR employee name, REB-EMP-#, department, job title..."
+                    className="input !h-8 !min-h-0 pl-8 text-xs"
+                  />
+                </div>
+                <div className="flex rounded-lg border border-line bg-surface-2/60 p-0.5 text-[10.5px] font-semibold">
+                  {(
+                    [
+                      ['ALL', `All (${hrEmployees.length})`],
+                      ['UNASSIGNED', `No Role (${unassignedCount})`],
+                      ['ASSIGNED', `Has Role (${assignedCount})`],
+                    ] as const
+                  ).map(([k, lbl]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setEmpFilter(k)}
+                      className={cn(
+                        'rounded-md px-2 py-1 transition',
+                        empFilter === k ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg',
+                      )}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {f.credentialMode === 'password' ? (
-                <>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="font-medium text-fg">Initial Password (min 12 chars)</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setF({ ...f, password: generateStrongPassword() })}
-                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand hover:underline"
-                        >
-                          <Sparkles className="size-3" /> Generate
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(f.password);
-                            toast.success('Password copied');
-                          }}
-                          className="inline-flex items-center gap-1 text-[11px] font-medium text-fg-muted hover:text-fg"
-                        >
-                          <Copy className="size-3" /> Copy
-                        </button>
-                      </div>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type={showPw ? 'text' : 'password'}
-                        value={f.password}
-                        onChange={(e) => setF({ ...f, password: e.target.value })}
-                        className="input pr-9 font-mono text-xs"
-                        placeholder="At least 12 characters"
-                      />
+              {hrLoading ? (
+                <div className="space-y-1.5 py-2">
+                  <Skeleton className="h-11" />
+                  <Skeleton className="h-11" />
+                  <Skeleton className="h-11" />
+                </div>
+              ) : filteredEmployees.length === 0 ? (
+                <div className="py-6 text-center text-xs text-fg-muted">
+                  No HR employees match your search.{' '}
+                  <Link href="/hr" onClick={close} className="font-semibold text-brand underline">
+                    Add employee in HR Directory →
+                  </Link>
+                </div>
+              ) : (
+                <div className="scrollbar-thin grid max-h-44 gap-1 overflow-y-auto pr-1">
+                  {filteredEmployees.map((emp) => {
+                    const isSelected = emp.staffProfileId === selectedStaffId;
+                    const hasRole = !!emp.existingUser;
+                    return (
                       <button
+                        key={emp.staffProfileId}
                         type="button"
-                        onClick={() => setShowPw((v) => !v)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-fg-subtle hover:text-fg"
-                        aria-label={showPw ? 'Hide password' : 'Show password'}
+                        onClick={() => handleSelectEmployee(emp.staffProfileId)}
+                        className={cn(
+                          'flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition',
+                          isSelected
+                            ? 'border-fg bg-fg/5 ring-1 ring-fg'
+                            : 'border-transparent hover:border-line hover:bg-surface-2/60',
+                        )}
                       >
-                        {showPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-bold text-fg">{emp.fullName}</span>
+                            <span className="rounded bg-surface-2 px-1.5 py-0.2 font-mono text-[10px] font-semibold text-fg-subtle">
+                              {emp.employeeNumber}
+                            </span>
+                          </div>
+                          <p className="truncate text-[11px] text-fg-muted">
+                            {emp.jobTitle} · {emp.departmentName}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          {hasRole ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/35 bg-amber-500/12 px-2 py-0.5 text-[10px] font-bold text-warning">
+                              <Shield className="size-2.5" />
+                              {emp.existingUser?.roleDisplayName}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-success">
+                              Available
+                            </span>
+                          )}
+                        </div>
                       </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Step 3: Selected HR Employee Details & Smart Role Conflict / Assignment Flow */}
+          {selectedEmployee && (
+            <div className="space-y-3.5 border-t border-line pt-3">
+              {/* Auto-fetched HR Employee Profile Card */}
+              <div className="rounded-xl border border-line bg-surface-2/30 p-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-fg text-xs font-bold text-bg">
+                      {selectedEmployee.firstName[0]}
+                      {selectedEmployee.lastName[0]}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-bold text-fg">{selectedEmployee.fullName}</span>
+                        <span className="rounded bg-surface px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-fg-muted border border-line">
+                          {selectedEmployee.employeeNumber}
+                        </span>
+                      </div>
+                      <p className="text-[11.5px] text-fg-muted">
+                        {selectedEmployee.jobTitle} · {selectedEmployee.departmentName} · {selectedEmployee.phone}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
+                    Verified HR Record
+                  </span>
+                </div>
+              </div>
+
+              {/* CASE A1: Employee ALREADY holds this exact role */}
+              {isSameRole && existingUser && (
+                <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3.5 text-xs">
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+                    <div className="space-y-1">
+                      <p className="font-bold text-fg">
+                        {selectedEmployee.fullName} already holds the &ldquo;{existingUser.roleDisplayName}&rdquo; role
+                      </p>
+                      <p className="text-fg-muted">
+                        This employee already has active system access under <b>{existingUser.roleDisplayName}</b>. You can keep their current role and exit, or select a different target role above to switch their role.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CASE A2: Employee ALREADY holds a DIFFERENT active role -> Ask to Change Role or Keep/Exit */}
+              {isRoleChange && existingUser && (
+                <div className="space-y-3 rounded-xl border border-amber-500/45 bg-amber-500/10 p-3.5 text-xs">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+                    <div className="flex-1 space-y-1.5">
+                      <p className="text-[13px] font-bold text-fg">
+                        Existing Active Access Role Detected
+                      </p>
+                      <p className="leading-relaxed text-fg-muted">
+                        <b>{selectedEmployee.fullName}</b> ({selectedEmployee.employeeNumber}) is already assigned to an active role in the system. Would you like to <b>change their role</b> to <b>{targetRoleDisplayName}</b>, or <b>keep their current role and exit</b>?
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 pt-1">
+                        <span className="rounded-lg border border-line bg-surface px-2.5 py-1 font-semibold text-fg">
+                          Current: {existingUser.roleDisplayName}
+                        </span>
+                        <ArrowRight className="size-3.5 text-warning" />
+                        <span className="rounded-lg border border-amber-500/40 bg-amber-500/20 px-2.5 py-1 font-bold text-fg">
+                          New: {targetRoleDisplayName}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <label className="flex cursor-pointer items-start gap-2.5 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={f.sendCredentials}
-                      onChange={(e) => setF({ ...f, sendCredentials: e.target.checked })}
-                      className="mt-0.5 size-4 rounded border-line accent-brand"
-                    />
-                    <span>
-                      <span className="font-semibold text-fg">
-                        Send login credentials to their official email
-                      </span>
-                      <span className="block text-[11px] text-fg-muted">
-                        Emails their login URL, official email, and password via{' '}
-                        <b>alerts@reberonhotel.com</b>. They can change or reset their password
-                        anytime after signing in.
-                      </span>
-                    </span>
-                  </label>
-                </>
-              ) : (
-                <p className="flex items-center gap-1.5 text-xs text-fg-muted">
-                  <Mail className="size-3.5 shrink-0" /> Sends a 7-day setup link from{' '}
-                  <b>alerts@reberonhotel.com</b> so they choose their own password.
-                </p>
+                  <div className="border-t border-amber-500/25 pt-2.5">
+                    <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-fg">
+                      <input
+                        type="checkbox"
+                        checked={updatePasswordOnRoleChange}
+                        onChange={(e) => setUpdatePasswordOnRoleChange(e.target.checked)}
+                        className="size-4 rounded border-line accent-brand"
+                      />
+                      <span>Also issue a new password / email updated login credentials</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Credentials & Sign-In Configuration (shown for new role assignment OR when updating password on role change) */}
+              {(!existingUser || updatePasswordOnRoleChange) && (
+                <div className="space-y-3">
+                  <Switch
+                    label="Signs in to the House"
+                    hint={
+                      canSignIn
+                        ? 'Grants portal login access with their official @reberonhotel.com email and password.'
+                        : 'Staff record only (no portal login).'
+                    }
+                    checked={canSignIn}
+                    onChange={setCanSignIn}
+                  />
+
+                  <TextInput
+                    label={canSignIn ? 'Official Email (Sign-In ID)' : 'Email (Optional)'}
+                    type="email"
+                    required={canSignIn}
+                    placeholder="name@reberonhotel.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+
+                  {canSignIn && (
+                    <div className="grid gap-3 rounded-xl border border-line bg-surface-2/40 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold">Password & Credential Dispatch</span>
+                        <div className="flex rounded-lg border border-line bg-surface p-0.5 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => setCredentialMode('password')}
+                            className={cn(
+                              'rounded-md px-2 py-0.5 font-medium transition',
+                              credentialMode === 'password'
+                                ? 'bg-fg text-bg'
+                                : 'text-fg-muted hover:text-fg',
+                            )}
+                          >
+                            Set Password Now
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCredentialMode('invite')}
+                            className={cn(
+                              'rounded-md px-2 py-0.5 font-medium transition',
+                              credentialMode === 'invite'
+                                ? 'bg-fg text-bg'
+                                : 'text-fg-muted hover:text-fg',
+                            )}
+                          >
+                            Send Invite Link
+                          </button>
+                        </div>
+                      </div>
+
+                      {credentialMode === 'password' ? (
+                        <>
+                          <div>
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span className="font-medium text-fg">Initial Password (min 12 chars)</span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setPassword(generateStrongPassword())}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand hover:underline"
+                                >
+                                  <Sparkles className="size-3" /> Generate
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(password);
+                                    toast.success('Password copied');
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-fg-muted hover:text-fg"
+                                >
+                                  <Copy className="size-3" /> Copy
+                                </button>
+                              </div>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type={showPw ? 'text' : 'password'}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="input pr-9 font-mono text-xs"
+                                placeholder="At least 12 characters"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPw((v) => !v)}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-fg-subtle hover:text-fg"
+                                aria-label={showPw ? 'Hide password' : 'Show password'}
+                              >
+                                {showPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <label className="flex cursor-pointer items-start gap-2.5 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={sendCredentials}
+                              onChange={(e) => setSendCredentials(e.target.checked)}
+                              className="mt-0.5 size-4 rounded border-line accent-brand"
+                            />
+                            <span>
+                              <span className="font-semibold text-fg">
+                                Send login credentials to their official email
+                              </span>
+                              <span className="block text-[11px] text-fg-muted">
+                                Emails their login URL, official email, assigned role ({targetRoleDisplayName}), and password via{' '}
+                                <b>alerts@reberonhotel.com</b>.
+                              </span>
+                            </span>
+                          </label>
+                        </>
+                      ) : (
+                        <p className="flex items-center gap-1.5 text-xs text-fg-muted">
+                          <Mail className="size-3.5 shrink-0" /> Sends a 7-day setup link from{' '}
+                          <b>alerts@reberonhotel.com</b> so they choose their own password.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}

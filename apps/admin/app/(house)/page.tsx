@@ -251,6 +251,7 @@ export default function Today() {
         : 'ALL';
   const [lens, setLens] = useState<DashboardLens>(defaultLens);
   const [deskTab, setDeskTab] = useState<'ARRIVALS' | 'IN_HOUSE' | 'DEPARTURES'>('ARRIVALS');
+  const [fabOpen, setFabOpen] = useState(false);
 
   // 1. Unified fast pulse (works for all authenticated roles)
   const { data: pulse, isLoading: pulseLoading, refetch: refetchPulse, isFetching: pulseFetching } = useQuery({
@@ -660,8 +661,9 @@ export default function Today() {
       : 0;
 
   return (
-    <div className="fade-in space-y-5 pb-20">
-      <PageHeader
+    <>
+      <div className="fade-in space-y-5 pb-16">
+        <PageHeader
         title={`Overview · ${me.name.split(' ')[0]}`}
         description={`${todayFormatted} · ${me.customRoleName || me.jobTitle || roleBadgeLabel[me.role] || me.role} · Kapchorwa HQ (1,900m)`}
         actions={
@@ -1645,93 +1647,174 @@ export default function Today() {
           )}
         </>
       )}
+      </div>
 
-      {/* STICKY FLOATING ACTION TOOLBAR (Consolidated Fast-Paced Check-In, POS & Floor Operations) */}
-      <div className="fixed bottom-4 left-1/2 z-30 flex max-w-[95vw] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-2xl border border-line-strong bg-surface/95 p-1.5 shadow-[var(--shadow-lift)] backdrop-blur-md">
-        {can('bookings:write') && (
-          <Link
-            href="/reservations/new?walkin=1"
-            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl bg-fg px-3.5 py-2 text-xs font-bold text-bg shadow-xs transition hover:opacity-90"
-          >
-            <Plus className="size-4" strokeWidth={2.5} />
-            <span>New Booking</span>
-          </Link>
-        )}
-        {canDesk && (pulse?.desk.lateArrivals ?? 0) > 0 && (
-          <Link
-            href="/desk"
-            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-rose-500"
-          >
-            <AlertTriangle className="size-3.5" />
-            <span>Overdue ({pulse?.desk.lateArrivals})</span>
-          </Link>
-        )}
-        {canDesk && (
-          <Link
-            href="/desk"
-            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2"
-          >
-            <ConciergeBell className="size-3.5 text-sky-500" />
-            <span>Check-In</span>
-            {(pulse?.desk.arrivalsToday ?? 0) > 0 && (
-              <span className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-extrabold text-warning tabular">
-                {pulse?.desk.arrivalsToday}
-              </span>
-            )}
-          </Link>
-        )}
-        {canPos && (
-          <Link
-            href="/pos"
-            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2"
-          >
-            <UtensilsCrossed className="size-3.5 text-orange-500" />
-            <span>Add POS Charge</span>
-            {(pulse?.operations.posOpenOrders ?? 0) > 0 && (
-              <span className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-extrabold text-warning tabular">
-                {pulse?.operations.posOpenOrders}
-              </span>
-            )}
-          </Link>
-        )}
-        {canRooms && (
+      {/* VIEWPORT-FIXED FLOATING ACTION BUTTON (FAB) MENU — Outside .fade-in so position:fixed never breaks */}
+      <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end">
+        {fabOpen && (
           <>
-            <Link
-              href="/rack"
-              className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2"
-            >
-              <LayoutGrid className="size-3.5 text-emerald-500" />
-              <span>Room Rack</span>
-              {pulse && (
-                <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.2 text-[10px] font-extrabold text-success tabular">
-                  {pulse.rooms.vacantClean} clean
+            <div
+              className="fixed inset-0 z-30 bg-black/20 backdrop-blur-[1px]"
+              onClick={() => setFabOpen(false)}
+            />
+            <div className="relative z-40 mb-3 w-72 rounded-2xl border border-line-strong bg-surface p-2 shadow-[var(--shadow-lift)]">
+              <div className="mb-1.5 flex items-center justify-between border-b border-line px-2.5 pb-2 pt-1">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-fg-muted">
+                  Quick Action Center
                 </span>
-              )}
-            </Link>
-            <Link
-              href="/housekeeping"
-              className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2"
-            >
-              <SprayCan className="size-3.5 text-amber-500" />
-              <span>Housekeeping</span>
-              {(pulse?.rooms.vacantDirty ?? 0) + (pulse?.rooms.hkTodoCount ?? 0) > 0 && (
-                <span className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-extrabold text-warning tabular">
-                  {(pulse?.rooms.vacantDirty ?? 0) + (pulse?.rooms.hkTodoCount ?? 0)}
-                </span>
-              )}
-            </Link>
+                <span className="text-[10.5px] text-fg-subtle">Instant Workflows</span>
+              </div>
+
+              <div className="grid gap-1">
+                {can('bookings:write') && (
+                  <Link
+                    href="/reservations/new?walkin=1"
+                    onClick={() => setFabOpen(false)}
+                    className="flex min-h-[44px] items-center justify-between rounded-xl bg-fg px-3 py-2 text-xs font-bold text-bg transition hover:opacity-90"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Plus className="size-4" strokeWidth={2.5} />
+                      <span>+ New Walk-In / Booking</span>
+                    </span>
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                )}
+
+                {canDesk && (pulse?.desk.lateArrivals ?? 0) > 0 && (
+                  <Link
+                    href="/desk"
+                    onClick={() => setFabOpen(false)}
+                    className="flex min-h-[44px] items-center justify-between rounded-xl border border-rose-500/40 bg-rose-500/12 px-3 py-2 text-xs font-bold text-danger transition hover:bg-rose-500/20"
+                  >
+                    <span className="flex items-center gap-2">
+                      <AlertTriangle className="size-4" />
+                      <span>Resolve Overdue Arrivals</span>
+                    </span>
+                    <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-extrabold text-white tabular">
+                      {pulse?.desk.lateArrivals}
+                    </span>
+                  </Link>
+                )}
+
+                {canDesk && (
+                  <Link
+                    href="/desk"
+                    onClick={() => setFabOpen(false)}
+                    className="flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-fg transition hover:bg-surface-2"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <ConciergeBell className="size-4 text-sky-500" />
+                      <span>Check-In & Front Desk</span>
+                    </span>
+                    {(pulse?.desk.arrivalsToday ?? 0) > 0 ? (
+                      <span className="rounded-full border border-amber-500/35 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-warning tabular">
+                        {pulse?.desk.arrivalsToday} due
+                      </span>
+                    ) : (
+                      <ArrowRight className="size-3.5 text-fg-subtle" />
+                    )}
+                  </Link>
+                )}
+
+                {canPos && (
+                  <Link
+                    href="/pos"
+                    onClick={() => setFabOpen(false)}
+                    className="flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-fg transition hover:bg-surface-2"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <UtensilsCrossed className="size-4 text-orange-500" />
+                      <span>Add POS Charge</span>
+                    </span>
+                    {(pulse?.operations.posOpenOrders ?? 0) > 0 ? (
+                      <span className="rounded-full border border-amber-500/35 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-warning tabular">
+                        {pulse?.operations.posOpenOrders} open
+                      </span>
+                    ) : (
+                      <ArrowRight className="size-3.5 text-fg-subtle" />
+                    )}
+                  </Link>
+                )}
+
+                {canRooms && (
+                  <>
+                    <Link
+                      href="/rack"
+                      onClick={() => setFabOpen(false)}
+                      className="flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-fg transition hover:bg-surface-2"
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <LayoutGrid className="size-4 text-emerald-500" />
+                        <span>Room Rack Status</span>
+                      </span>
+                      {pulse && (
+                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-success tabular">
+                          {pulse.rooms.vacantClean} clean
+                        </span>
+                      )}
+                    </Link>
+
+                    <Link
+                      href="/housekeeping"
+                      onClick={() => setFabOpen(false)}
+                      className="flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-fg transition hover:bg-surface-2"
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <SprayCan className="size-4 text-amber-500" />
+                        <span>Housekeeping Queue</span>
+                      </span>
+                      {(pulse?.rooms.vacantDirty ?? 0) + (pulse?.rooms.hkTodoCount ?? 0) > 0 ? (
+                        <span className="rounded-full border border-amber-500/35 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-warning tabular">
+                          {(pulse?.rooms.vacantDirty ?? 0) + (pulse?.rooms.hkTodoCount ?? 0)} dirty
+                        </span>
+                      ) : (
+                        <ArrowRight className="size-3.5 text-fg-subtle" />
+                      )}
+                    </Link>
+                  </>
+                )}
+
+                {can('users:manage') && (
+                  <Link
+                    href="/settings/users?view=roles"
+                    onClick={() => setFabOpen(false)}
+                    className="flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-fg transition hover:bg-surface-2"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <ShieldCheck className="size-4 text-violet-500" />
+                      <span>Roles & Staff Access</span>
+                    </span>
+                    <ArrowRight className="size-3.5 text-fg-subtle" />
+                  </Link>
+                )}
+              </div>
+            </div>
           </>
         )}
-        {can('users:manage') && (
-          <Link
-            href="/settings/users?view=roles"
-            className="hidden min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface-2/80 px-3 py-2 text-xs font-bold text-fg transition hover:border-line-strong hover:bg-surface-2 lg:inline-flex"
-          >
-            <ShieldCheck className="size-3.5 text-violet-500" />
-            <span>Roles & Access</span>
-          </Link>
-        )}
+
+        <button
+          type="button"
+          onClick={() => setFabOpen((v) => !v)}
+          aria-expanded={fabOpen}
+          className={cn(
+            'relative z-40 inline-flex h-12 items-center gap-2 rounded-full px-4 text-xs font-extrabold shadow-[var(--shadow-lift)] transition-all active:scale-95',
+            fabOpen
+              ? 'bg-surface text-fg border border-line-strong'
+              : 'bg-fg text-bg hover:opacity-95',
+          )}
+        >
+          <Plus
+            className={cn('size-4 transition-transform duration-200', fabOpen && 'rotate-45')}
+            strokeWidth={2.5}
+          />
+          <span>{fabOpen ? 'Close Actions' : 'Quick Actions'}</span>
+          {!fabOpen && (pulse?.desk.lateArrivals ?? 0) > 0 && (
+            <span className="ml-0.5 grid size-5 place-items-center rounded-full bg-rose-500 text-[10px] font-extrabold text-white tabular">
+              {pulse?.desk.lateArrivals}
+            </span>
+          )}
+        </button>
       </div>
-    </div>
+    </>
   );
 }

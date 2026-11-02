@@ -14,6 +14,7 @@ import {
   zStaffCreateInput,
   zUpdateRoleInput,
   zUserUpdateInput,
+  type HrEmployeeForAccessDTO,
   type Permission,
   type Role,
   type RoleDefinitionDTO,
@@ -160,6 +161,154 @@ export class UsersController implements OnModuleInit {
       lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
       createdAt: u.createdAt.toISOString(),
     }));
+  }
+
+  /* ───── HR Employee Directory Lookup for Role Assignment ───── */
+
+  @Get('hr-employees')
+  @Requires('users:manage')
+  async listHrEmployees(): Promise<HrEmployeeForAccessDTO[]> {
+    const [staffProfiles, departments, activeUsers] = await Promise.all([
+      this.prisma.staffProfile.findMany({
+        where: { status: { not: 'TERMINATED' } },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      }),
+      this.prisma.hotelDepartment.findMany({ select: { code: true, name: true } }),
+      this.prisma.user.findMany({
+        where: { deletedAt: null },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+
+    const deptMap = new Map<string, string>(departments.map((d) => [d.code, d.name]));
+    const userById = new Map<string, User>(activeUsers.map((u) => [u.id, u]));
+    const userByEmail = new Map<string, User>();
+    const userByPhone = new Map<string, User>();
+    for (const u of activeUsers) {
+      if (u.email) userByEmail.set(u.email.toLowerCase(), u);
+      if (u.phone) userByPhone.set(normalizePhone(u.phone) ?? u.phone, u);
+    }
+
+    const linkedUserIds = new Set<string>();
+    const results: HrEmployeeForAccessDTO[] = [];
+
+    for (const s of staffProfiles) {
+      const fullName = [s.firstName, s.lastName, s.otherNames].filter(Boolean).join(' ');
+      let matchedUser: User | undefined = s.userId ? userById.get(s.userId) : undefined;
+      if (!matchedUser && s.email) {
+        matchedUser = userByEmail.get(s.email.toLowerCase());
+      }
+      if (!matchedUser && s.phone) {
+        matchedUser = userByPhone.get(normalizePhone(s.phone) ?? s.phone);
+      }
+
+      if (matchedUser) {
+        linkedUserIds.add(matchedUser.id);
+        if (s.userId !== matchedUser.id) {
+          await this.prisma.staffProfile
+            .update({ where: { id: s.id }, data: { userId: matchedUser.id } })
+            .catch(() => undefined);
+        }
+      }
+
+      results.push({
+        staffProfileId: s.id,
+        employeeNumber: s.employeeNumber,
+        fullName,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        jobTitle: s.jobTitle,
+        departmentCode: s.departmentCode,
+        departmentName: deptMap.get(s.departmentCode) ?? s.departmentCode,
+        phone: s.phone,
+        email: s.email ?? matchedUser?.email ?? null,
+        employmentStatus: s.status,
+        existingUser: matchedUser
+          ? {
+              id: matchedUser.id,
+              email: matchedUser.email,
+              role: matchedUser.role,
+              customRoleKey: matchedUser.customRoleKey ?? null,
+              customRoleName: matchedUser.customRoleName ?? null,
+              roleDisplayName:
+                matchedUser.customRoleName || ROLE_WORD[matchedUser.role] || matchedUser.role,
+              canSignIn: matchedUser.canSignIn,
+              hasPassword: !!matchedUser.passwordHash,
+              status: matchedUser.status,
+            }
+          : null,
+      });
+    }
+
+    // Ensure any active User who wasn't in StaffProfile yet (e.g. Co-Owner Wilson Ecaat) also has an HR StaffProfile
+    let nextEmpIndex = staffProfiles.length + 1;
+    for (const u of activeUsers) {
+      if (linkedUserIds.has(u.id)) continue;
+      const parts = u.name.trim().split(/\s+/);
+      const firstName = parts[0] || u.name;
+      const lastName = parts.slice(1).join(' ') || 'Staff';
+      const empNo = `REB-EMP-${String(nextEmpIndex++).padStart(3, '0')}`;
+      const deptCode =
+        u.role === 'OWNER' || u.role === 'MANAGER' || u.role === 'HR' || u.role === 'ACCOUNTANT'
+          ? 'ADMIN_GENERAL'
+          : u.role === 'KITCHEN'
+            ? 'KITCHEN'
+            : u.role === 'BAR'
+              ? 'BAR'
+              : u.role === 'GYM'
+                ? 'HEALTH_CLUB'
+                : u.role === 'HOUSEKEEPING'
+                  ? 'HOUSEKEEPING'
+                  : 'FRONT_DESK';
+
+      try {
+        const createdProfile = await this.prisma.staffProfile.create({
+          data: {
+            employeeNumber: empNo,
+            userId: u.id,
+            firstName,
+            lastName,
+            phone: u.phone || '+256700000000',
+            email: u.email,
+            departmentCode: deptCode,
+            jobTitle: u.jobTitle || ROLE_WORD[u.role] || u.role,
+            employmentType: 'FULL_TIME',
+            emergencyContactName: 'Reberon Administration',
+            emergencyContactPhone: '+256700000101',
+            emergencyContactRelation: 'COLLEAGUE',
+            status: u.status === 'DISABLED' ? 'SUSPENDED' : 'ACTIVE',
+          },
+        });
+        results.push({
+          staffProfileId: createdProfile.id,
+          employeeNumber: createdProfile.employeeNumber,
+          fullName: u.name,
+          firstName,
+          lastName,
+          jobTitle: createdProfile.jobTitle,
+          departmentCode: deptCode,
+          departmentName: deptMap.get(deptCode) ?? deptCode,
+          phone: createdProfile.phone,
+          email: u.email,
+          employmentStatus: createdProfile.status,
+          existingUser: {
+            id: u.id,
+            email: u.email,
+            role: u.role,
+            customRoleKey: u.customRoleKey ?? null,
+            customRoleName: u.customRoleName ?? null,
+            roleDisplayName: u.customRoleName || ROLE_WORD[u.role] || u.role,
+            canSignIn: u.canSignIn,
+            hasPassword: !!u.passwordHash,
+            status: u.status,
+          },
+        });
+      } catch {
+        // ignore duplicate empNo race
+      }
+    }
+
+    return results.sort((a, b) => a.fullName.localeCompare(b.fullName));
   }
 
   /* ───── Roles & Permissions Management ───── */
@@ -437,15 +586,32 @@ export class UsersController implements OnModuleInit {
     return this.create({ ...body, canSignIn: true, sendCredentials: true }, me, req);
   }
 
-  /** Add a person. With canSignIn they either receive a direct password (and optional credentials email) or an invitation link; without, they are a staff record only. */
+  /** Add or assign an HR employee to a role. With canSignIn they either receive a direct password (and optional credentials email) or an invitation link; without, they are a staff record only. */
   @Post()
   @Requires('users:manage')
   async create(@Body(new ZodPipe(zStaffCreateInput)) body: z.infer<typeof zStaffCreateInput>, @CurrentUser() me: AuthUser, @Req() req: Request) {
-    const existing = body.email ? await this.prisma.user.findUnique({ where: { email: body.email } }) : null;
-    if (existing && !(existing.status === 'INVITED' && !existing.deletedAt)) throw conflict('Someone with that email is already on the staff list');
+    let staffProfile = body.staffProfileId
+      ? await this.prisma.staffProfile.findUnique({ where: { id: body.staffProfileId } })
+      : null;
+
+    let existing = staffProfile?.userId
+      ? await this.prisma.user.findFirst({ where: { id: staffProfile.userId, deletedAt: null } })
+      : null;
+
+    if (!existing && body.email) {
+      existing = await this.prisma.user.findUnique({ where: { email: body.email } });
+      if (existing && !body.staffProfileId && !(existing.status === 'INVITED' && !existing.deletedAt)) {
+        throw conflict('Someone with that email is already on the staff list');
+      }
+    }
+
+    if (existing && existing.id === me.id && body.role !== existing.role) {
+      throw badRequest('Ask another owner to change your own access role');
+    }
+
     const phone = body.phone ? (normalizePhone(body.phone) ?? body.phone) : null;
     const passwordHash = body.canSignIn && body.password ? await argon2.hash(body.password, ARGON_OPTS) : undefined;
-    const status = !body.canSignIn ? 'ACTIVE' : passwordHash ? 'ACTIVE' : 'INVITED';
+    const status = !body.canSignIn ? 'ACTIVE' : passwordHash || existing?.passwordHash ? 'ACTIVE' : 'INVITED';
 
     let finalRole: Role = body.role;
     let customRoleKey: string | null = null;
@@ -484,11 +650,34 @@ export class UsersController implements OnModuleInit {
       grants,
       revokes,
       canSignIn: body.canSignIn,
+      ...(body.email ? { email: body.email } : {}),
       ...(passwordHash ? { passwordHash, status: 'ACTIVE' as const, failedLogins: 0, lockedUntil: null } : {}),
     };
     const user = existing
       ? await this.prisma.user.update({ where: { id: existing.id }, data: fields })
       : await this.prisma.user.create({ data: { ...fields, email: body.email ?? null, status } });
+
+    // Link or synchronize with HR StaffProfile
+    if (staffProfile) {
+      await this.prisma.staffProfile
+        .update({
+          where: { id: staffProfile.id },
+          data: {
+            userId: user.id,
+            ...(body.email ? { email: body.email } : {}),
+            ...(phone ? { phone } : {}),
+            ...(body.jobTitle ? { jobTitle: body.jobTitle } : {}),
+          },
+        })
+        .catch(() => undefined);
+    } else if (user.email) {
+      await this.prisma.staffProfile
+        .updateMany({
+          where: { email: { equals: user.email, mode: 'insensitive' }, userId: null },
+          data: { userId: user.id },
+        })
+        .catch(() => undefined);
+    }
 
     let inviteUrl: string | undefined;
     let credentialsEmailed = false;
@@ -498,7 +687,7 @@ export class UsersController implements OnModuleInit {
           await this.sendCredentialsEmail(user, body.password, me);
           credentialsEmailed = true;
         }
-      } else {
+      } else if (!existing?.passwordHash) {
         inviteUrl = await this.sendInvite(user, me);
       }
     }
@@ -506,10 +695,12 @@ export class UsersController implements OnModuleInit {
     const roleLabel = customRoleName || ROLE_WORD[user.role] || user.role;
     await this.audit.record({
       actor: me,
-      action: 'user.create',
+      action: existing ? 'user.update' : 'user.create',
       entityType: 'User',
       entityId: user.id,
-      summary: `Added ${user.name} (${roleLabel})${!body.canSignIn ? ', no sign-in' : body.password ? (credentialsEmailed ? ' with password and emailed credentials' : ' with password set') : ' and sent an invitation'}`,
+      summary: existing
+        ? `Assigned role ${roleLabel} to ${user.name}${credentialsEmailed ? ' and emailed credentials' : ''}`
+        : `Assigned ${user.name} to ${roleLabel}${!body.canSignIn ? ', no sign-in' : body.password ? (credentialsEmailed ? ' with password and emailed credentials' : ' with password set') : ' and sent an invitation'}`,
       req,
     });
     return { user: (await this.dto([user]))[0], inviteUrl, credentialsEmailed };

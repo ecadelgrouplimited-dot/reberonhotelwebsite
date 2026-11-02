@@ -147,8 +147,8 @@ dialog.modal .panel { transition: transform 0.22s var(--ease-out-soft), opacity 
 dialog.drawer { margin: 0 0 0 auto; height: 100dvh; max-height: none; }
 @starting-style { dialog.drawer[open] .panel { transform: translateX(32px); opacity: 0; } }
 
-.fade-in { animation: fade-in 0.25s var(--ease-out-soft) both; }
-@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.fade-in { animation: fade-in 0.2s var(--ease-out-soft); }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .skeleton { background: linear-gradient(90deg, var(--surface-2), color-mix(in oklab, var(--surface-2) 60%, var(--surface)), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; border-radius: 6px; }
 @keyframes shimmer { to { background-position: -200% 0; } }

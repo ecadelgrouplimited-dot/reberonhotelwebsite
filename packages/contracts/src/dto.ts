@@ -213,6 +213,31 @@ export interface RoleDefinitionDTO {
   updatedAt?: string;
 }
 
+export interface HrEmployeeForAccessDTO {
+  staffProfileId: string;
+  employeeNumber: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  jobTitle: string;
+  departmentCode: string;
+  departmentName: string;
+  phone: string;
+  email: string | null;
+  employmentStatus: string;
+  existingUser: {
+    id: string;
+    email: string | null;
+    role: Role;
+    customRoleKey: string | null;
+    customRoleName: string | null;
+    roleDisplayName: string;
+    canSignIn: boolean;
+    hasPassword: boolean;
+    status: UserStatus;
+  } | null;
+}
+
 export interface UserDTO {
   id: string;
   email: string | null;
