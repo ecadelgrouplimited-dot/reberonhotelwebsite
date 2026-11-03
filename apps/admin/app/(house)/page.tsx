@@ -68,15 +68,6 @@ type DashboardLens = 'ALL' | 'EXECUTIVE' | 'DESK' | 'HOUSEKEEPING' | 'OPERATIONS
 type BadgeTone = 'red' | 'amber' | 'green' | 'neutral';
 type KpiAccent = 'emerald' | 'sky' | 'amber' | 'indigo' | 'orange' | 'teal' | 'violet' | 'rose';
 
-interface QuickAction {
-  label: string;
-  sub: string;
-  href: string;
-  icon: LucideIcon;
-  badgeCount?: number;
-  badgeTone?: BadgeTone;
-}
-
 const TONE_PILL_CLASSES: Record<BadgeTone, string> = {
   red: 'border-rose-500/35 bg-rose-500/12 text-danger font-bold',
   amber: 'border-amber-500/35 bg-amber-500/12 text-warning font-semibold',
@@ -340,153 +331,6 @@ export default function Today() {
     HOUSEKEEPING: 'Housekeeping & Room Readiness',
   };
 
-  // Build role-aware priority quick actions with strict urgency-tiered badges (red / amber / green / neutral)
-  const criticalActions: QuickAction[] = [
-    ...(canDesk
-      ? [
-          {
-            label: 'Front Desk & Check-In',
-            sub:
-              (pulse?.desk.lateArrivals ?? 0) > 0
-                ? `${pulse?.desk.lateArrivals} overdue · ${pulse?.desk.arrivalsToday ?? 0} arriving today`
-                : 'Check-in, assign rooms & departures',
-            href: '/desk',
-            icon: ConciergeBell,
-            badgeCount:
-              (pulse?.desk.lateArrivals ?? 0) ||
-              (pulse?.desk.arrivalsToday ?? 0) + (pulse?.desk.departuresToday ?? 0) ||
-              (pulse?.desk.inHouse ?? 0),
-            badgeTone: (
-              (pulse?.desk.lateArrivals ?? 0) > 0
-                ? 'red'
-                : (pulse?.desk.arrivalsToday ?? 0) + (pulse?.desk.departuresToday ?? 0) > 0
-                  ? 'amber'
-                  : 'green'
-            ) as BadgeTone,
-          },
-        ]
-      : []),
-    ...(can('bookings:write')
-      ? [
-          {
-            label: '+ New Booking / Walk-In',
-            sub: 'Instant reservation or 48h hold',
-            href: '/reservations/new?walkin=1',
-            icon: UserRoundPlus,
-          },
-        ]
-      : []),
-    ...(canBookings
-      ? [
-          {
-            label: 'Reservations & Holds',
-            sub: 'Bookings, holds & guest folios',
-            href: '/reservations?sort=latest',
-            icon: BookOpenText,
-            badgeCount: (pulse?.reservations.heldCount ?? 0) || (pulse?.reservations.confirmedCount ?? 0),
-            badgeTone: ((pulse?.reservations.heldCount ?? 0) > 0 ? 'amber' : 'neutral') as BadgeTone,
-          },
-        ]
-      : []),
-    ...(canRooms
-      ? [
-          {
-            label: 'Room Rack',
-            sub: 'Live room status & blocks',
-            href: '/rack',
-            icon: LayoutGrid,
-            badgeCount: pulse?.rooms.vacantClean ?? 0,
-            badgeTone: ((pulse?.rooms.vacantClean ?? 0) > 0 ? 'green' : 'red') as BadgeTone,
-          },
-          {
-            label: 'Housekeeping Queue',
-            sub: 'Floor cleaning & room inspection',
-            href: '/housekeeping',
-            icon: SprayCan,
-            badgeCount:
-              (pulse?.rooms.vacantDirty ?? 0) +
-              (pulse?.rooms.hkTodoCount ?? 0) +
-              (pulse?.rooms.hkDoneToInspect ?? 0) ||
-              (pulse?.rooms.vacantClean ?? 0),
-            badgeTone: (
-              (pulse?.rooms.vacantDirty ?? 0) +
-                (pulse?.rooms.hkTodoCount ?? 0) +
-                (pulse?.rooms.hkDoneToInspect ?? 0) >
-              0
-                ? 'amber'
-                : 'green'
-            ) as BadgeTone,
-          },
-        ]
-      : []),
-    ...(canPos
-      ? [
-          {
-            label: 'Add POS Charge',
-            sub: 'Kitchen, Bar & Room Folio Tabs',
-            href: '/pos',
-            icon: UtensilsCrossed,
-            badgeCount: (pulse?.operations.posOpenOrders ?? 0) || (pulse?.operations.posCompletedToday ?? 0),
-            badgeTone: ((pulse?.operations.posOpenOrders ?? 0) > 0 ? 'amber' : 'green') as BadgeTone,
-          },
-        ]
-      : []),
-    ...(can('receipts:read')
-      ? [
-          {
-            label: 'Receipts & Billing',
-            sub: 'Issue A4 & 80mm thermal receipts',
-            href: '/receipts',
-            icon: ReceiptText,
-            badgeCount: pulse?.finance.receiptsIssuedToday ?? 0,
-            badgeTone: 'neutral' as BadgeTone,
-          },
-        ]
-      : []),
-    ...(canInv
-      ? [
-          {
-            label: 'Inventory & Stock',
-            sub: 'Pantry, ingredients & stock levels',
-            href: '/inventory',
-            icon: Boxes,
-            badgeCount: pulse?.operations.lowStockCount ?? 0,
-            badgeTone: ((pulse?.operations.lowStockCount ?? 0) > 0 ? 'red' : 'green') as BadgeTone,
-          },
-        ]
-      : []),
-    ...(canReq
-      ? [
-          {
-            label: 'Store Requisitions',
-            sub: 'Department supply requests',
-            href: '/requisitions',
-            icon: ClipboardCheck,
-            badgeCount: pulse?.operations.pendingRequisitions ?? 0,
-            badgeTone: (
-              (pulse?.operations.urgentRequisitions ?? 0) > 0
-                ? 'red'
-                : (pulse?.operations.pendingRequisitions ?? 0) > 0
-                  ? 'amber'
-                  : 'green'
-            ) as BadgeTone,
-          },
-        ]
-      : []),
-    ...(canHr
-      ? [
-          {
-            label: 'Staff & HR',
-            sub: 'Rosters, leave & payroll',
-            href: '/hr',
-            icon: Users,
-            badgeCount: (pulse?.hr.pendingLeaves ?? 0) || (pulse?.hr.activeStaff ?? 0),
-            badgeTone: ((pulse?.hr.pendingLeaves ?? 0) > 0 ? 'amber' : 'neutral') as BadgeTone,
-          },
-        ]
-      : []),
-  ].slice(0, 8);
-
   // Available lenses for the current user with urgency-tiered badges
   const lenses: { id: DashboardLens; label: string; icon: LucideIcon; badge?: number; tone?: BadgeTone }[] = [
     ...(me.role !== 'HOUSEKEEPING' || canDesk
@@ -680,51 +524,15 @@ export default function Today() {
         title={`Overview · ${me.name.split(' ')[0]}`}
         description={`${todayFormatted} · ${me.customRoleName || me.jobTitle || roleBadgeLabel[me.role] || me.role} · Kapchorwa HQ (1,900m)`}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => refetchPulse()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-semibold text-fg-muted transition hover:border-line-strong hover:text-fg"
-              title="Refresh live hotel pulse"
-            >
-              <RefreshCw className={cn('size-3.5', pulseFetching && 'animate-spin')} />
-              <span className="hidden sm:inline">Live Sync</span>
-            </button>
-            {canDesk && (pulse?.desk.lateArrivals ?? 0) > 0 && (
-              <Link
-                href="/desk"
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/12 px-3 text-xs font-bold text-danger transition hover:bg-rose-500/20"
-              >
-                <AlertTriangle className="size-3.5" />
-                <span>Resolve {pulse?.desk.lateArrivals} Overdue</span>
-              </Link>
-            )}
-            {canDesk && (
-              <Button size="sm" variant="secondary" href="/desk" icon={<ConciergeBell className="size-3.5" />}>
-                Check-In / Desk
-              </Button>
-            )}
-            {canPos && (
-              <Button size="sm" variant="secondary" href="/pos" icon={<UtensilsCrossed className="size-3.5" />}>
-                Add POS Charge
-              </Button>
-            )}
-            {canRooms && !canDesk && (
-              <Button size="sm" variant="secondary" href="/housekeeping" icon={<SprayCan className="size-3.5" />}>
-                Housekeeping
-              </Button>
-            )}
-            {canReq && !canDesk && !canBookings && (
-              <Button size="sm" variant="secondary" href="/requisitions" icon={<ClipboardCheck className="size-3.5" />}>
-                Requisitions
-              </Button>
-            )}
-            {can('bookings:write') && (
-              <Button size="sm" variant="primary" href="/reservations/new" icon={<Plus className="size-3.5" />}>
-                + New Booking
-              </Button>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => refetchPulse()}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-semibold text-fg-muted transition hover:border-line-strong hover:text-fg"
+            title="Refresh live hotel pulse"
+          >
+            <RefreshCw className={cn('size-3.5', pulseFetching && 'animate-spin')} />
+            <span className="hidden sm:inline">Live Sync</span>
+          </button>
         }
       />
 
@@ -789,51 +597,7 @@ export default function Today() {
       {/* 1. TV-Style Interactive Live Operations Console (Dynamic Priority Queue & Real-Time Stream) */}
       <LiveOperationsConsole />
 
-      {/* 2. Compact Hover-Expandable Quick-Launch Ribbon (Sorted by Live Urgency) */}
-      {criticalActions.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {[...criticalActions]
-            .sort((a, b) => {
-              const weight = (t?: BadgeTone) =>
-                t === 'red' ? 3 : t === 'amber' ? 2 : t === 'green' ? 1 : 0;
-              return weight(b.badgeTone) - weight(a.badgeTone);
-            })
-            .map((a) => (
-              <Link
-                key={a.href}
-                href={a.href}
-                title={a.sub}
-                className="group inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-xs transition-all hover:border-line-strong hover:bg-surface-2 hover:shadow-xs"
-              >
-                <span className="grid size-6 shrink-0 place-items-center rounded-md bg-surface-2 text-fg transition-colors group-hover:bg-[#1A1E43] group-hover:text-white dark:group-hover:bg-[#D76E1B]">
-                  <a.icon className="size-3.5" strokeWidth={1.9} />
-                </span>
-                <span className="font-bold text-fg">{a.label}</span>
-                {a.badgeCount !== undefined && a.badgeCount > 0 && (
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.2 text-[10px] tabular',
-                      TONE_PILL_CLASSES[a.badgeTone ?? 'neutral'],
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'size-1.5 rounded-full',
-                        TONE_DOT_CLASSES[a.badgeTone ?? 'neutral'],
-                      )}
-                    />
-                    {a.badgeCount}
-                  </span>
-                )}
-                <span className="hidden max-w-0 overflow-hidden whitespace-nowrap text-[11px] text-fg-muted opacity-0 transition-all duration-200 group-hover:max-w-[200px] group-hover:opacity-100 sm:inline">
-                  · {a.sub}
-                </span>
-              </Link>
-            ))}
-        </div>
-      )}
-
-      {/* 3. Dynamic Priority-Sorted Compact Hover-Collapsible KPI Strip */}
+      {/* 2. Operational Overview Cards (Dynamic Priority-Sorted Compact KPI Strip) */}
       {pulseLoading || !pulse ? (
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
@@ -1107,17 +871,17 @@ export default function Today() {
         </div>
       )}
 
-      {/* UNIFIED ROOMS, HOUSEKEEPING & FRONT DESK COCKPIT (Grouped Side-by-Side with Subtle Visual Boundaries) */}
+      {/* UNIFIED ROOMS, HOUSEKEEPING & FRONT DESK COCKPIT (Passive Operational Overview) */}
       {((showDesk && canDesk) || (showHk && canRooms)) && (
         <div className="rounded-2xl border border-line-strong/80 bg-surface-2/25 p-3 sm:p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
             <div className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-emerald-500" />
               <h2 className="text-xs font-extrabold uppercase tracking-wider text-fg">
-                Live Front-of-House & Room Readiness Cockpit
+                Operational House Status & Room Readiness
               </h2>
               <span className="hidden text-xs text-fg-muted sm:inline">
-                — Check-ins, physical Room Rack readiness, and floor housekeeping grouped side-by-side
+                — Passive overview of guest movement, physical room inventory, and housekeeping state
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -1158,11 +922,11 @@ export default function Today() {
                   : 'grid-cols-1',
             )}
           >
-            {/* Column 1: Front Desk Live Movement (Touch-Friendly Cards) */}
+            {/* Column 1: Front Desk Live Movement (Passive Overview) */}
             {showDesk && canDesk && (
               <Section
                 title="1. Front Desk Live Movement"
-                description="Tap any guest card to check in, assign a room, or settle balance"
+                description="Passive overview of arrivals, in-house guests, and departures"
                 actions={
                   <div className="flex rounded-lg border border-line bg-surface-2/60 p-0.5 text-[11px] font-semibold">
                     {(
@@ -1195,21 +959,6 @@ export default function Today() {
                   </div>
                 ) : (
                   <div className="space-y-2.5">
-                    {deskBoard.lateArrivals.length > 0 && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-500/40 bg-rose-500/12 p-3 text-xs">
-                        <span className="flex items-center gap-2 font-bold text-danger">
-                          <AlertTriangle className="size-4 shrink-0" />
-                          {deskBoard.lateArrivals.length} overdue arrival(s) from prior date awaiting check-in or no-show
-                        </span>
-                        <Link
-                          href="/desk"
-                          className="inline-flex min-h-[36px] items-center rounded-lg bg-rose-600 px-3 py-1.5 font-bold text-white shadow-2xs hover:bg-rose-500"
-                        >
-                          Resolve Now →
-                        </Link>
-                      </div>
-                    )}
-
                     {(() => {
                       const list =
                         deskTab === 'ARRIVALS'
@@ -1227,7 +976,7 @@ export default function Today() {
                       }
 
                       return (
-                        <div className="grid gap-2.5">
+                        <div className="grid gap-2">
                           {list.slice(0, 5).map((stay) => {
                             const assignedRooms = stay.rooms
                               .flatMap((r) => r.assigned.map((a) => a.number))
@@ -1282,10 +1031,11 @@ export default function Today() {
                                     </span>
                                   )}
                                   <Link
-                                    href={deskTab === 'ARRIVALS' ? '/desk' : `/reservations/${stay.id}`}
-                                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3.5 py-1.5 text-xs font-bold text-fg shadow-2xs transition hover:bg-fg hover:text-bg"
+                                    href={`/reservations/${stay.id}`}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold text-fg-muted hover:text-fg"
                                   >
-                                    {deskTab === 'ARRIVALS' ? 'Check In →' : 'Manage →'}
+                                    <span>Details</span>
+                                    <ArrowRight className="size-3" />
                                   </Link>
                                 </div>
                               </div>
@@ -1410,11 +1160,11 @@ export default function Today() {
               </Section>
             )}
 
-            {/* Column 3: Today's Housekeeping Floor Queue (Large Touch Targets for Tablet/Mobile) */}
+            {/* Column 3: Today's Housekeeping Floor State (Passive Overview) */}
             {showHk && canRooms && pulse && (
               <Section
-                title="3. Housekeeping Queue"
-                description={`${pulse.rooms.hkInspectedToday} rooms inspected today · Tap card to update room status`}
+                title="3. Housekeeping Floor State"
+                description={`${pulse.rooms.hkInspectedToday} rooms inspected today · Floor status log`}
                 actions={
                   <Link href="/housekeeping" className="flex items-center gap-1 text-xs font-bold text-fg-muted hover:text-fg">
                     Full Board <ArrowRight className="size-3" />
@@ -1422,7 +1172,7 @@ export default function Today() {
                 }
               >
                 {hkBoard && hkBoard.tasks.filter((tItem) => tItem.status !== 'INSPECTED' && tItem.status !== 'SKIPPED').length > 0 ? (
-                  <div className="grid gap-2.5">
+                  <div className="grid gap-2">
                     {hkBoard.tasks
                       .filter((tItem) => tItem.status !== 'INSPECTED' && tItem.status !== 'SKIPPED')
                       .slice(0, 5)
@@ -1430,7 +1180,7 @@ export default function Today() {
                         <Link
                           key={task.id}
                           href="/housekeeping"
-                          className="flex min-h-[60px] items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/40 p-3 transition hover:border-line-strong hover:bg-surface-2"
+                          className="flex min-h-[50px] items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/40 p-2.5 transition hover:border-line-strong hover:bg-surface-2"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
@@ -1441,20 +1191,17 @@ export default function Today() {
                                 {task.room.roomTypeName}
                               </span>
                               {task.arrivalToday && (
-                                <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-danger border border-rose-500/30">
                                   Arrival Today
                                 </span>
                               )}
                             </div>
-                            <p className="mt-1 text-[11px] font-medium text-fg-muted">
+                            <p className="mt-0.5 text-[11px] font-medium text-fg-muted">
                               {task.kind} · {task.assignee?.name ? `Assigned: ${task.assignee.name}` : 'Unassigned cleaner'}
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             <Status value={task.status} />
-                            <span className="inline-flex min-h-[36px] items-center rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-bold text-fg">
-                              {task.status === 'DONE' ? 'Inspect →' : 'Clean →'}
-                            </span>
                           </div>
                         </Link>
                       ))}
@@ -1467,7 +1214,7 @@ export default function Today() {
                     </p>
                     <Link
                       href="/housekeeping"
-                      className="mt-1 inline-flex min-h-[36px] items-center rounded-lg border border-emerald-500/30 bg-surface px-3 py-1.5 text-xs font-semibold text-fg hover:bg-surface-2"
+                      className="mt-1 inline-flex min-h-[32px] items-center rounded-lg border border-emerald-500/30 bg-surface px-3 py-1 text-xs font-semibold text-fg hover:bg-surface-2"
                     >
                       Open Housekeeping Board →
                     </Link>
@@ -1747,22 +1494,6 @@ export default function Today() {
                   </Link>
                 )}
 
-                {canDesk && (pulse?.desk.lateArrivals ?? 0) > 0 && (
-                  <Link
-                    href="/desk"
-                    onClick={() => setFabOpen(false)}
-                    className="flex min-h-[44px] items-center justify-between rounded-xl border border-rose-500/40 bg-rose-500/12 px-3 py-2 text-xs font-bold text-danger transition hover:bg-rose-500/20"
-                  >
-                    <span className="flex items-center gap-2">
-                      <AlertTriangle className="size-4" />
-                      <span>Resolve Overdue Arrivals</span>
-                    </span>
-                    <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-extrabold text-white tabular">
-                      {pulse?.desk.lateArrivals}
-                    </span>
-                  </Link>
-                )}
-
                 {canDesk && (
                   <Link
                     href="/desk"
@@ -1841,6 +1572,20 @@ export default function Today() {
                   </>
                 )}
 
+                {canReq && (
+                  <Link
+                    href="/requisitions"
+                    onClick={() => setFabOpen(false)}
+                    className="flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-fg transition hover:bg-surface-2"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <ClipboardCheck className="size-4 text-teal-500" />
+                      <span>Create Store Requisition</span>
+                    </span>
+                    <ArrowRight className="size-3.5 text-fg-subtle" />
+                  </Link>
+                )}
+
                 {can('users:manage') && (
                   <Link
                     href="/settings/users?view=roles"
@@ -1875,11 +1620,6 @@ export default function Today() {
             strokeWidth={2.5}
           />
           <span>{fabOpen ? 'Close Actions' : 'Quick Actions'}</span>
-          {!fabOpen && (pulse?.desk.lateArrivals ?? 0) > 0 && (
-            <span className="ml-0.5 grid size-5 place-items-center rounded-full bg-rose-500 text-[10px] font-extrabold text-white tabular">
-              {pulse?.desk.lateArrivals}
-            </span>
-          )}
         </button>
       </div>
     </>
