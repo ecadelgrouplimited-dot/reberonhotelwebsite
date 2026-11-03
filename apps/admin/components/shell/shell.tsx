@@ -225,7 +225,23 @@ function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, Badge
 
 function NavBadge({ badge, compact = false }: { badge?: BadgeInfo; compact?: boolean }) {
   if (!badge || badge.count <= 0) return null;
-  const toneStyles: Record<BadgeInfo['tone'], { pill: string; dot: string }> = {
+
+  // Passive counts (green/neutral) are rendered in calm muted gray text without a pill background
+  if (badge.tone === 'green' || badge.tone === 'neutral') {
+    return (
+      <span
+        title={badge.tooltip}
+        className={cn(
+          'tabular font-medium text-[var(--sidebar-muted)] select-none opacity-80',
+          compact ? 'text-[10px] px-1' : 'text-[11px] px-1.5',
+        )}
+      >
+        {badge.count}
+      </span>
+    );
+  }
+
+  const toneStyles: Record<'red' | 'amber', { pill: string; dot: string }> = {
     red: {
       pill: 'bg-rose-500/22 text-rose-200 ring-1 ring-inset ring-rose-400/40',
       dot: 'bg-rose-400',
@@ -233,14 +249,6 @@ function NavBadge({ badge, compact = false }: { badge?: BadgeInfo; compact?: boo
     amber: {
       pill: 'bg-amber-500/20 text-amber-200 ring-1 ring-inset ring-amber-400/35',
       dot: 'bg-amber-400',
-    },
-    green: {
-      pill: 'bg-emerald-500/18 text-emerald-200 ring-1 ring-inset ring-emerald-400/30',
-      dot: 'bg-emerald-400',
-    },
-    neutral: {
-      pill: 'bg-white/10 text-white/75 ring-1 ring-inset ring-white/15',
-      dot: 'bg-white/50',
     },
   };
   const style = toneStyles[badge.tone];
@@ -480,16 +488,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     }}
                   />
                 )}
-                {!isOpen && groupRed === 0 && groupAmber === 0 && groupGreen > 0 && (
-                  <NavBadge
-                    compact
-                    badge={{
-                      count: groupGreen,
-                      tone: 'green',
-                      tooltip: `${groupGreen} active item(s) in ${g.label}`,
-                    }}
-                  />
-                )}
                 {isOpen ? (
                   <ChevronDown className="size-3 shrink-0 opacity-60" />
                 ) : (
@@ -581,7 +579,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 function AccountMenu() {
   const { data: me } = useMeQuery();
-  const { data: pulse } = useAdminPulse(!!me);
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const qc = useQueryClient();
@@ -596,61 +593,10 @@ function AccountMenu() {
     setDark(!dark);
   };
 
-  const criticalTotal =
-    (pulse?.desk.lateArrivals ?? 0) +
-    (pulse?.operations.urgentRequisitions ?? 0) +
-    (pulse?.operations.lowStockCount ?? 0) +
-    (pulse?.feedback.openIssues ?? 0);
-
-  const pendingTotal =
-    (pulse?.inbox.newCount ?? 0) +
-    (pulse?.waitlist.newCount ?? 0) +
-    (pulse?.desk.arrivalsToday ?? 0) +
-    (pulse?.desk.pendingGuestRequests ?? 0) +
-    (pulse?.rooms.vacantDirty ?? 0) +
-    (pulse?.operations.posOpenOrders ?? 0) +
-    (pulse?.operations.pendingRequisitions ?? 0) +
-    (pulse?.hr.pendingLeaves ?? 0);
-
   const roleDisplay = me.customRoleName || me.jobTitle || ROLE_LABELS[me.role] || me.role;
 
   return (
     <div className="flex items-center gap-2">
-      {pulse && (
-        <div className="hidden items-center gap-1.5 md:flex">
-          {criticalTotal > 0 && (
-            <Link
-              href="/"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-500/35 bg-rose-500/10 px-2.5 text-[11.5px] font-semibold text-danger transition hover:border-rose-500/60"
-              title="Immediate overdue or critical operational issues"
-            >
-              <span className="size-2 rounded-full bg-rose-500 animate-pulse" />
-              <span className="tabular font-bold">{criticalTotal}</span>
-              <span>urgent</span>
-            </Link>
-          )}
-          <Link
-            href="/"
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[11.5px] font-medium text-fg-muted transition hover:border-line-strong hover:text-fg"
-            title="Pending operational tasks across the House"
-          >
-            <span className={cn('size-2 rounded-full', pendingTotal > 0 ? 'bg-amber-500' : 'bg-emerald-500')} />
-            <span className="tabular font-semibold text-fg">{pendingTotal}</span>
-            <span>{pendingTotal === 1 ? 'pending' : 'pending'}</span>
-          </Link>
-          {pulse.rooms.totalActive > 0 && (
-            <Link
-              href="/rack"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[11.5px] font-medium text-fg-muted transition hover:border-line-strong hover:text-fg"
-              title="Vacant clean rooms ready for check-in"
-            >
-              <span className={cn('size-2 rounded-full', pulse.rooms.vacantClean > 0 ? 'bg-emerald-500' : 'bg-rose-500')} />
-              <span className="tabular font-semibold text-fg">{pulse.rooms.vacantClean}</span>
-              <span>/ {pulse.rooms.totalActive} clean</span>
-            </Link>
-          )}
-        </div>
-      )}
       <LiveAlertCenterButton />
       <button
         type="button"

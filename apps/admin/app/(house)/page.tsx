@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -279,6 +279,19 @@ export default function Today() {
     refetchInterval: 30_000,
     enabled: canDesk,
   });
+
+  // Auto-switch default tab if arrivals queue is empty to avoid wasting screen real estate
+  useEffect(() => {
+    if (deskBoard) {
+      const arr = deskBoard.counts.arrivals ?? 0;
+      const inH = deskBoard.counts.inHouse ?? 0;
+      const dep = deskBoard.counts.departures ?? 0;
+      if (arr === 0) {
+        if (inH > 0) setDeskTab('IN_HOUSE');
+        else if (dep > 0) setDeskTab('DEPARTURES');
+      }
+    }
+  }, [deskBoard]);
 
   // 4. Housekeeping board (when permitted)
   const { data: hkBoard } = useQuery({
@@ -595,9 +608,61 @@ export default function Today() {
       )}
 
       {/* 1. TV-Style Interactive Live Operations Console (Dynamic Priority Queue & Real-Time Stream) */}
-      <LiveOperationsConsole />
+      <LiveOperationsConsole lens={lens} onLensChange={setLens} />
 
-      {/* 2. Operational Overview Cards (Dynamic Priority-Sorted Compact KPI Strip) */}
+      {/* 2. Dedicated Financial Strip (Contextual Revenue & Settlement Tracking) */}
+      {(showExecutive || showOps) && (canReports || can('receipts:read') || canPos) && pulse && (
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {(canReports || can('receipts:read')) && (
+            <KpiCard
+              key="cleared"
+              label="Cleared Revenue Today"
+              icon={Wallet}
+              accent="amber"
+              value={money(pulse.finance.clearedTodayUgxMinor, 'UGX')}
+              sub={
+                BigInt(pulse.finance.clearedTodayUsdMinor) > 0n
+                  ? `+ ${money(pulse.finance.clearedTodayUsdMinor, 'USD')} · ${pulse.finance.receiptsIssuedToday} receipts · vs. yesterday`
+                  : `${pulse.finance.clearedTodayCount} payments · ${pulse.finance.receiptsIssuedToday} receipts issued today (vs yesterday)`
+              }
+              href="/brief"
+              badge={
+                pulse.finance.clearedTodayCount > 0
+                  ? { text: `${pulse.finance.clearedTodayCount} paid`, tone: 'green' }
+                  : { text: 'UGX 0 today', tone: 'neutral' }
+              }
+            />
+          )}
+          {canPos && (
+            <KpiCard
+              key="pos"
+              label={canClub ? 'POS & Health Club Revenue' : 'Kitchen & Bar POS Revenue'}
+              icon={UtensilsCrossed}
+              accent="orange"
+              value={money(pulse.operations.posRevenueTodayUgxMinor, 'UGX')}
+              sub={
+                canClub
+                  ? `${pulse.operations.posCompletedToday} settled · ${pulse.operations.healthClubInsideNow} in Gym/Spa · vs. yesterday`
+                  : `${pulse.operations.posCompletedToday} settled · ${pulse.operations.posOpenOrders} open tabs (vs yesterday)`
+              }
+              href="/pos"
+              badge={
+                pulse.operations.posOpenOrders > 0
+                  ? {
+                      text: `${pulse.operations.posOpenOrders} waiting`,
+                      tone: 'amber',
+                    }
+                  : {
+                      text: `${pulse.operations.posCompletedToday} settled`,
+                      tone: 'green',
+                    }
+              }
+            />
+          )}
+        </div>
+      )}
+
+      {/* 3. Operational Overview Cards (Dynamic Priority-Sorted Compact KPI Strip) */}
       {pulseLoading || !pulse ? (
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
@@ -608,35 +673,6 @@ export default function Today() {
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           {(
             [
-              canRooms
-                ? {
-                    key: 'rooms',
-                    priority:
-                      pulse.rooms.vacantClean === 0 && pulse.rooms.totalActive > 0
-                        ? 100
-                        : pulse.rooms.vacantDirty > 0
-                          ? 80
-                          : 40,
-                    node: (
-                      <KpiCard
-                        key="rooms"
-                        label="Room Readiness"
-                        icon={BedDouble}
-                        accent="emerald"
-                        value={`${pulse.rooms.vacantClean} / ${pulse.rooms.totalActive} Clean`}
-                        sub={`${pulse.rooms.occupied} occupied · ${pulse.rooms.vacantDirty} dirty · ${occupancyPct}% occ`}
-                        href="/rack"
-                        badge={
-                          pulse.rooms.vacantClean === 0 && pulse.rooms.totalActive > 0
-                            ? { text: '0 clean', tone: 'red' }
-                            : pulse.rooms.vacantDirty > 0
-                              ? { text: `${pulse.rooms.vacantDirty} dirty`, tone: 'amber' }
-                              : { text: `${pulse.rooms.vacantClean} ready`, tone: 'green' }
-                        }
-                      />
-                    ),
-                  }
-                : null,
               canDesk || canBookings
                 ? {
                     key: 'desk',
@@ -666,32 +702,6 @@ export default function Today() {
                     ),
                   }
                 : null,
-              canReports || can('receipts:read')
-                ? {
-                    key: 'cleared',
-                    priority: pulse.finance.clearedTodayCount > 0 ? 60 : 25,
-                    node: (
-                      <KpiCard
-                        key="cleared"
-                        label="Cleared Today"
-                        icon={Wallet}
-                        accent="amber"
-                        value={money(pulse.finance.clearedTodayUgxMinor, 'UGX')}
-                        sub={
-                          BigInt(pulse.finance.clearedTodayUsdMinor) > 0n
-                            ? `+ ${money(pulse.finance.clearedTodayUsdMinor, 'USD')} · ${pulse.finance.receiptsIssuedToday} receipts`
-                            : `${pulse.finance.clearedTodayCount} payments · ${pulse.finance.receiptsIssuedToday} receipts today`
-                        }
-                        href="/brief"
-                        badge={
-                          pulse.finance.clearedTodayCount > 0
-                            ? { text: `${pulse.finance.clearedTodayCount} paid`, tone: 'green' }
-                            : { text: '0 today', tone: 'neutral' }
-                        }
-                      />
-                    ),
-                  }
-                : null,
               canBookings
                 ? {
                     key: 'reservations',
@@ -711,38 +721,6 @@ export default function Today() {
                             : {
                                 text: `${pulse.reservations.confirmedCount} confirmed`,
                                 tone: 'neutral',
-                              }
-                        }
-                      />
-                    ),
-                  }
-                : null,
-              canPos
-                ? {
-                    key: 'pos',
-                    priority: pulse.operations.posOpenOrders > 0 ? 82 : 45,
-                    node: (
-                      <KpiCard
-                        key="pos"
-                        label={canClub ? 'POS & Health Club' : 'Kitchen & Bar POS'}
-                        icon={UtensilsCrossed}
-                        accent="orange"
-                        value={money(pulse.operations.posRevenueTodayUgxMinor, 'UGX')}
-                        sub={
-                          canClub
-                            ? `${pulse.operations.posCompletedToday} settled · ${pulse.operations.healthClubInsideNow} in Gym/Spa`
-                            : `${pulse.operations.posCompletedToday} settled · ${pulse.operations.posOpenOrders} waiting payment`
-                        }
-                        href="/pos"
-                        badge={
-                          pulse.operations.posOpenOrders > 0
-                            ? {
-                                text: `${pulse.operations.posOpenOrders} waiting`,
-                                tone: 'amber',
-                              }
-                            : {
-                                text: `${pulse.operations.posCompletedToday} paid`,
-                                tone: 'green',
                               }
                         }
                       />
@@ -884,32 +862,6 @@ export default function Today() {
                 — Passive overview of guest movement, physical room inventory, and housekeeping state
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              {canDesk && (
-                <Link
-                  href="/desk"
-                  className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-fg transition hover:border-line-strong"
-                >
-                  <ConciergeBell className="size-3.5" /> Front Desk
-                </Link>
-              )}
-              {canRooms && (
-                <>
-                  <Link
-                    href="/rack"
-                    className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-fg transition hover:border-line-strong"
-                  >
-                    <LayoutGrid className="size-3.5" /> Room Rack
-                  </Link>
-                  <Link
-                    href="/housekeeping"
-                    className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-fg transition hover:border-line-strong"
-                  >
-                    <SprayCan className="size-3.5" /> Housekeeping
-                  </Link>
-                </>
-              )}
-            </div>
           </div>
 
           <div
@@ -969,8 +921,14 @@ export default function Today() {
 
                       if (list.length === 0) {
                         return (
-                          <div className="rounded-xl border border-dashed border-line py-8 text-center text-xs text-fg-muted">
-                            No stays in {deskTab.toLowerCase().replace('_', '-')} queue right now.
+                          <div className="flex items-center justify-between rounded-xl border border-dashed border-line bg-surface px-3.5 py-3 text-xs text-fg-muted">
+                            <span className="flex items-center gap-2">
+                              <CheckCircle2 className="size-4 text-emerald-500" />
+                              <span>No stays in {deskTab.toLowerCase().replace('_', '-')} queue right now.</span>
+                            </span>
+                            <Link href="/reservations/new" className="font-semibold text-accent hover:underline">
+                              + New Walk-In
+                            </Link>
                           </div>
                         );
                       }
@@ -1160,66 +1118,100 @@ export default function Today() {
               </Section>
             )}
 
-            {/* Column 3: Today's Housekeeping Floor State (Passive Overview) */}
+            {/* Column 3: Housekeeping Staff & Floor Load (Passive Overview) */}
             {showHk && canRooms && pulse && (
               <Section
-                title="3. Housekeeping Floor State"
-                description={`${pulse.rooms.hkInspectedToday} rooms inspected today · Floor status log`}
+                title="3. Housekeeping Staff & Floor Load"
+                description={`${pulse.rooms.hkInspectedToday} rooms inspected today · Staff assignment load`}
                 actions={
                   <Link href="/housekeeping" className="flex items-center gap-1 text-xs font-bold text-fg-muted hover:text-fg">
                     Full Board <ArrowRight className="size-3" />
                   </Link>
                 }
               >
-                {hkBoard && hkBoard.tasks.filter((tItem) => tItem.status !== 'INSPECTED' && tItem.status !== 'SKIPPED').length > 0 ? (
-                  <div className="grid gap-2">
-                    {hkBoard.tasks
-                      .filter((tItem) => tItem.status !== 'INSPECTED' && tItem.status !== 'SKIPPED')
-                      .slice(0, 5)
-                      .map((task) => (
-                        <Link
-                          key={task.id}
-                          href="/housekeeping"
-                          className="flex min-h-[50px] items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/40 p-2.5 transition hover:border-line-strong hover:bg-surface-2"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-lg border border-line-strong bg-surface px-2 py-0.5 font-mono text-xs font-extrabold text-fg">
-                                Rm {task.room.number}
-                              </span>
-                              <span className="truncate text-xs font-bold text-fg">
-                                {task.room.roomTypeName}
-                              </span>
-                              {task.arrivalToday && (
-                                <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-danger border border-rose-500/30">
-                                  Arrival Today
-                                </span>
-                              )}
-                            </div>
-                            <p className="mt-0.5 text-[11px] font-medium text-fg-muted">
-                              {task.kind} · {task.assignee?.name ? `Assigned: ${task.assignee.name}` : 'Unassigned cleaner'}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <Status value={task.status} />
-                          </div>
-                        </Link>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-8 text-center">
-                    <CheckCircle2 className="size-6 text-success" />
-                    <p className="text-xs font-bold text-success">
-                      All scheduled room cleaning & inspection tasks are complete!
-                    </p>
-                    <Link
-                      href="/housekeeping"
-                      className="mt-1 inline-flex min-h-[32px] items-center rounded-lg border border-emerald-500/30 bg-surface px-3 py-1 text-xs font-semibold text-fg hover:bg-surface-2"
-                    >
-                      Open Housekeeping Board →
-                    </Link>
-                  </div>
-                )}
+                {(() => {
+                  const staffList = hkBoard?.staff ?? [];
+                  const tasks = hkBoard?.tasks ?? [];
+                  const activeTasks = tasks.filter((t) => t.status !== 'INSPECTED' && t.status !== 'SKIPPED');
+                  const unassigned = activeTasks.filter((t) => !t.assignee);
+
+                  return (
+                    <div className="space-y-3">
+                      {/* Metric Summary Bar */}
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-lg border border-line bg-surface p-2">
+                          <span className="block text-[10px] font-bold uppercase text-fg-muted">Cleaners</span>
+                          <span className="text-lg font-black text-fg tabular">{staffList.length}</span>
+                        </div>
+                        <div className="rounded-lg border border-line bg-surface p-2">
+                          <span className="block text-[10px] font-bold uppercase text-fg-muted">Active Tasks</span>
+                          <span className="text-lg font-black text-fg tabular">{activeTasks.length}</span>
+                        </div>
+                        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2">
+                          <span className="block text-[10px] font-bold uppercase text-success">Inspected</span>
+                          <span className="text-lg font-black text-success tabular">{pulse.rooms.hkInspectedToday}</span>
+                        </div>
+                      </div>
+
+                      {/* Unassigned Tasks Alert */}
+                      {unassigned.length > 0 && (
+                        <div className="flex items-center justify-between rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-warning">
+                          <span className="font-semibold">
+                            {unassigned.length} room task{unassigned.length === 1 ? '' : 's'} awaiting cleaner assignment
+                          </span>
+                          <Link href="/housekeeping" className="font-bold underline hover:text-fg">
+                            Assign Now →
+                          </Link>
+                        </div>
+                      )}
+
+                      {/* Staff Assignment Load List */}
+                      {staffList.length > 0 ? (
+                        <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                          {staffList.map((cleaner) => {
+                            const cleanerTasks = tasks.filter((t) => t.assignee?.id === cleaner.id);
+                            const doneCount = cleanerTasks.filter((t) => t.status === 'DONE' || t.status === 'INSPECTED').length;
+                            const total = cleanerTasks.length;
+                            const initials = cleaner.name.split(' ').map((p) => p[0]).slice(0, 2).join('');
+
+                            return (
+                              <div
+                                key={cleaner.id}
+                                className="flex items-center justify-between gap-2.5 rounded-lg border border-line bg-surface p-2 text-xs"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-2 font-mono text-[10px] font-bold text-fg">
+                                    {initials}
+                                  </span>
+                                  <span className="truncate font-semibold text-fg">{cleaner.name}</span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[11px] font-medium text-fg-muted tabular">
+                                    {total > 0 ? `${doneCount}/${total} done` : 'Standby'}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      'rounded-full px-2 py-0.5 text-[9.5px] font-bold tabular',
+                                      total > doneCount
+                                        ? 'bg-amber-500/15 text-warning border border-amber-500/25'
+                                        : 'bg-emerald-500/15 text-success border border-emerald-500/25',
+                                    )}
+                                  >
+                                    {total > doneCount ? `${total - doneCount} active` : 'Ready'}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="py-4 text-center text-xs text-fg-muted">
+                          No housekeeping staff rostered on duty.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </Section>
             )}
           </div>

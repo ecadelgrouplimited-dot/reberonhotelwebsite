@@ -7,14 +7,19 @@ import {
   AlertTriangle,
   ArrowRight,
   BedDouble,
-  Boxes,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   ConciergeBell,
+  KeyRound,
+  LogOut,
+  Printer,
   Settings2,
+  ShieldCheck,
   SprayCan,
+  Trash2,
   Tv,
   UtensilsCrossed,
   Volume2,
@@ -30,45 +35,47 @@ import {
   type PriorityStreamItem,
 } from '@/components/shell/live-alerts';
 
-type ConsoleChannel = 'ALL' | 'FRONT_DESK' | 'HOUSEKEEPING' | 'POS' | 'OPERATIONS' | 'AUDIT_STREAM';
+export type DashboardLens = 'ALL' | 'EXECUTIVE' | 'DESK' | 'HOUSEKEEPING' | 'OPERATIONS' | 'HR_COMMS';
 
-interface LiveCircleProps {
+export interface LiveOperationsConsoleProps {
+  lens?: DashboardLens;
+  onLensChange?: (lens: DashboardLens) => void;
+}
+
+// 1. Sleek SVG Circular Progress Ring (Used strictly for ratios like Room Readiness: 6/10)
+interface LiveProgressCircleProps {
   label: string;
-  value: string | number;
+  value: string;
   sub: string;
   percent: number;
-  tone: 'red' | 'amber' | 'emerald' | 'sky' | 'teal';
-  pulse?: boolean;
+  tone: 'red' | 'amber' | 'emerald' | 'sky';
   active?: boolean;
   icon: LucideIcon;
   onClick: () => void;
 }
 
-function LiveStatusCircle({
+function LiveProgressCircle({
   label,
   value,
   sub,
   percent,
   tone,
-  pulse = false,
   active = false,
   icon: Icon,
   onClick,
-}: LiveCircleProps) {
-  const strokeColors: Record<LiveCircleProps['tone'], string> = {
+}: LiveProgressCircleProps) {
+  const strokeColors: Record<LiveProgressCircleProps['tone'], string> = {
     red: '#F43F5E',
     amber: '#D76E1B',
     emerald: '#10B981',
     sky: '#0284C7',
-    teal: '#14B8A6',
   };
 
-  const bgToneGlow: Record<LiveCircleProps['tone'], string> = {
+  const bgToneGlow: Record<LiveProgressCircleProps['tone'], string> = {
     red: 'shadow-[0_0_15px_rgba(244,63,94,0.35)] ring-rose-500/50',
     amber: 'shadow-[0_0_15px_rgba(215,110,27,0.35)] ring-[#D76E1B]/60',
     emerald: 'shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-emerald-500/50',
     sky: 'shadow-[0_0_15px_rgba(2,132,199,0.35)] ring-sky-500/50',
-    teal: 'shadow-[0_0_15px_rgba(20,184,166,0.35)] ring-teal-500/50',
   };
 
   const circumference = 175.93; // 2 * PI * 28
@@ -79,22 +86,15 @@ function LiveStatusCircle({
       type="button"
       onClick={onClick}
       className={cn(
-        'group relative flex flex-1 min-w-[105px] max-w-[150px] flex-col items-center justify-center rounded-2xl border p-2 text-center transition-all duration-200',
+        'group relative flex flex-1 min-w-[105px] max-w-[150px] min-h-[110px] flex-col items-center justify-between rounded-2xl border p-2 text-center transition-all duration-200',
         active
           ? cn('border-white/40 bg-white/12 ring-2 ring-offset-2 ring-offset-[#131633]', bgToneGlow[tone])
           : 'border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.07]',
       )}
     >
-      {/* Animated SVG Ring */}
-      <div className="relative size-14 shrink-0 sm:size-16">
+      <div className="relative size-12 shrink-0 sm:size-14">
         <svg className="size-full -rotate-90" viewBox="0 0 68 68">
-          <circle
-            cx="34"
-            cy="34"
-            r="28"
-            className="stroke-white/10 fill-none"
-            strokeWidth="4"
-          />
+          <circle cx="34" cy="34" r="28" className="stroke-white/10 fill-none" strokeWidth="4" />
           <circle
             cx="34"
             cy="34"
@@ -108,24 +108,19 @@ function LiveStatusCircle({
           />
         </svg>
 
-        {/* Center Metric */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-display text-[13px] font-extrabold leading-none text-white tabular sm:text-[14px]">
+          <span className="font-display text-[12px] font-extrabold leading-none text-white tabular sm:text-[13px]">
             {value}
           </span>
-          {pulse && (
-            <span className="absolute top-1 right-1 size-2 rounded-full bg-rose-500 animate-ping" />
-          )}
         </div>
       </div>
 
-      {/* Label and Subtitle */}
-      <div className="mt-1.5 w-full min-w-0">
-        <span className="flex items-center justify-center gap-1 truncate text-[11px] font-bold text-white">
+      <div className="w-full min-w-0">
+        <span className="flex items-center justify-center gap-1 truncate text-[11px] font-bold text-white leading-tight">
           <Icon className="size-3 shrink-0 opacity-80" />
           <span className="truncate">{label}</span>
         </span>
-        <span className="block truncate text-[9.5px] font-medium text-white/60">
+        <span className="block truncate text-[9.5px] font-medium text-white/60 leading-tight mt-0.5">
           {sub}
         </span>
       </div>
@@ -133,7 +128,355 @@ function LiveStatusCircle({
   );
 }
 
-export function LiveOperationsConsole() {
+// 2. Bold Typography Status Pod (Used for raw integer counts with status dots)
+interface LiveCountPodProps {
+  label: string;
+  value: string | number;
+  sub: string;
+  tone: 'red' | 'amber' | 'emerald' | 'sky' | 'teal';
+  pulse?: boolean;
+  active?: boolean;
+  icon: LucideIcon;
+  onClick: () => void;
+}
+
+function LiveCountPod({
+  label,
+  value,
+  sub,
+  tone,
+  pulse = false,
+  active = false,
+  icon: Icon,
+  onClick,
+}: LiveCountPodProps) {
+  const dotColor: Record<LiveCountPodProps['tone'], string> = {
+    red: 'bg-rose-500',
+    amber: 'bg-[#D76E1B]',
+    emerald: 'bg-emerald-400',
+    sky: 'bg-sky-400',
+    teal: 'bg-teal-400',
+  };
+
+  const bgToneGlow: Record<LiveCountPodProps['tone'], string> = {
+    red: 'shadow-[0_0_15px_rgba(244,63,94,0.35)] ring-rose-500/50',
+    amber: 'shadow-[0_0_15px_rgba(215,110,27,0.35)] ring-[#D76E1B]/60',
+    emerald: 'shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-emerald-500/50',
+    sky: 'shadow-[0_0_15px_rgba(2,132,199,0.35)] ring-sky-500/50',
+    teal: 'shadow-[0_0_15px_rgba(20,184,166,0.35)] ring-teal-500/50',
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group relative flex flex-1 min-w-[105px] max-w-[150px] min-h-[110px] flex-col justify-between rounded-2xl border p-2.5 text-left transition-all duration-200',
+        active
+          ? cn('border-white/40 bg-white/12 ring-2 ring-offset-2 ring-offset-[#131633]', bgToneGlow[tone])
+          : 'border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.07]',
+      )}
+    >
+      <div className="flex items-center justify-between w-full">
+        <div className="flex items-center gap-1.5">
+          {pulse ? (
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
+              <span className="relative inline-flex size-2 rounded-full bg-rose-500" />
+            </span>
+          ) : (
+            <span className={cn('size-2 rounded-full', dotColor[tone])} />
+          )}
+        </div>
+        <Icon className="size-3.5 text-white/60 transition-opacity group-hover:text-white group-hover:opacity-100" />
+      </div>
+
+      <div className="my-1">
+        <span className="font-display text-2xl font-black text-white tabular tracking-tight leading-none">
+          {value}
+        </span>
+      </div>
+
+      <div className="w-full min-w-0">
+        <span className="block truncate text-[11px] font-bold text-white leading-tight">
+          {label}
+        </span>
+        <span className="block truncate text-[9.5px] font-medium text-white/60 leading-tight mt-0.5">
+          {sub}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+// 3. Human-Formatted Activity Feed Parsing & Grouping
+function formatShortDateRange(startStr: string, endStr: string): string {
+  try {
+    const s = new Date(startStr);
+    const e = new Date(endStr);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return `${startStr} → ${endStr}`;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const sMonth = months[s.getUTCMonth()];
+    const eMonth = months[e.getUTCMonth()];
+    const sDay = s.getUTCDate();
+    const eDay = e.getUTCDate();
+    if (sMonth === eMonth) {
+      return `${sMonth} ${sDay}–${eDay}`;
+    }
+    return `${sMonth} ${sDay} – ${eMonth} ${eDay}`;
+  } catch {
+    return `${startStr} → ${endStr}`;
+  }
+}
+
+interface ParsedActivity {
+  id: string;
+  actionType: 'delete' | 'print' | 'checkin' | 'checkout' | 'pos' | 'hk' | 'user' | 'general';
+  actionLabel: string;
+  primarySubject: string;
+  detail?: string;
+  actor: string;
+  createdAt: string;
+  href: string;
+}
+
+function parseActivityItem(ev: {
+  id: string;
+  action: string;
+  summary: string;
+  actorName: string;
+  href: string;
+  createdAt: string;
+}): ParsedActivity {
+  const sum = ev.summary || '';
+  const act = ev.action || '';
+  const lower = (act + ' ' + sum).toLowerCase();
+
+  // Deleted reservation RB-XXXX (Name, YYYY-MM-DD - YYYY-MM-DD): Actor
+  const delMatch = sum.match(/deleted reservation ([^\s(]+)(?:\s*\(([^,]+),\s*([0-9-]+)\s*-\s*([0-9-]+)\))?(?::\s*(.*))?/i);
+  if (delMatch || lower.includes('deleted reservation') || lower.includes('cancelled reservation')) {
+    const code = delMatch?.[1] || '';
+    const guest = delMatch?.[2]?.trim() || 'Reservation';
+    const d1 = delMatch?.[3];
+    const d2 = delMatch?.[4];
+    const dateRange = d1 && d2 ? formatShortDateRange(d1, d2) : undefined;
+    const actor = delMatch?.[5]?.trim() || ev.actorName || 'Staff';
+    return {
+      id: ev.id,
+      actionType: 'delete',
+      actionLabel: 'Deleted Reservation',
+      primarySubject: guest !== 'Reservation' ? guest : code,
+      detail: dateRange ? `${dateRange} · ${code}` : code,
+      actor,
+      createdAt: ev.createdAt,
+      href: ev.href,
+    };
+  }
+
+  // Printed RCT-XXXX (copy X)
+  const printMatch = sum.match(/printed\s+(rct-[0-9-]+)(?:\s*\(([^)]+)\))?/i);
+  if (printMatch || lower.includes('printed rct') || lower.includes('receipt')) {
+    const rct = printMatch?.[1]?.toUpperCase() || 'Receipt';
+    const copy = printMatch?.[2]?.trim();
+    return {
+      id: ev.id,
+      actionType: 'print',
+      actionLabel: 'Printed Receipt',
+      primarySubject: rct,
+      detail: copy ? copy.toUpperCase() : undefined,
+      actor: ev.actorName || 'Staff',
+      createdAt: ev.createdAt,
+      href: ev.href,
+    };
+  }
+
+  // Check-In / Check-Out
+  if (lower.includes('check_in') || lower.includes('check in') || lower.includes('checked in')) {
+    return {
+      id: ev.id,
+      actionType: 'checkin',
+      actionLabel: 'Check-In',
+      primarySubject: sum.replace(/check-?in:?/i, '').trim() || 'Guest Arrived',
+      actor: ev.actorName || 'Front Desk',
+      createdAt: ev.createdAt,
+      href: ev.href,
+    };
+  }
+
+  if (lower.includes('check_out') || lower.includes('check out') || lower.includes('checked out')) {
+    return {
+      id: ev.id,
+      actionType: 'checkout',
+      actionLabel: 'Check-Out',
+      primarySubject: sum.replace(/check-?out:?/i, '').trim() || 'Guest Departed',
+      actor: ev.actorName || 'Front Desk',
+      createdAt: ev.createdAt,
+      href: ev.href,
+    };
+  }
+
+  // POS / Dining
+  if (lower.includes('order ord-') || lower.includes('pos') || lower.includes('kitchen') || lower.includes('bar')) {
+    return {
+      id: ev.id,
+      actionType: 'pos',
+      actionLabel: 'POS Order',
+      primarySubject: sum.replace(/(order\s+|pos\s+)/i, '').trim(),
+      actor: ev.actorName || 'Staff',
+      createdAt: ev.createdAt,
+      href: ev.href,
+    };
+  }
+
+  // User / Password
+  if (lower.includes('password') || lower.includes('credential') || lower.includes('user')) {
+    const userMatch = sum.match(/password for ([^and]+)/i);
+    return {
+      id: ev.id,
+      actionType: 'user',
+      actionLabel: 'Security Update',
+      primarySubject: userMatch ? userMatch[1].trim() : 'Staff Account',
+      detail: 'Password & Credentials',
+      actor: ev.actorName || 'Admin',
+      createdAt: ev.createdAt,
+      href: ev.href,
+    };
+  }
+
+  // Housekeeping / Room
+  if (lower.includes('housekeeping') || lower.includes('room') || lower.includes('dirty') || lower.includes('clean')) {
+    return {
+      id: ev.id,
+      actionType: 'hk',
+      actionLabel: 'Room Status',
+      primarySubject: sum,
+      actor: ev.actorName || 'Housekeeping',
+      createdAt: ev.createdAt,
+      href: ev.href,
+    };
+  }
+
+  return {
+    id: ev.id,
+    actionType: 'general',
+    actionLabel: 'Activity',
+    primarySubject: sum,
+    actor: ev.actorName || 'System',
+    createdAt: ev.createdAt,
+    href: ev.href,
+  };
+}
+
+type GroupedActivity =
+  | { kind: 'single'; item: ParsedActivity }
+  | {
+      kind: 'group';
+      key: string;
+      actionType: ParsedActivity['actionType'];
+      actionLabel: string;
+      actor: string;
+      latestTime: string;
+      count: number;
+      items: ParsedActivity[];
+    };
+
+function groupConsecutiveActivities(items: ParsedActivity[]): GroupedActivity[] {
+  const groups: GroupedActivity[] = [];
+  let currentGroup: ParsedActivity[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const prev = currentGroup[0];
+
+    if (prev && prev.actionType === item.actionType && prev.actor === item.actor) {
+      currentGroup.push(item);
+    } else {
+      if (currentGroup.length === 1) {
+        groups.push({ kind: 'single', item: currentGroup[0] });
+      } else if (currentGroup.length > 1) {
+        groups.push({
+          kind: 'group',
+          key: `${currentGroup[0].actionType}-${currentGroup[0].actor}-${currentGroup[0].id}`,
+          actionType: currentGroup[0].actionType,
+          actionLabel: currentGroup[0].actionLabel,
+          actor: currentGroup[0].actor,
+          latestTime: currentGroup[0].createdAt,
+          count: currentGroup.length,
+          items: currentGroup,
+        });
+      }
+      currentGroup = [item];
+    }
+  }
+
+  if (currentGroup.length === 1) {
+    groups.push({ kind: 'single', item: currentGroup[0] });
+  } else if (currentGroup.length > 1) {
+    groups.push({
+      kind: 'group',
+      key: `${currentGroup[0].actionType}-${currentGroup[0].actor}-${currentGroup[0].id}`,
+      actionType: currentGroup[0].actionType,
+      actionLabel: currentGroup[0].actionLabel,
+      actor: currentGroup[0].actor,
+      latestTime: currentGroup[0].createdAt,
+      count: currentGroup.length,
+      items: currentGroup,
+    });
+  }
+
+  return groups;
+}
+
+const ACTION_ANCHORS: Record<
+  ParsedActivity['actionType'],
+  { icon: LucideIcon; badge: string; iconColor: string }
+> = {
+  delete: {
+    icon: Trash2,
+    badge: 'bg-rose-500/20 text-rose-300 ring-rose-500/35',
+    iconColor: 'text-rose-400',
+  },
+  print: {
+    icon: Printer,
+    badge: 'bg-sky-500/20 text-sky-200 ring-sky-500/35',
+    iconColor: 'text-sky-400',
+  },
+  checkin: {
+    icon: KeyRound,
+    badge: 'bg-emerald-500/20 text-emerald-200 ring-emerald-500/35',
+    iconColor: 'text-emerald-400',
+  },
+  checkout: {
+    icon: LogOut,
+    badge: 'bg-amber-500/20 text-amber-200 ring-amber-500/35',
+    iconColor: 'text-amber-400',
+  },
+  pos: {
+    icon: UtensilsCrossed,
+    badge: 'bg-[#D76E1B]/25 text-[#F3A257] ring-[#D76E1B]/40',
+    iconColor: 'text-[#F3A257]',
+  },
+  hk: {
+    icon: SprayCan,
+    badge: 'bg-purple-500/20 text-purple-200 ring-purple-500/35',
+    iconColor: 'text-purple-300',
+  },
+  user: {
+    icon: ShieldCheck,
+    badge: 'bg-indigo-500/20 text-indigo-200 ring-indigo-500/35',
+    iconColor: 'text-indigo-300',
+  },
+  general: {
+    icon: Activity,
+    badge: 'bg-white/10 text-white/70 ring-white/15',
+    iconColor: 'text-white/70',
+  },
+};
+
+export function LiveOperationsConsole({
+  lens = 'ALL',
+  onLensChange,
+}: LiveOperationsConsoleProps) {
   const me = useMe();
   const can = useCan();
 
@@ -144,9 +487,23 @@ export function LiveOperationsConsole() {
   const canReq = isExec || can('requisitions:request') || can('requisitions:approve');
   const canAudit = isExec || can('audit:read');
 
-  const [channel, setChannel] = useState<ConsoleChannel>('ALL');
+  // Channel is directly derived from page lens, removing redundant second navigation tier
+  const channel = useMemo(() => {
+    if (lens === 'DESK') return 'FRONT_DESK';
+    if (lens === 'HOUSEKEEPING') return 'HOUSEKEEPING';
+    if (lens === 'OPERATIONS') return 'POS';
+    if (lens === 'HR_COMMS') return 'OPERATIONS';
+    return 'ALL';
+  }, [lens]);
+
+  const [showAuditLog, setShowAuditLog] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [spotlightIndex, setSpotlightIndex] = useState(0);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const { data } = useQuery({
     queryKey: ['live-console'],
@@ -154,7 +511,7 @@ export function LiveOperationsConsole() {
     refetchInterval: 12_000,
   });
 
-  // Strict client-side permission filtering (limits matter!)
+  // Strict client-side permission filtering
   const filteredPriority = useMemo(() => {
     const list = (data?.priorityStream ?? []).filter((item) => {
       if (isExec) return true;
@@ -165,7 +522,7 @@ export function LiveOperationsConsole() {
       return true;
     });
 
-    if (channel === 'ALL' || channel === 'AUDIT_STREAM') return list;
+    if (channel === 'ALL') return list;
     return list.filter((item) => item.category === channel);
   }, [data?.priorityStream, channel, isExec, canDesk, canRooms, canPos, canReq]);
 
@@ -181,18 +538,13 @@ export function LiveOperationsConsole() {
     });
   }, [data?.liveAlertStream, isExec, canRooms, canDesk, canPos, canReq]);
 
-  // Channel tabs strictly filtered by user permissions
-  const availableChannels: { id: ConsoleChannel; label: string }[] = useMemo(() => {
-    const list: { id: ConsoleChannel; label: string }[] = [
-      { id: 'ALL', label: 'Priority Hub' },
-    ];
-    if (canDesk) list.push({ id: 'FRONT_DESK', label: 'Front Desk' });
-    if (canRooms) list.push({ id: 'HOUSEKEEPING', label: 'Housekeeping' });
-    if (canPos) list.push({ id: 'POS', label: 'POS & Tabs' });
-    if (canReq) list.push({ id: 'OPERATIONS', label: 'Operations' });
-    if (canAudit) list.push({ id: 'AUDIT_STREAM', label: 'Live Log' });
-    return list;
-  }, [canDesk, canRooms, canPos, canReq, canAudit]);
+  const parsedActivities = useMemo(() => {
+    return liveStream.map(parseActivityItem);
+  }, [liveStream]);
+
+  const groupedActivities = useMemo(() => {
+    return groupConsecutiveActivities(parsedActivities);
+  }, [parsedActivities]);
 
   const circles = data?.circles;
   const activeSpotlight = filteredPriority[spotlightIndex % Math.max(1, filteredPriority.length)];
@@ -204,9 +556,24 @@ export function LiveOperationsConsole() {
     green: 'bg-emerald-500 text-white',
   };
 
+  const activeChannelLabel =
+    channel === 'FRONT_DESK'
+      ? 'Front Desk'
+      : channel === 'HOUSEKEEPING'
+        ? 'Housekeeping'
+        : channel === 'POS'
+          ? 'POS & Operations'
+          : channel === 'OPERATIONS'
+            ? 'Operations'
+            : 'All House';
+
+  const urgentCount =
+    (circles?.deskOverdue ?? 0) + (circles?.urgentReqs ?? 0) ||
+    filteredPriority.filter((p) => p.tone === 'red').length;
+
   return (
     <div className="overflow-hidden rounded-2xl border border-[#1A1E43]/25 bg-[#131633] text-white shadow-lg dark:border-white/15">
-      {/* Top TV Console Bar */}
+      {/* Top TV Console Bar — Clean, Single-Tier Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#1A1E43] px-3.5 py-2">
         <div className="flex items-center gap-2.5">
           <span className="inline-flex items-center gap-1.5 rounded-md bg-rose-500/20 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rose-300 ring-1 ring-rose-500/40">
@@ -218,32 +585,26 @@ export function LiveOperationsConsole() {
             <span>Interactive Operational Dials</span>
           </span>
           <span className="hidden text-[11px] text-white/55 md:inline">
-            — {filteredPriority.length} active tasks in your scope
+            — {filteredPriority.length} active tasks in {activeChannelLabel} scope
           </span>
         </div>
 
-        {/* Permission-Filtered Channel Switcher & Controls */}
+        {/* Action Controls (Eliminated redundant second tab row) */}
         <div className="flex flex-wrap items-center gap-1.5">
-          {availableChannels.map(({ id, label }) => (
+          {canAudit && (
             <button
-              key={id}
               type="button"
-              onClick={() => {
-                setChannel(id);
-                setSpotlightIndex(0);
-              }}
+              onClick={() => setShowAuditLog((v) => !v)}
               className={cn(
                 'rounded-md px-2 py-1 text-[10.5px] font-bold transition',
-                channel === id
+                showAuditLog
                   ? 'bg-[#D76E1B] text-white shadow-2xs'
                   : 'bg-white/6 text-white/70 hover:bg-white/12 hover:text-white',
               )}
             >
-              {label}
+              {showAuditLog ? 'Priority Queue' : 'Full Audit Log'}
             </button>
-          ))}
-
-          <span className="mx-0.5 h-3.5 w-px bg-white/15" />
+          )}
 
           {canAudit && (
             <button
@@ -318,9 +679,9 @@ export function LiveOperationsConsole() {
         </div>
       ) : (
         <div className="grid gap-0 lg:grid-cols-12">
-          {/* Left Column (7 cols): Custom Live Circles Hub & Focused Action Spotlight */}
+          {/* Left Column (7 cols): Operational Dials Hub & Focused Action Spotlight */}
           <div className="border-b border-white/10 p-3.5 lg:col-span-7 lg:border-b-0 lg:border-r">
-            {channel === 'AUDIT_STREAM' ? (
+            {showAuditLog ? (
               <div className="space-y-2">
                 <p className="text-[10.5px] font-bold uppercase tracking-wider text-[#E88432]">
                   Live System Log (Scoped to your permissions)
@@ -354,38 +715,28 @@ export function LiveOperationsConsole() {
               </div>
             ) : (
               <div className="space-y-3">
-                {/* 1. Custom Live Circles Hub (Role-Gated Interactive Metric Rings) */}
+                {/* 1. Interactive Metric Hub: Ratio Dial for Readiness, Bold Typography Pods for Raw Counts */}
                 <div className="flex flex-wrap items-center gap-2.5">
-                  {/* Circle A: Urgent Alerts Ring (Shown if Desk, Reqs, or active red items exist) */}
+                  {/* Pod A: Urgent Tasks (Raw Count with Status Dot) */}
                   {(canDesk || canReq || filteredPriority.some((p) => p.tone === 'red')) && (
-                    <LiveStatusCircle
+                    <LiveCountPod
                       label="Urgent Tasks"
-                      value={
-                        (circles?.deskOverdue ?? 0) + (circles?.urgentReqs ?? 0) ||
-                        filteredPriority.filter((p) => p.tone === 'red').length
-                      }
-                      sub={
-                        (circles?.deskOverdue ?? 0) + (circles?.urgentReqs ?? 0) > 0
-                          ? 'Action Needed'
-                          : 'Zero Overdue'
-                      }
-                      percent={
-                        (circles?.deskOverdue ?? 0) + (circles?.urgentReqs ?? 0) > 0 ? 100 : 0
-                      }
-                      tone={(circles?.deskOverdue ?? 0) + (circles?.urgentReqs ?? 0) > 0 ? 'red' : 'emerald'}
-                      pulse={(circles?.deskOverdue ?? 0) + (circles?.urgentReqs ?? 0) > 0}
+                      value={urgentCount}
+                      sub={urgentCount > 0 ? `${urgentCount} to Resolve` : 'Zero Overdue'}
+                      tone={urgentCount > 0 ? 'red' : 'emerald'}
+                      pulse={urgentCount > 0}
                       active={channel === 'ALL'}
                       icon={AlertTriangle}
                       onClick={() => {
-                        setChannel('ALL');
+                        onLensChange?.('ALL');
                         setSpotlightIndex(0);
                       }}
                     />
                   )}
 
-                  {/* Circle B: Room Turnover & Readiness Ring (Strictly for Housekeeping & Management) */}
+                  {/* Dial B: Room Readiness (Circular Progress Ring strictly for ratio) */}
                   {canRooms && (
-                    <LiveStatusCircle
+                    <LiveProgressCircle
                       label="Rooms Ready"
                       value={
                         circles?.roomsTotal
@@ -408,15 +759,15 @@ export function LiveOperationsConsole() {
                       active={channel === 'HOUSEKEEPING'}
                       icon={BedDouble}
                       onClick={() => {
-                        setChannel('HOUSEKEEPING');
+                        onLensChange?.('HOUSEKEEPING');
                         setSpotlightIndex(0);
                       }}
                     />
                   )}
 
-                  {/* Circle C: Front Desk Stays Ring (Strictly for Front Desk & Management) */}
+                  {/* Pod C: Front Desk Stays (Raw Count with Status Dot) */}
                   {canDesk && (
-                    <LiveStatusCircle
+                    <LiveCountPod
                       label="Front Desk"
                       value={
                         (circles?.deskArrivals ?? 0) > 0
@@ -428,20 +779,19 @@ export function LiveOperationsConsole() {
                           ? `${circles?.deskOverdue} Overdue`
                           : `${circles?.deskArrivals ?? 0} Arriving`
                       }
-                      percent={Math.min(100, ((circles?.deskArrivals ?? 0) / 8) * 100)}
                       tone={(circles?.deskOverdue ?? 0) > 0 ? 'red' : 'sky'}
                       active={channel === 'FRONT_DESK'}
                       icon={ConciergeBell}
                       onClick={() => {
-                        setChannel('FRONT_DESK');
+                        onLensChange?.('DESK');
                         setSpotlightIndex(0);
                       }}
                     />
                   )}
 
-                  {/* Circle D: Kitchen & Bar POS Tabs Ring (Strictly for POS, Kitchen, Bar & Management) */}
+                  {/* Pod D: POS & Tabs (Raw Count with Status Dot) */}
                   {canPos && (
-                    <LiveStatusCircle
+                    <LiveCountPod
                       label="POS & Tabs"
                       value={
                         circles?.posOpenOrders !== undefined
@@ -453,36 +803,34 @@ export function LiveOperationsConsole() {
                           ? `${circles?.posOpenOrders} Open Bills`
                           : 'Orders Settled'
                       }
-                      percent={Math.min(100, ((circles?.posOpenOrders ?? 0) / 6) * 100)}
                       tone={(circles?.posOpenOrders ?? 0) > 0 ? 'amber' : 'emerald'}
                       active={channel === 'POS'}
                       icon={UtensilsCrossed}
                       onClick={() => {
-                        setChannel('POS');
+                        onLensChange?.('OPERATIONS');
                         setSpotlightIndex(0);
                       }}
                     />
                   )}
 
-                  {/* Circle E: Supply Requisitions Ring (For Requisitions & Operations) */}
+                  {/* Pod E: Supply Requisitions (Raw Count with Status Dot) */}
                   {canReq && (
-                    <LiveStatusCircle
+                    <LiveCountPod
                       label="Supply Reqs"
                       value={circles?.urgentReqs ?? 0}
                       sub={(circles?.urgentReqs ?? 0) > 0 ? 'Urgent Reqs' : 'Stock Stable'}
-                      percent={Math.min(100, ((circles?.urgentReqs ?? 0) / 4) * 100)}
                       tone={(circles?.urgentReqs ?? 0) > 0 ? 'red' : 'teal'}
                       active={channel === 'OPERATIONS'}
                       icon={ClipboardCheck}
                       onClick={() => {
-                        setChannel('OPERATIONS');
+                        onLensChange?.('OPERATIONS');
                         setSpotlightIndex(0);
                       }}
                     />
                   )}
                 </div>
 
-                {/* 2. Focused Action Spotlight Card (Zero Ugly Lists — Clean, Minimal, Actionable) */}
+                {/* 2. Focused Action Spotlight Card (Zero Clutter — Highest Priority First) */}
                 {activeSpotlight ? (
                   <div
                     className={cn(
@@ -504,10 +852,9 @@ export function LiveOperationsConsole() {
                             {activeSpotlight.badge}
                           </span>
                           <span className="font-mono text-[10.5px] text-white/60">
-                            Queue #{ (spotlightIndex % filteredPriority.length) + 1 } of {filteredPriority.length}
+                            Queue #{(spotlightIndex % filteredPriority.length) + 1} of {filteredPriority.length}
                           </span>
 
-                          {/* Minimal Pagination Chevrons when multiple tasks exist in scope */}
                           {filteredPriority.length > 1 && (
                             <div className="flex items-center gap-1 ml-1.5">
                               <button
@@ -568,10 +915,10 @@ export function LiveOperationsConsole() {
             )}
           </div>
 
-          {/* Right Column (5 cols): Live Activity Feed (Strictly Role-Scoped) */}
+          {/* Right Column (5 cols): Live Activity Feed (Visual Anchors, Human Formatted, Grouped) */}
           <div className="flex flex-col justify-between p-3.5 lg:col-span-5">
             <div>
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2.5 flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-wider text-[#F3A257]">
                   <Activity className="size-3.5" />
                   Live Activity Feed
@@ -587,25 +934,100 @@ export function LiveOperationsConsole() {
               </div>
 
               <ul className="max-h-[220px] space-y-1.5 overflow-y-auto pr-1">
-                {liveStream.slice(0, 6).map((ev) => (
-                  <li key={ev.id}>
-                    <Link
-                      href={ev.href}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-1.5 text-[11px] transition hover:border-white/20 hover:bg-white/[0.08]"
-                    >
-                      <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.2 text-[9px] font-bold uppercase text-[#F3A257]">
-                          {ev.category}
+                {groupedActivities.slice(0, 6).map((entry) => {
+                  if (entry.kind === 'group') {
+                    const isExpanded = !!expandedGroups[entry.key];
+                    const anchor = ACTION_ANCHORS[entry.actionType];
+                    const AnchorIcon = anchor.icon;
+
+                    return (
+                      <li key={entry.key} className="rounded-lg border border-white/8 bg-white/[0.03] overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(entry.key)}
+                          className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-[11px] transition hover:bg-white/[0.05]"
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className={cn('grid size-5 shrink-0 place-items-center rounded-md ring-1', anchor.badge)}>
+                              <AnchorIcon className={cn('size-3', anchor.iconColor)} />
+                            </span>
+                            <span className="truncate text-white/90">
+                              <span className="font-bold text-white">
+                                {entry.count} {entry.actionLabel.toLowerCase()}s
+                              </span>{' '}
+                              <span className="text-white/60">by {entry.actor}</span>
+                            </span>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <span className="rounded bg-white/10 px-1.5 py-0.2 font-mono text-[9px] font-bold text-white/80">
+                              ×{entry.count}
+                            </span>
+                            <span className="font-mono text-[10px] text-white/50">
+                              {ago(entry.latestTime)}
+                            </span>
+                            <ChevronDown
+                              className={cn('size-3 text-white/50 transition-transform', isExpanded && 'rotate-180')}
+                            />
+                          </div>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="border-t border-white/5 bg-black/20 p-1.5 space-y-1">
+                            {entry.items.map((subItem) => (
+                              <Link
+                                key={subItem.id}
+                                href={subItem.href}
+                                className="flex items-center justify-between gap-2 rounded px-2 py-1 text-[10.5px] hover:bg-white/[0.05]"
+                              >
+                                <span className="truncate text-white/80">
+                                  <span className="font-semibold text-white">{subItem.primarySubject}</span>
+                                  {subItem.detail && (
+                                    <span className="ml-1 text-white/50">({subItem.detail})</span>
+                                  )}
+                                </span>
+                                <span className="shrink-0 font-mono text-[9.5px] text-white/40">
+                                  {ago(subItem.createdAt)}
+                                </span>
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  }
+
+                  const { item } = entry;
+                  const anchor = ACTION_ANCHORS[item.actionType];
+                  const AnchorIcon = anchor.icon;
+
+                  return (
+                    <li key={item.id}>
+                      <Link
+                        href={item.href}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-1.5 text-[11px] transition hover:border-white/20 hover:bg-white/[0.08]"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <span className={cn('grid size-5 shrink-0 place-items-center rounded-md ring-1', anchor.badge)}>
+                            <AnchorIcon className={cn('size-3', anchor.iconColor)} />
+                          </span>
+                          <div className="truncate text-white/90">
+                            <span className="font-bold text-white">{item.actionLabel}</span>
+                            <span className="mx-1 text-white/40">·</span>
+                            <span className="font-semibold text-white/95">{item.primarySubject}</span>
+                            {item.detail && (
+                              <span className="ml-1 text-white/55">({item.detail})</span>
+                            )}
+                            <span className="ml-1 text-white/50 text-[10px]">by {item.actor}</span>
+                          </div>
+                        </div>
+                        <span className="shrink-0 font-mono text-[10px] text-white/50">
+                          {ago(item.createdAt)}
                         </span>
-                        <span className="truncate font-medium text-white/90">{ev.summary}</span>
-                      </div>
-                      <span className="shrink-0 font-mono text-[10px] text-white/50">
-                        {ago(ev.createdAt)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-                {liveStream.length === 0 && (
+                      </Link>
+                    </li>
+                  );
+                })}
+                {groupedActivities.length === 0 && (
                   <li className="py-6 text-center text-xs text-white/50">
                     Waiting for activity in your scope…
                   </li>
