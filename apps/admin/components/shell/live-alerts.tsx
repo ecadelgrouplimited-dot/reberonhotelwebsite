@@ -74,11 +74,28 @@ export interface NotificationRuleDTO {
   emailEnabled: boolean;
 }
 
+export interface LiveConsoleCirclesMetrics {
+  canDesk: boolean;
+  canRooms: boolean;
+  canPos: boolean;
+  canReq: boolean;
+  deskOverdue: number;
+  deskArrivals: number;
+  deskDepartures: number;
+  roomsClean: number;
+  roomsTotal: number;
+  roomsDirty: number;
+  posOpenOrders: number;
+  posSettledToday: number;
+  urgentReqs: number;
+}
+
 export interface LiveConsoleDTO {
   generatedAt: string;
   priorityStream: PriorityStreamItem[];
   liveAlertStream: LiveAlertEventItem[];
   rules: NotificationRuleDTO[];
+  circles?: LiveConsoleCirclesMetrics;
 }
 
 /**

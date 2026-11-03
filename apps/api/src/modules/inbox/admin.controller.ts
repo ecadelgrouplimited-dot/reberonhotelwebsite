@@ -649,12 +649,19 @@ export class DashboardController {
     const todayDate = new Date(`${todayStr}T00:00:00.000Z`);
     const rules = await this.getSavedNotificationRules();
 
+    const isExec = user.role === 'OWNER' || user.role === 'MANAGER';
+    const canDesk = isExec || has(user, 'desk:operate') || has(user, 'bookings:read');
+    const canRooms = isExec || has(user, 'rooms:status');
+    const canPos = isExec || has(user, 'pos:operate');
+    const canReq = isExec || has(user, 'requisitions:request') || has(user, 'requisitions:approve');
+
     const [
       recentAudit,
       overdueArrivals,
       todayArrivals,
       todayDepartures,
       dirtyRooms,
+      roomCounts,
       openPosOrders,
       recentSettledPos,
       urgentReqs,
@@ -667,45 +674,65 @@ export class DashboardController {
         },
         include: { actor: { select: { id: true, name: true, role: true } } },
         orderBy: { createdAt: 'desc' },
-        take: 25,
+        take: 30,
       }),
-      this.prisma.reservation.findMany({
-        where: { arrival: { lt: todayDate }, status: 'CONFIRMED' },
-        include: { contact: { select: { name: true, phone: true } } },
-        take: 6,
-      }),
-      this.prisma.reservation.findMany({
-        where: { arrival: todayDate, status: { in: ['CONFIRMED', 'HELD'] } },
-        include: { contact: { select: { name: true, phone: true } }, assignments: { include: { room: { select: { number: true } } } } },
-        take: 8,
-      }),
-      this.prisma.reservation.findMany({
-        where: { departure: todayDate, status: 'IN_HOUSE' },
-        include: { contact: { select: { name: true } }, assignments: { include: { room: { select: { number: true } } } } },
-        take: 8,
-      }),
-      this.prisma.room.findMany({
-        where: { isActive: true, hkStatus: 'VACANT_DIRTY' },
-        include: { roomType: { select: { name: true } } },
-        orderBy: { number: 'asc' },
-        take: 10,
-      }),
-      this.prisma.posOrder.findMany({
-        where: { status: { in: ['PENDING', 'PREPARING', 'READY'] } },
-        include: { outlet: { select: { name: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-      }),
-      this.prisma.posOrder.findMany({
-        where: { status: 'COMPLETED' },
-        include: { outlet: { select: { name: true } } },
-        orderBy: { updatedAt: 'desc' },
-        take: 6,
-      }),
-      this.prisma.requisition.findMany({
-        where: { status: { in: ['PENDING', 'MANAGER_APPROVED'] }, priority: 'URGENT' },
-        take: 5,
-      }),
+      canDesk
+        ? this.prisma.reservation.findMany({
+            where: { arrival: { lt: todayDate }, status: 'CONFIRMED' },
+            include: { contact: { select: { name: true, phone: true } } },
+            take: 6,
+          })
+        : Promise.resolve([]),
+      canDesk
+        ? this.prisma.reservation.findMany({
+            where: { arrival: todayDate, status: { in: ['CONFIRMED', 'HELD'] } },
+            include: { contact: { select: { name: true, phone: true } }, assignments: { include: { room: { select: { number: true } } } } },
+            take: 8,
+          })
+        : Promise.resolve([]),
+      canDesk
+        ? this.prisma.reservation.findMany({
+            where: { departure: todayDate, status: 'IN_HOUSE' },
+            include: { contact: { select: { name: true } }, assignments: { include: { room: { select: { number: true } } } } },
+            take: 8,
+          })
+        : Promise.resolve([]),
+      canRooms
+        ? this.prisma.room.findMany({
+            where: { isActive: true, hkStatus: 'VACANT_DIRTY' },
+            include: { roomType: { select: { name: true } } },
+            orderBy: { number: 'asc' },
+            take: 10,
+          })
+        : Promise.resolve([]),
+      canRooms
+        ? Promise.all([
+            this.prisma.room.count({ where: { isActive: true, hkStatus: { in: ['VACANT_CLEAN', 'INSPECTED'] } } }),
+            this.prisma.room.count({ where: { isActive: true } }),
+          ])
+        : Promise.resolve([0, 0]),
+      canPos
+        ? this.prisma.posOrder.findMany({
+            where: { status: { in: ['PENDING', 'PREPARING', 'READY'] } },
+            include: { outlet: { select: { name: true } } },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          })
+        : Promise.resolve([]),
+      canPos
+        ? this.prisma.posOrder.findMany({
+            where: { status: 'COMPLETED' },
+            include: { outlet: { select: { name: true } } },
+            orderBy: { updatedAt: 'desc' },
+            take: 6,
+          })
+        : Promise.resolve([]),
+      canReq
+        ? this.prisma.requisition.findMany({
+            where: { status: { in: ['PENDING', 'MANAGER_APPROVED'] }, priority: 'URGENT' },
+            take: 5,
+          })
+        : Promise.resolve([]),
     ]);
 
     // Map audit logs to structured live alert events
@@ -732,33 +759,42 @@ export class DashboardController {
 
     const ruleMap = new Map(rules.map((r) => [r.id, r]));
 
-    const liveAlertStream = recentAudit.map((a) => {
-      const ruleId = mapActionToRuleId(a.action);
-      const rule = ruleMap.get(ruleId) ?? rules[0]!;
-      const targetedToMe =
-        rule.roles.includes(user.role) ||
-        rule.recipientUserIds.includes(user.id) ||
-        user.role === 'OWNER' ||
-        user.role === 'MANAGER';
-      return {
-        id: a.id,
-        ruleId,
-        ruleLabel: rule.label,
-        category: rule.category,
-        urgency: rule.urgency,
-        action: a.action,
-        summary: a.summary,
-        actorName: a.actor?.name ?? 'System',
-        href: mapActionHref(a.action, a.entityType, a.entityId),
-        createdAt: a.createdAt.toISOString(),
-        targetedToMe,
-        popupEnabled: rule.popupEnabled,
-        soundEnabled: rule.soundEnabled,
-        soundTone: rule.soundTone,
-      };
-    });
+    const liveAlertStream = recentAudit
+      .map((a) => {
+        const ruleId = mapActionToRuleId(a.action);
+        const rule = ruleMap.get(ruleId) ?? rules[0]!;
+        const targetedToMe =
+          rule.roles.includes(user.role) ||
+          rule.recipientUserIds.includes(user.id) ||
+          isExec;
+        return {
+          id: a.id,
+          ruleId,
+          ruleLabel: rule.label,
+          category: rule.category,
+          urgency: rule.urgency,
+          action: a.action,
+          summary: a.summary,
+          actorName: a.actor?.name ?? 'System',
+          href: mapActionHref(a.action, a.entityType, a.entityId),
+          createdAt: a.createdAt.toISOString(),
+          targetedToMe,
+          popupEnabled: rule.popupEnabled,
+          soundEnabled: rule.soundEnabled,
+          soundTone: rule.soundTone,
+        };
+      })
+      .filter((item) => {
+        if (isExec) return true;
+        if (item.targetedToMe) return true;
+        if (item.category === 'HOUSEKEEPING' && canRooms) return true;
+        if (item.category === 'FRONT_DESK' && canDesk) return true;
+        if (item.category === 'POS' && canPos) return true;
+        if (item.category === 'OPERATIONS' && canReq) return true;
+        return false;
+      });
 
-    // Build dynamic priority queue (sorted strictly by operational urgency right now)
+    // Build dynamic priority queue (strictly scoped to user's permissions)
     const priorityStream: {
       id: string;
       priority: number; // 100 = CRITICAL RED, 75 = HIGH AMBER, 50 = ACTIVE LIVE
@@ -772,120 +808,150 @@ export class DashboardController {
       timestamp: string;
     }[] = [];
 
-    for (const r of overdueArrivals) {
-      priorityStream.push({
-        id: `overdue-${r.id}`,
-        priority: 100,
-        tone: 'red',
-        category: 'FRONT_DESK',
-        badge: 'OVERDUE ARRIVAL',
-        title: `${r.contact?.name || 'Guest'} (${r.code})`,
-        subtitle: `Expected ${r.arrival.toISOString().slice(0, 10)} · Resolve check-in or mark no-show`,
-        href: `/reservations/${r.id}?checkin=1`,
-        ctaLabel: 'Resolve Now',
-        timestamp: r.createdAt.toISOString(),
-      });
+    if (canDesk) {
+      for (const r of overdueArrivals) {
+        priorityStream.push({
+          id: `overdue-${r.id}`,
+          priority: 100,
+          tone: 'red',
+          category: 'FRONT_DESK',
+          badge: 'OVERDUE ARRIVAL',
+          title: `${r.contact?.name || 'Guest'} (${r.code})`,
+          subtitle: `Expected ${r.arrival.toISOString().slice(0, 10)} · Resolve check-in or mark no-show`,
+          href: `/reservations/${r.id}?checkin=1`,
+          ctaLabel: 'Resolve Now',
+          timestamp: r.createdAt.toISOString(),
+        });
+      }
     }
 
-    for (const rm of dirtyRooms) {
-      priorityStream.push({
-        id: `dirty-${rm.id}`,
-        priority: 95,
-        tone: 'amber',
-        category: 'HOUSEKEEPING',
-        badge: 'VACANT DIRTY',
-        title: `Room ${rm.number} · ${t(lt(rm.roomType.name))}`,
-        subtitle: `Requires housekeeping departure/turnover cleaning before next check-in`,
-        href: '/housekeeping',
-        ctaLabel: 'Clean Room',
-        timestamp: new Date().toISOString(),
-      });
+    if (canRooms) {
+      for (const rm of dirtyRooms) {
+        priorityStream.push({
+          id: `dirty-${rm.id}`,
+          priority: 95,
+          tone: 'amber',
+          category: 'HOUSEKEEPING',
+          badge: 'VACANT DIRTY',
+          title: `Room ${rm.number} · ${t(lt(rm.roomType.name))}`,
+          subtitle: `Requires housekeeping departure/turnover cleaning before next check-in`,
+          href: '/housekeeping',
+          ctaLabel: 'Clean Room',
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
-    for (const req of urgentReqs) {
-      priorityStream.push({
-        id: `req-${req.id}`,
-        priority: 92,
-        tone: 'red',
-        category: 'OPERATIONS',
-        badge: 'URGENT SUPPLY',
-        title: `${req.number} · ${req.department}`,
-        subtitle: `${req.title} (${req.status})`,
-        href: '/requisitions',
-        ctaLabel: 'Review Req',
-        timestamp: req.createdAt.toISOString(),
-      });
+    if (canReq) {
+      for (const req of urgentReqs) {
+        priorityStream.push({
+          id: `req-${req.id}`,
+          priority: 92,
+          tone: 'red',
+          category: 'OPERATIONS',
+          badge: 'URGENT SUPPLY',
+          title: `${req.number} · ${req.department}`,
+          subtitle: `${req.title} (${req.status})`,
+          href: '/requisitions',
+          ctaLabel: 'Review Req',
+          timestamp: req.createdAt.toISOString(),
+        });
+      }
     }
 
-    for (const po of openPosOrders) {
-      priorityStream.push({
-        id: `pos-open-${po.id}`,
-        priority: 85,
-        tone: 'amber',
-        category: 'POS',
-        badge: 'WAITING PAYMENT',
-        title: `${po.tableOrRoom || 'Counter'} · ${po.orderNumber}`,
-        subtitle: `${po.customerName || 'Walk-in'} · Waiter: ${po.servedByName || 'Staff'} · UGX ${Number(po.totalMinor).toLocaleString()} (${po.status})`,
-        href: '/pos',
-        ctaLabel: 'Confirm Payment',
-        timestamp: po.createdAt.toISOString(),
-      });
+    if (canPos) {
+      for (const po of openPosOrders) {
+        priorityStream.push({
+          id: `pos-open-${po.id}`,
+          priority: 85,
+          tone: 'amber',
+          category: 'POS',
+          badge: 'WAITING PAYMENT',
+          title: `${po.tableOrRoom || 'Counter'} · ${po.orderNumber}`,
+          subtitle: `${po.customerName || 'Walk-in'} · Waiter: ${po.servedByName || 'Staff'} · UGX ${Number(po.totalMinor).toLocaleString()} (${po.status})`,
+          href: '/pos',
+          ctaLabel: 'Confirm Payment',
+          timestamp: po.createdAt.toISOString(),
+        });
+      }
     }
 
-    for (const arr of todayArrivals) {
-      const rmNums = arr.assignments.map((a) => a.room.number).join(', ') || 'Unassigned';
-      priorityStream.push({
-        id: `arr-${arr.id}`,
-        priority: 80,
-        tone: 'sky',
-        category: 'FRONT_DESK',
-        badge: 'ARRIVING TODAY',
-        title: `${arr.contact?.name || 'Guest'} (${arr.code})`,
-        subtitle: `Room: ${rmNums} · ${arr.status} · Ready for Front Desk check-in`,
-        href: `/reservations/${arr.id}?checkin=1`,
-        ctaLabel: 'Check In',
-        timestamp: arr.createdAt.toISOString(),
-      });
+    if (canDesk) {
+      for (const arr of todayArrivals) {
+        const rmNums = arr.assignments.map((a) => a.room.number).join(', ') || 'Unassigned';
+        priorityStream.push({
+          id: `arr-${arr.id}`,
+          priority: 80,
+          tone: 'sky',
+          category: 'FRONT_DESK',
+          badge: 'ARRIVING TODAY',
+          title: `${arr.contact?.name || 'Guest'} (${arr.code})`,
+          subtitle: `Room: ${rmNums} · ${arr.status} · Ready for Front Desk check-in`,
+          href: `/reservations/${arr.id}?checkin=1`,
+          ctaLabel: 'Check In',
+          timestamp: arr.createdAt.toISOString(),
+        });
+      }
+
+      for (const dep of todayDepartures) {
+        const rmNums = dep.assignments.map((a) => a.room.number).join(', ') || 'Room';
+        priorityStream.push({
+          id: `dep-${dep.id}`,
+          priority: 78,
+          tone: 'amber',
+          category: 'FRONT_DESK',
+          badge: 'DEPARTING TODAY',
+          title: `Room ${rmNums} · ${dep.contact?.name || 'Guest'} (${dep.code})`,
+          subtitle: `Scheduled departure today — verify folio & check out`,
+          href: `/reservations/${dep.id}`,
+          ctaLabel: 'Check Out',
+          timestamp: dep.createdAt.toISOString(),
+        });
+      }
     }
 
-    for (const dep of todayDepartures) {
-      const rmNums = dep.assignments.map((a) => a.room.number).join(', ') || 'Room';
-      priorityStream.push({
-        id: `dep-${dep.id}`,
-        priority: 78,
-        tone: 'amber',
-        category: 'FRONT_DESK',
-        badge: 'DEPARTING TODAY',
-        title: `Room ${rmNums} · ${dep.contact?.name || 'Guest'} (${dep.code})`,
-        subtitle: `Scheduled departure today — verify folio & check out`,
-        href: `/reservations/${dep.id}`,
-        ctaLabel: 'Check Out',
-        timestamp: dep.createdAt.toISOString(),
-      });
-    }
-
-    for (const paid of recentSettledPos.slice(0, 4)) {
-      priorityStream.push({
-        id: `pos-paid-${paid.id}`,
-        priority: 50,
-        tone: 'green',
-        category: 'POS',
-        badge: 'PAID & CONFIRMED',
-        title: `${paid.orderNumber} · ${paid.tableOrRoom || paid.outlet?.name || 'POS'}`,
-        subtitle: `UGX ${Number(paid.totalMinor).toLocaleString()} confirmed via ${paid.paymentMethod} · Waiter: ${paid.servedByName || 'Staff'}`,
-        href: '/pos',
-        ctaLabel: 'View POS',
-        timestamp: paid.updatedAt.toISOString(),
-      });
+    if (canPos) {
+      for (const paid of recentSettledPos.slice(0, 4)) {
+        priorityStream.push({
+          id: `pos-paid-${paid.id}`,
+          priority: 50,
+          tone: 'green',
+          category: 'POS',
+          badge: 'PAID & CONFIRMED',
+          title: `${paid.orderNumber} · ${paid.tableOrRoom || paid.outlet?.name || 'POS'}`,
+          subtitle: `UGX ${Number(paid.totalMinor).toLocaleString()} confirmed via ${paid.paymentMethod} · Waiter: ${paid.servedByName || 'Staff'}`,
+          href: '/pos',
+          ctaLabel: 'View POS',
+          timestamp: paid.updatedAt.toISOString(),
+        });
+      }
     }
 
     priorityStream.sort((a, b) => b.priority - a.priority);
+
+    const [cleanRoomsCount, totalRoomsCount] = (roomCounts as [number, number]) || [0, 0];
+    const circles = {
+      canDesk,
+      canRooms,
+      canPos,
+      canReq,
+      deskOverdue: overdueArrivals.length,
+      deskArrivals: todayArrivals.length,
+      deskDepartures: todayDepartures.length,
+      roomsClean: cleanRoomsCount,
+      roomsTotal: totalRoomsCount,
+      roomsDirty: dirtyRooms.length,
+      posOpenOrders: openPosOrders.length,
+      posSettledToday: recentSettledPos.length,
+      urgentReqs: urgentReqs.length,
+    };
 
     return {
       generatedAt: new Date().toISOString(),
       priorityStream,
       liveAlertStream,
       rules,
+      circles,
     };
   }
 }
