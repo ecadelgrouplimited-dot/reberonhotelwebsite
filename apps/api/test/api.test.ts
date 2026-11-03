@@ -584,4 +584,63 @@ describe('movement V: POS, health club, quotations, inventory & requisitions', (
     assert.equal(disb.status, 200);
     assert.equal(disb.body.status, 'DISBURSED');
   });
+
+  test('inbox: desk can delete a message, delete a conversation, and clear spam', async () => {
+    const d = await as('desk@reberonhotel.com');
+    const createRes = await d.post('/admin/conversations', {
+      name: 'Spam Sender Test',
+      phone: '+256700000999',
+      channel: 'WHATSAPP',
+      intent: 'GENERAL',
+      message: 'Buy cheap watches spam message',
+    });
+    assert.equal(createRes.status, 201);
+    const convId = createRes.body.id;
+    assert.ok(convId);
+
+    // Add a note
+    const noteRes = await d.post(`/admin/conversations/${convId}/messages`, {
+      body: 'This looks like spam, will delete',
+      kind: 'NOTE',
+    });
+    assert.equal(noteRes.status, 201);
+    const noteId = noteRes.body.message.id;
+
+    // Delete the note message
+    const delMsgRes = await d.del(`/admin/conversations/${convId}/messages/${noteId}`);
+    assert.equal(delMsgRes.status, 200);
+    assert.equal(delMsgRes.body.deleted, true);
+
+    // Verify note is gone
+    const convDetail = await d.get(`/admin/conversations/${convId}`);
+    assert.equal(convDetail.status, 200);
+    assert.equal(convDetail.body.messages.some((m: { id: string }) => m.id === noteId), false);
+
+    // Delete the whole conversation
+    const delConvRes = await d.del(`/admin/conversations/${convId}`);
+    assert.equal(delConvRes.status, 200);
+    assert.equal(delConvRes.body.deleted, true);
+
+    // Verify conversation is gone
+    const checkConv = await d.get(`/admin/conversations/${convId}`);
+    assert.equal(checkConv.status, 404);
+
+    // Test clear spam
+    const spamConv = await d.post('/admin/conversations', {
+      name: 'Clear Spam Test',
+      email: 'cleartest@example.com',
+      channel: 'EMAIL',
+      intent: 'GENERAL',
+      message: 'Automated test spam message',
+    });
+    assert.equal(spamConv.status, 201);
+    await d.patch(`/admin/conversations/${spamConv.body.id}`, { status: 'SPAM' });
+
+    const clearRes = await d.del('/admin/conversations/spam');
+    assert.equal(clearRes.status, 200);
+    assert.ok(clearRes.body.count >= 1);
+
+    const checkSpam = await d.get(`/admin/conversations/${spamConv.body.id}`);
+    assert.equal(checkSpam.status, 404);
+  });
 });

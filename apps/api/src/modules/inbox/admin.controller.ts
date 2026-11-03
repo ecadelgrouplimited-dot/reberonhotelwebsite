@@ -27,6 +27,13 @@ export class ConversationsController {
     return this.ingestion.syncEmails(user);
   }
 
+  @Delete('spam')
+  @HttpCode(200)
+  @Requires('inbox:write')
+  clearSpam(@CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.inbox.clearSpam(user, req);
+  }
+
   @Get()
   @Requires('inbox:read')
   list(@CurrentUser() user: AuthUser, @Query() q: Record<string, string>) {
@@ -43,6 +50,25 @@ export class ConversationsController {
   @Requires('inbox:write')
   update(@Param('id') id: string, @Body(new ZodPipe(zConversationPatch)) body: z.infer<typeof zConversationPatch>, @CurrentUser() user: AuthUser, @Req() req: Request) {
     return this.inbox.update(id, body, user, req);
+  }
+
+  @Delete(':id/messages/:messageId')
+  @HttpCode(200)
+  @Requires('inbox:write')
+  deleteMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.inbox.deleteMessage(id, messageId, user, req);
+  }
+
+  @Delete(':id')
+  @HttpCode(200)
+  @Requires('inbox:write')
+  deleteConversation(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.inbox.deleteConversation(id, user, req);
   }
 
   @Post(':id/messages')

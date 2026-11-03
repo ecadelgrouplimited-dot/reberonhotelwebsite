@@ -297,4 +297,87 @@ export class InboxService {
     await this.audit.record({ actor: user, action: 'waitlist.create', entityType: 'WaitlistEntry', entityId: entry.id, summary: `Added ${c.contact.name} to the first-stay list from ${c.reference}`, req });
     return { waitlistId: entry.id, reference: entry.reference };
   }
+
+  async deleteConversation(id: string, user: AuthUser, req?: Request) {
+    const existing = await this.prisma.conversation.findUnique({
+      where: { id },
+      include: { contact: { select: { id: true, name: true } } },
+    });
+    if (!existing) throw notFound('Conversation');
+
+    await this.prisma.conversation.delete({ where: { id } });
+
+    await this.audit.record({
+      actor: user,
+      action: 'conversation.delete',
+      entityType: 'Conversation',
+      entityId: id,
+      summary: `Deleted conversation ${existing.reference} from ${existing.contact?.name ?? 'unknown'}`,
+      req,
+    });
+
+    return { ok: true, deleted: true };
+  }
+
+  async deleteMessage(conversationId: string, messageId: string, user: AuthUser, req?: Request) {
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    if (!conversation) throw notFound('Conversation');
+
+    const message = await this.prisma.message.findFirst({
+      where: { id: messageId, conversationId },
+    });
+    if (!message) throw notFound('Message');
+
+    await this.prisma.message.delete({ where: { id: messageId } });
+
+    const latestMessage = await this.prisma.message.findFirst({
+      where: { conversationId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (latestMessage) {
+      await this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { lastMessageAt: latestMessage.createdAt },
+      });
+    }
+
+    await this.audit.record({
+      actor: user,
+      action: 'message.delete',
+      entityType: 'Conversation',
+      entityId: conversationId,
+      summary: `Deleted message from conversation ${conversation.reference}`,
+      req,
+    });
+
+    return { ok: true, deleted: true };
+  }
+
+  async clearSpam(user: AuthUser, req?: Request) {
+    const spamConvs = await this.prisma.conversation.findMany({
+      where: { status: 'SPAM' },
+      select: { id: true },
+    });
+
+    if (spamConvs.length === 0) {
+      return { ok: true, count: 0 };
+    }
+
+    const ids = spamConvs.map((c) => c.id);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.message.deleteMany({ where: { conversationId: { in: ids } } });
+      await tx.conversationRead.deleteMany({ where: { conversationId: { in: ids } } });
+      await tx.conversation.deleteMany({ where: { id: { in: ids } } });
+    });
+
+    await this.audit.record({
+      actor: user,
+      action: 'conversation.clear_spam',
+      entityType: 'Conversation',
+      summary: `Cleared ${ids.length} spam conversation(s)`,
+      req,
+    });
+
+    return { ok: true, count: ids.length };
+  }
 }

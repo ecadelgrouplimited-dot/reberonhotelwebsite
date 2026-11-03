@@ -5,12 +5,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, BedDouble, CalendarDays, CheckCheck, Globe, ListPlus, Mail, MessageSquareText, Phone, Plus, RefreshCw, Search, Send, StickyNote, UserRound, Users,
+  ArrowLeft, BedDouble, CalendarDays, CheckCheck, Globe, ListPlus, Mail, MessageSquareText, Phone, Plus, RefreshCw, Search, Send, StickyNote, Trash2, UserRound, Users,
 } from 'lucide-react';
 import type { ConversationDetailDTO, ConversationSummaryDTO, Paginated, UserDTO } from '@reberon/contracts';
 import { whatsappLink } from '@reberon/utils';
-import { ApiError, get, patch, post } from '@/lib/api';
+import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
+import { useConfirm } from '@/components/ui/confirm';
 import { ago, dateRange, dateTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,38 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
   const [creating, setCreating] = useState(false);
   const can = useCan();
   const qc = useQueryClient();
+  const confirm = useConfirm();
+
+  const clearSpamMut = useMutation({
+    mutationFn: () => del<{ ok: boolean; count: number }>('/conversations/spam'),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      qc.invalidateQueries({ queryKey: ['badge', 'inbox'] });
+      if (selectedId) {
+        qc.invalidateQueries({ queryKey: ['conversation', selectedId] });
+        router.push('/inbox');
+      }
+      toast.success(`Cleared ${res.count} spam conversation(s)`);
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : 'Could not clear spam');
+    },
+  });
+
+  const deleteConvMut = useMutation({
+    mutationFn: (id: string) => del(`/conversations/${id}`),
+    onSuccess: (_, deletedId) => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      qc.invalidateQueries({ queryKey: ['badge', 'inbox'] });
+      if (selectedId === deletedId) {
+        router.push('/inbox');
+      }
+      toast.success('Conversation deleted');
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : 'Could not delete conversation');
+    },
+  });
 
   useEffect(() => {
     if (!searchParams) return;
@@ -152,9 +185,34 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
             { value: 'active', label: 'Active', count: (counts.NEW ?? 0) + (counts.OPEN ?? 0) + (counts.WAITING_GUEST ?? 0) },
             { value: 'NEW', label: 'New', count: counts.NEW ?? 0 },
             { value: 'DONE', label: 'Done' },
-            { value: 'SPAM', label: 'Spam' },
+            { value: 'SPAM', label: 'Spam', count: counts.SPAM ?? 0 },
           ]}
         />
+        {status === 'SPAM' && (counts.SPAM ?? 0) > 0 && can('inbox:write') && (
+          <div className="flex items-center justify-between border-b border-line bg-surface-2/60 px-4 py-2 text-[12px] text-fg-muted">
+            <span>{counts.SPAM} spam conversation{counts.SPAM === 1 ? '' : 's'}</span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 font-semibold text-danger hover:underline disabled:opacity-50"
+              disabled={clearSpamMut.isPending}
+              onClick={async () => {
+                if (
+                  await confirm({
+                    title: 'Clear all spam conversations?',
+                    body: `This will permanently delete all ${counts.SPAM} spam conversation(s) from the inbox. This action cannot be undone.`,
+                    confirm: 'Clear all spam',
+                    danger: true,
+                  })
+                ) {
+                  clearSpamMut.mutate();
+                }
+              }}
+            >
+              <Trash2 className="size-3" />
+              {clearSpamMut.isPending ? 'Clearing…' : 'Clear all spam'}
+            </button>
+          </div>
+        )}
         <ul className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
           {list.isLoading &&
             Array.from({ length: 8 }, (_, i) => (
@@ -170,7 +228,7 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
           {rows.map((c) => {
             const Icon = CHANNEL[c.channel]?.icon ?? Globe;
             return (
-              <li key={c.id}>
+              <li key={c.id} className="group relative">
                 <Link href={`/inbox/${c.id}`} className={cn('relative flex gap-3 border-b border-line px-4 py-3.5 transition-colors', c.id === selectedId ? 'bg-surface-2' : 'hover:bg-surface-2/60')}>
                   {c.unread && <span className="absolute left-1.5 top-5 size-1.5 rounded-full bg-accent" aria-label="Unread" />}
                   <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-moss-700/10 text-[12px] font-semibold text-brand">
@@ -192,6 +250,30 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
                     </span>
                   </span>
                 </Link>
+                {can('inbox:write') && (
+                  <button
+                    type="button"
+                    title={`Delete conversation ${c.reference}`}
+                    aria-label={`Delete conversation ${c.reference}`}
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (
+                        await confirm({
+                          title: `Delete conversation from ${c.contact.name}?`,
+                          body: `This will permanently delete ${c.reference} and all its messages from the inbox.`,
+                          confirm: 'Delete',
+                          danger: true,
+                        })
+                      ) {
+                        deleteConvMut.mutate(c.id);
+                      }
+                    }}
+                    className="absolute right-2.5 top-2.5 hidden rounded-md border border-line bg-surface p-1 text-fg-subtle shadow-sm transition hover:border-danger/40 hover:bg-danger/10 hover:text-danger group-hover:block"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                )}
               </li>
             );
           })}
@@ -209,9 +291,11 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
 }
 
 function Thread({ id }: { id: string }) {
+  const router = useRouter();
   const qc = useQueryClient();
   const me = useMe();
   const can = useCan();
+  const confirm = useConfirm();
   const [body, setBody] = useState('');
   const [mode, setMode] = useState<'REPLY' | 'NOTE'>('REPLY');
   const endRef = useRef<HTMLDivElement>(null);
@@ -233,6 +317,24 @@ function Thread({ id }: { id: string }) {
     mutationFn: (p: Record<string, unknown>) => patch(`/conversations/${id}`, p),
     onSuccess: refresh,
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not update'),
+  });
+  const deleteConversationMut = useMutation({
+    mutationFn: () => del(`/conversations/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      qc.invalidateQueries({ queryKey: ['badge', 'inbox'] });
+      toast.success('Conversation deleted');
+      router.push('/inbox');
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not delete conversation'),
+  });
+  const deleteMessageMut = useMutation({
+    mutationFn: (msgId: string) => del(`/conversations/${id}/messages/${msgId}`),
+    onSuccess: () => {
+      toast.success('Message deleted');
+      refresh();
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not delete message'),
   });
   const send = useMutation({
     mutationFn: () => post<{ waUrl?: string; delivery?: string }>(`/conversations/${id}/messages`, { body, kind: mode }),
@@ -301,15 +403,42 @@ function Thread({ id }: { id: string }) {
                   Done
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-fg-subtle hover:bg-danger/10 hover:text-danger"
+                icon={<Trash2 className="size-3.5" />}
+                loading={deleteConversationMut.isPending}
+                title="Delete conversation"
+                onClick={async () => {
+                  if (
+                    await confirm({
+                      title: `Delete conversation ${c.reference}?`,
+                      body: `This will permanently delete this conversation from ${c.contact.name} and all its messages. This cannot be undone.`,
+                      confirm: 'Delete conversation',
+                      danger: true,
+                    })
+                  ) {
+                    deleteConversationMut.mutate();
+                  }
+                }}
+              >
+                Delete
+              </Button>
             </div>
           )}
         </header>
 
         <div className="scrollbar-thin min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-6">
+          {c.messages.length === 0 && (
+            <p className="py-12 text-center text-[13px] text-fg-subtle">
+              No messages in this conversation.
+            </p>
+          )}
           {c.messages.map((m) => {
             const mine = m.direction !== 'INBOUND';
             return (
-              <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+              <div key={m.id} className={cn('group flex', mine ? 'justify-end' : 'justify-start')}>
                 <div className={cn('max-w-[min(34rem,85%)]', mine && 'text-right')}>
                   <div
                     className={cn(
@@ -322,9 +451,33 @@ function Thread({ id }: { id: string }) {
                     {m.direction === 'NOTE' && <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-warning"><StickyNote className="size-3" /> Internal note</span>}
                     {m.body}
                   </div>
-                  <p className="mt-1 px-1 text-[11px] text-fg-subtle">
-                    {m.author?.name ?? c.contact.name} · {dateTime(m.createdAt)}
-                  </p>
+                  <div className={cn('mt-1 flex items-center gap-1.5 px-1 text-[11px] text-fg-subtle', mine && 'justify-end')}>
+                    <span>
+                      {m.author?.name ?? c.contact.name} · {dateTime(m.createdAt)}
+                    </span>
+                    {can('inbox:write') && (
+                      <button
+                        type="button"
+                        title="Delete message"
+                        aria-label="Delete message"
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: 'Delete this message?',
+                              body: 'This specific message will be permanently removed from the conversation thread.',
+                              confirm: 'Delete message',
+                              danger: true,
+                            })
+                          ) {
+                            deleteMessageMut.mutate(m.id);
+                          }
+                        }}
+                        className="opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                      >
+                        <Trash2 className="size-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -412,6 +565,30 @@ function Thread({ id }: { id: string }) {
         <p className="mt-6 rounded-xl bg-surface-2 p-3 text-[12px] leading-relaxed text-fg-muted">
           Bookings arrive in Movement II. Until then, put stay requests on the first-stay list so nobody is forgotten when the calendar opens.
         </p>
+        {can('inbox:write') && (
+          <div className="mt-6 border-t border-line pt-4">
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[12px] font-medium text-fg-subtle transition hover:border-danger/30 hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+              disabled={deleteConversationMut.isPending}
+              onClick={async () => {
+                if (
+                  await confirm({
+                    title: `Delete conversation ${c.reference}?`,
+                    body: `This will permanently delete this conversation from ${c.contact.name} and all its messages. This cannot be undone.`,
+                    confirm: 'Delete conversation',
+                    danger: true,
+                  })
+                ) {
+                  deleteConversationMut.mutate();
+                }
+              }}
+            >
+              <Trash2 className="size-3.5" />
+              Delete conversation
+            </button>
+          </div>
+        )}
       </aside>
     </div>
   );
