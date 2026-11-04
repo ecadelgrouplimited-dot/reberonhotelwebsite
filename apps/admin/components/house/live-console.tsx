@@ -497,6 +497,7 @@ export function LiveOperationsConsole({
   }, [lens]);
 
   const [showAuditLog, setShowAuditLog] = useState(false);
+  const [showDials, setShowDials] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [spotlightIndex, setSpotlightIndex] = useState(0);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -582,15 +583,30 @@ export function LiveOperationsConsole({
           </span>
           <span className="flex items-center gap-1.5 text-xs font-bold tracking-tight text-white">
             <Tv className="size-3.5 text-[#E88432]" />
-            <span>Interactive Operational Dials</span>
+            <span>Priority Action Queue & Live Stream</span>
           </span>
           <span className="hidden text-[11px] text-white/55 md:inline">
-            — {filteredPriority.length} active tasks in {activeChannelLabel} scope
+            — {filteredPriority.length} active task{filteredPriority.length === 1 ? '' : 's'} in {activeChannelLabel} scope
           </span>
         </div>
 
         {/* Action Controls (Eliminated redundant second tab row) */}
         <div className="flex flex-wrap items-center gap-1.5">
+          {!compactMode && !showAuditLog && (
+            <button
+              type="button"
+              onClick={() => setShowDials((v) => !v)}
+              className={cn(
+                'rounded-md px-2 py-1 text-[10.5px] font-bold transition',
+                showDials
+                  ? 'bg-white/20 text-white'
+                  : 'bg-white/6 text-white/70 hover:bg-white/12 hover:text-white',
+              )}
+            >
+              {showDials ? 'Hide Dials' : 'Show Dials'}
+            </button>
+          )}
+
           {canAudit && (
             <button
               type="button"
@@ -715,120 +731,122 @@ export function LiveOperationsConsole({
               </div>
             ) : (
               <div className="space-y-3">
-                {/* 1. Interactive Metric Hub: Ratio Dial for Readiness, Bold Typography Pods for Raw Counts */}
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {/* Pod A: Urgent Tasks (Raw Count with Status Dot) */}
-                  {(canDesk || canReq || filteredPriority.some((p) => p.tone === 'red')) && (
-                    <LiveCountPod
-                      label="Urgent Tasks"
-                      value={urgentCount}
-                      sub={urgentCount > 0 ? `${urgentCount} to Resolve` : 'Zero Overdue'}
-                      tone={urgentCount > 0 ? 'red' : 'emerald'}
-                      pulse={urgentCount > 0}
-                      active={channel === 'ALL'}
-                      icon={AlertTriangle}
-                      onClick={() => {
-                        onLensChange?.('ALL');
-                        setSpotlightIndex(0);
-                      }}
-                    />
-                  )}
+                {/* 1. Optional Interactive Metric Hub (Hidden by default to keep workspace clutter-free) */}
+                {showDials && (
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Pod A: Urgent Tasks (Raw Count with Status Dot) */}
+                    {(canDesk || canReq || filteredPriority.some((p) => p.tone === 'red')) && (
+                      <LiveCountPod
+                        label="Urgent Tasks"
+                        value={urgentCount}
+                        sub={urgentCount > 0 ? `${urgentCount} to Resolve` : 'Zero Overdue'}
+                        tone={urgentCount > 0 ? 'red' : 'emerald'}
+                        pulse={urgentCount > 0}
+                        active={channel === 'ALL'}
+                        icon={AlertTriangle}
+                        onClick={() => {
+                          onLensChange?.('ALL');
+                          setSpotlightIndex(0);
+                        }}
+                      />
+                    )}
 
-                  {/* Dial B: Room Readiness (Circular Progress Ring strictly for ratio) */}
-                  {canRooms && (
-                    <LiveProgressCircle
-                      label="Rooms Ready"
-                      value={
-                        circles?.roomsTotal
-                          ? `${circles.roomsClean}/${circles.roomsTotal}`
-                          : filteredPriority.filter((p) => p.category === 'HOUSEKEEPING').length > 0
-                            ? `${filteredPriority.filter((p) => p.category === 'HOUSEKEEPING').length} Dirty`
-                            : 'Ready'
-                      }
-                      sub={
-                        (circles?.roomsDirty ?? 0) > 0
-                          ? `${circles?.roomsDirty} to Turn`
-                          : 'All Inspected'
-                      }
-                      percent={
-                        circles?.roomsTotal
-                          ? Math.round((circles.roomsClean / circles.roomsTotal) * 100)
-                          : 70
-                      }
-                      tone={(circles?.roomsDirty ?? 0) > 0 ? 'amber' : 'emerald'}
-                      active={channel === 'HOUSEKEEPING'}
-                      icon={BedDouble}
-                      onClick={() => {
-                        onLensChange?.('HOUSEKEEPING');
-                        setSpotlightIndex(0);
-                      }}
-                    />
-                  )}
+                    {/* Dial B: Room Readiness (Circular Progress Ring strictly for ratio) */}
+                    {canRooms && (
+                      <LiveProgressCircle
+                        label="Rooms Ready"
+                        value={
+                          circles?.roomsTotal
+                            ? `${circles.roomsClean}/${circles.roomsTotal}`
+                            : filteredPriority.filter((p) => p.category === 'HOUSEKEEPING').length > 0
+                              ? `${filteredPriority.filter((p) => p.category === 'HOUSEKEEPING').length} Dirty`
+                              : 'Ready'
+                        }
+                        sub={
+                          (circles?.roomsDirty ?? 0) > 0
+                            ? `${circles?.roomsDirty} to Turn`
+                            : 'All Inspected'
+                        }
+                        percent={
+                          circles?.roomsTotal
+                            ? Math.round((circles.roomsClean / circles.roomsTotal) * 100)
+                            : 70
+                        }
+                        tone={(circles?.roomsDirty ?? 0) > 0 ? 'amber' : 'emerald'}
+                        active={channel === 'HOUSEKEEPING'}
+                        icon={BedDouble}
+                        onClick={() => {
+                          onLensChange?.('HOUSEKEEPING');
+                          setSpotlightIndex(0);
+                        }}
+                      />
+                    )}
 
-                  {/* Pod C: Front Desk Stays (Raw Count with Status Dot) */}
-                  {canDesk && (
-                    <LiveCountPod
-                      label="Front Desk"
-                      value={
-                        (circles?.deskArrivals ?? 0) > 0
-                          ? `${circles?.deskArrivals} In`
-                          : `${circles?.deskDepartures ?? 0} Out`
-                      }
-                      sub={
-                        (circles?.deskOverdue ?? 0) > 0
-                          ? `${circles?.deskOverdue} Overdue`
-                          : `${circles?.deskArrivals ?? 0} Arriving`
-                      }
-                      tone={(circles?.deskOverdue ?? 0) > 0 ? 'red' : 'sky'}
-                      active={channel === 'FRONT_DESK'}
-                      icon={ConciergeBell}
-                      onClick={() => {
-                        onLensChange?.('DESK');
-                        setSpotlightIndex(0);
-                      }}
-                    />
-                  )}
+                    {/* Pod C: Front Desk Stays (Raw Count with Status Dot) */}
+                    {canDesk && (
+                      <LiveCountPod
+                        label="Front Desk"
+                        value={
+                          (circles?.deskArrivals ?? 0) > 0
+                            ? `${circles?.deskArrivals} In`
+                            : `${circles?.deskDepartures ?? 0} Out`
+                        }
+                        sub={
+                          (circles?.deskOverdue ?? 0) > 0
+                            ? `${circles?.deskOverdue} Overdue`
+                            : `${circles?.deskArrivals ?? 0} Arriving`
+                        }
+                        tone={(circles?.deskOverdue ?? 0) > 0 ? 'red' : 'sky'}
+                        active={channel === 'FRONT_DESK'}
+                        icon={ConciergeBell}
+                        onClick={() => {
+                          onLensChange?.('DESK');
+                          setSpotlightIndex(0);
+                        }}
+                      />
+                    )}
 
-                  {/* Pod D: POS & Tabs (Raw Count with Status Dot) */}
-                  {canPos && (
-                    <LiveCountPod
-                      label="POS & Tabs"
-                      value={
-                        circles?.posOpenOrders !== undefined
-                          ? circles.posOpenOrders
-                          : filteredPriority.filter((p) => p.category === 'POS').length
-                      }
-                      sub={
-                        (circles?.posOpenOrders ?? 0) > 0
-                          ? `${circles?.posOpenOrders} Open Bills`
-                          : 'Orders Settled'
-                      }
-                      tone={(circles?.posOpenOrders ?? 0) > 0 ? 'amber' : 'emerald'}
-                      active={channel === 'POS'}
-                      icon={UtensilsCrossed}
-                      onClick={() => {
-                        onLensChange?.('OPERATIONS');
-                        setSpotlightIndex(0);
-                      }}
-                    />
-                  )}
+                    {/* Pod D: POS & Tabs (Raw Count with Status Dot) */}
+                    {canPos && (
+                      <LiveCountPod
+                        label="POS & Tabs"
+                        value={
+                          circles?.posOpenOrders !== undefined
+                            ? circles.posOpenOrders
+                            : filteredPriority.filter((p) => p.category === 'POS').length
+                        }
+                        sub={
+                          (circles?.posOpenOrders ?? 0) > 0
+                            ? `${circles?.posOpenOrders} Open Bills`
+                            : 'Orders Settled'
+                        }
+                        tone={(circles?.posOpenOrders ?? 0) > 0 ? 'amber' : 'emerald'}
+                        active={channel === 'POS'}
+                        icon={UtensilsCrossed}
+                        onClick={() => {
+                          onLensChange?.('OPERATIONS');
+                          setSpotlightIndex(0);
+                        }}
+                      />
+                    )}
 
-                  {/* Pod E: Supply Requisitions (Raw Count with Status Dot) */}
-                  {canReq && (
-                    <LiveCountPod
-                      label="Supply Reqs"
-                      value={circles?.urgentReqs ?? 0}
-                      sub={(circles?.urgentReqs ?? 0) > 0 ? 'Urgent Reqs' : 'Stock Stable'}
-                      tone={(circles?.urgentReqs ?? 0) > 0 ? 'red' : 'teal'}
-                      active={channel === 'OPERATIONS'}
-                      icon={ClipboardCheck}
-                      onClick={() => {
-                        onLensChange?.('OPERATIONS');
-                        setSpotlightIndex(0);
-                      }}
-                    />
-                  )}
-                </div>
+                    {/* Pod E: Supply Requisitions (Raw Count with Status Dot) */}
+                    {canReq && (
+                      <LiveCountPod
+                        label="Supply Reqs"
+                        value={circles?.urgentReqs ?? 0}
+                        sub={(circles?.urgentReqs ?? 0) > 0 ? 'Urgent Reqs' : 'Stock Stable'}
+                        tone={(circles?.urgentReqs ?? 0) > 0 ? 'red' : 'teal'}
+                        active={channel === 'OPERATIONS'}
+                        icon={ClipboardCheck}
+                        onClick={() => {
+                          onLensChange?.('OPERATIONS');
+                          setSpotlightIndex(0);
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
 
                 {/* 2. Focused Action Spotlight Card (Zero Clutter — Highest Priority First) */}
                 {activeSpotlight ? (
