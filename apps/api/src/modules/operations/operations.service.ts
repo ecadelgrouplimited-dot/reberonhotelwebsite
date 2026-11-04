@@ -135,6 +135,16 @@ export class OperationsService {
     return rows.map((r) => this.mapOrder(r));
   }
 
+  /** UGX and USD are never converted: a USD bill can only carry items with a USD price. */
+  private posUnitPrice(
+    item: { name: string; priceMinorUGX: bigint; priceMinorUSD: bigint | null },
+    currency: string,
+  ): bigint {
+    if (currency !== 'USD') return item.priceMinorUGX;
+    if (item.priceMinorUSD === null) throw badRequest(`${item.name} has no USD price — bill it in UGX`);
+    return item.priceMinorUSD;
+  }
+
   private mapOrder(r: any): PosOrderDTO {
     return {
       id: r.id,
@@ -232,7 +242,7 @@ export class OperationsService {
       const dbIt = itemMap.get(reqItem.itemId);
       if (!dbIt) throw badRequest('One or more menu items were not found');
       if (!dbIt.isAvailable) throw badRequest(`${dbIt.name} is currently marked unavailable`);
-      const unitPrice = input.currency === 'USD' ? (dbIt.priceMinorUSD ?? dbIt.priceMinorUGX) : dbIt.priceMinorUGX;
+      const unitPrice = this.posUnitPrice(dbIt, input.currency);
       const lineTotal = unitPrice * BigInt(reqItem.quantity);
       subtotal += lineTotal;
       return {
@@ -414,7 +424,7 @@ export class OperationsService {
       const dbIt = itemMap.get(reqItem.itemId);
       if (!dbIt) throw badRequest('One or more menu items were not found');
       if (!dbIt.isAvailable) throw badRequest(`${dbIt.name} is currently marked unavailable`);
-      const unitPrice = existing.currency === 'USD' ? (dbIt.priceMinorUSD ?? dbIt.priceMinorUGX) : dbIt.priceMinorUGX;
+      const unitPrice = this.posUnitPrice(dbIt, existing.currency);
       const lineTotal = unitPrice * BigInt(reqItem.quantity);
       addedSubtotal += lineTotal;
       return {
@@ -634,10 +644,7 @@ export class OperationsService {
       replacementLines = input.items.map((reqItem) => {
         const dbIt = itemMap.get(reqItem.itemId);
         if (!dbIt) throw badRequest('One or more menu items were not found');
-        const unitPrice =
-          existing.currency === 'USD'
-            ? (dbIt.priceMinorUSD ?? dbIt.priceMinorUGX)
-            : dbIt.priceMinorUGX;
+        const unitPrice = this.posUnitPrice(dbIt, existing.currency);
         const lineTotal = unitPrice * BigInt(reqItem.quantity);
         sub += lineTotal;
         return {
