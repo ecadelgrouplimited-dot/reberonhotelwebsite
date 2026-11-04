@@ -13,6 +13,8 @@ import {
   LogOut,
   Menu,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Sparkles,
   Sun,
@@ -267,7 +269,7 @@ function NavBadge({ badge, compact = false }: { badge?: BadgeInfo; compact?: boo
   );
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate, onToggleCollapse }: { onNavigate?: () => void; onToggleCollapse?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentTab = searchParams.get('tab');
@@ -377,23 +379,35 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex h-full flex-col bg-[var(--sidebar)] text-[var(--sidebar-fg)] select-none">
       {/* Brand Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-3.5">
-        <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5">
-          <div className="grid size-9 place-items-center rounded-lg border border-[#D76E1B]/35 bg-[#10132B] shadow-inner">
+        <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 min-w-0">
+          <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#D76E1B]/35 bg-[#10132B] shadow-inner">
             <ReberonMonogramIcon className="h-6 w-6" color="#D76E1B" />
           </div>
-          <span className="leading-none">
-            <span className="block font-display text-[14.5px] font-bold tracking-tight text-white">Reberon Hotel</span>
+          <span className="leading-none truncate">
+            <span className="block font-display text-[14.5px] font-bold tracking-tight text-white truncate">Reberon Hotel</span>
             <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.18em] text-[#E88432]">The House · PMS</span>
           </span>
         </Link>
-        <button
-          type="button"
-          onClick={toggleAllGroups}
-          title={allExpanded ? 'Collapse sidebar sections' : 'Expand all sidebar sections'}
-          className="grid size-7 place-items-center rounded-md text-[var(--sidebar-muted)] transition-colors hover:bg-white/8 hover:text-white"
-        >
-          {allExpanded ? <ChevronsDownUp className="size-3.5" /> : <ChevronsUpDown className="size-3.5" />}
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={toggleAllGroups}
+            title={allExpanded ? 'Collapse sidebar sections' : 'Expand all sidebar sections'}
+            className="grid size-7 place-items-center rounded-md text-[var(--sidebar-muted)] transition-colors hover:bg-white/8 hover:text-white"
+          >
+            {allExpanded ? <ChevronsDownUp className="size-3.5" /> : <ChevronsUpDown className="size-3.5" />}
+          </button>
+          {onToggleCollapse && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              title="Collapse sidebar for full screen (⌘B)"
+              className="grid size-7 place-items-center rounded-md text-[var(--sidebar-muted)] transition-colors hover:bg-white/8 hover:text-white"
+            >
+              <PanelLeftClose className="size-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Live Notification Summary Strip (Strict Urgency Tiers) */}
@@ -569,10 +583,16 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+function Sidebar({
+  onNavigate,
+  onToggleCollapse,
+}: {
+  onNavigate?: () => void;
+  onToggleCollapse?: () => void;
+}) {
   return (
     <Suspense fallback={<div className="h-full bg-[var(--sidebar)]" />}>
-      <SidebarContent onNavigate={onNavigate} />
+      <SidebarContent onNavigate={onNavigate} onToggleCollapse={onToggleCollapse} />
     </Suspense>
   );
 }
@@ -659,7 +679,32 @@ export function Shell({ children }: { children: ReactNode }) {
   const { data: me, isError } = useMeQuery();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const router = useRouter();
+
+  // Load persisted collapse state from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('rb-admin-sidebar-collapsed');
+      if (saved === 'true') {
+        setSidebarCollapsed(true);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('rb-admin-sidebar-collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (isError) router.replace('/login?expired=1');
@@ -671,15 +716,31 @@ export function Shell({ children }: { children: ReactNode }) {
         e.preventDefault();
         setPaletteOpen((v) => !v);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[15.25rem_1fr]">
-      <aside className="sticky top-0 hidden h-dvh lg:block">
-        <Sidebar />
+    <div
+      className={cn(
+        'min-h-dvh transition-[grid-template-columns] duration-200 ease-in-out',
+        sidebarCollapsed ? 'lg:grid lg:grid-cols-[0px_1fr]' : 'lg:grid lg:grid-cols-[15.25rem_1fr]',
+      )}
+    >
+      <aside
+        className={cn(
+          'sticky top-0 hidden h-dvh overflow-hidden transition-all duration-200 ease-in-out lg:block',
+          sidebarCollapsed ? 'w-0 border-none' : 'w-[15.25rem]',
+        )}
+      >
+        <div className="h-full w-[15.25rem]">
+          <Sidebar onToggleCollapse={toggleSidebar} />
+        </div>
       </aside>
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -693,10 +754,32 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       )}
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-30 flex h-13 items-center gap-3 border-b border-line bg-[color-mix(in_oklab,var(--bg)_88%,transparent)] px-4 backdrop-blur-lg sm:px-6">
+        <header className="sticky top-0 z-30 flex h-13 items-center gap-2.5 border-b border-line bg-[color-mix(in_oklab,var(--bg)_88%,transparent)] px-4 backdrop-blur-lg sm:px-6">
           <button type="button" onClick={() => setMobileOpen(true)} className="grid size-8 place-items-center rounded-lg hover:bg-surface-2 lg:hidden" aria-label="Open menu">
             <Menu className="size-4" />
           </button>
+
+          {/* Desktop Sidebar Toggle Button */}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className={cn(
+              'hidden h-8 items-center gap-1.5 rounded-lg border border-line bg-surface text-xs font-semibold transition hover:border-line-strong hover:bg-surface-2 lg:inline-flex',
+              sidebarCollapsed ? 'px-2.5 text-fg shadow-2xs' : 'px-2 text-fg-muted',
+            )}
+            title={sidebarCollapsed ? 'Expand sidebar (⌘B)' : 'Collapse sidebar for full screen (⌘B)'}
+          >
+            {sidebarCollapsed ? (
+              <>
+                <PanelLeftOpen className="size-4 text-[#D76E1B]" />
+                <span className="hidden sm:inline">Sidebar</span>
+                <span className="ml-0.5"><Kbd>⌘B</Kbd></span>
+              </>
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
+          </button>
+
           <button type="button" onClick={() => setPaletteOpen(true)} className="flex h-8 w-full max-w-sm items-center gap-2 rounded-lg border border-line bg-surface px-3 text-[12.5px] text-fg-subtle hover:border-line-strong">
             <Search className="size-3.5" />
             <span className="flex-1 text-left">Jump to page or search…</span>
