@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
+  ArrowRight,
   Building2,
   CalendarDays,
   CheckCircle2,
@@ -31,6 +32,7 @@ import {
   UserPlus,
   Users,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import type {
@@ -45,6 +47,7 @@ import type {
 import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
 import { money } from '@/lib/money';
+import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Skeleton, Tabs } from '@/components/ui/bits';
 import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
@@ -87,6 +90,7 @@ export default function HrPage() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
   const deptParam = searchParams.get('department');
+  const actionParam = searchParams.get('action');
 
   const [activeTab, setActiveTab] = useState<HrTab>(() => {
     if (
@@ -112,6 +116,18 @@ export default function HrPage() {
       setActiveTab('STAFF');
     }
   }, [tabParam]);
+
+  useEffect(() => {
+    if (actionParam === 'add' || actionParam === 'create') {
+      setCreateStaffOpen(true);
+    } else if (actionParam === 'shift') {
+      setCreateShiftOpen(true);
+    } else if (actionParam === 'roster') {
+      setBulkShiftOpen(true);
+    } else if (actionParam === 'leave') {
+      setCreateLeaveOpen(true);
+    }
+  }, [actionParam]);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -541,12 +557,195 @@ export default function HrPage() {
         }
       />
 
-      {/* High-Contrast 5-Card KPI Strip */}
+      {/* 1. HR Quick Actions Workspace Bar — One-click daily workflows */}
+      <section
+        aria-label="HR Quick Actions"
+        className="rounded-2xl border border-line bg-surface p-3 shadow-2xs"
+      >
+        <div className="mb-2.5 flex items-center justify-between gap-2 px-0.5">
+          <div className="flex items-center gap-1.5">
+            <Zap className="size-3.5 text-amber-500" />
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-fg">
+              HR Quick Actions & Shortcuts
+            </span>
+            <span className="hidden text-[11px] text-fg-muted sm:inline">
+              — One-click workflows for employee profiles, rosters, leave requests and payroll
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          {canHrManage && (
+            <button
+              type="button"
+              onClick={() => setCreateStaffOpen(true)}
+              className="group flex flex-col justify-between gap-2 rounded-xl border border-fg bg-fg p-3 text-left text-bg shadow-xs transition-all hover:opacity-95"
+            >
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/15 text-bg">
+                  <UserPlus className="size-4" strokeWidth={2.2} />
+                </span>
+                <span className="rounded-full border border-white/25 bg-white/15 px-2 py-0.5 text-[10px] font-bold tabular text-bg">
+                  + Add
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-extrabold text-bg">+ Add Employee</p>
+                <p className="mt-0.5 truncate text-[10.5px] text-bg/75">New profile & terms</p>
+              </div>
+            </button>
+          )}
+
+          {canHrManage && (
+            <button
+              type="button"
+              onClick={() => setCreateShiftOpen(true)}
+              className="group flex flex-col justify-between gap-2 rounded-xl border border-line bg-surface-2/35 p-3 text-left text-fg transition-all hover:border-line-strong hover:bg-surface-2/80"
+            >
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-line/80 bg-surface text-sky-500">
+                  <Clock className="size-4" strokeWidth={2.2} />
+                </span>
+                <ArrowRight className="size-3.5 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-extrabold text-fg">Assign Shift</p>
+                <p className="mt-0.5 truncate text-[10.5px] text-fg-muted">Daily duty coverage</p>
+              </div>
+            </button>
+          )}
+
+          {canHrManage && (
+            <button
+              type="button"
+              onClick={() => setBulkShiftOpen(true)}
+              className="group flex flex-col justify-between gap-2 rounded-xl border border-line bg-surface-2/35 p-3 text-left text-fg transition-all hover:border-line-strong hover:bg-surface-2/80"
+            >
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-line/80 bg-surface text-indigo-500">
+                  <CalendarDays className="size-4" strokeWidth={2.2} />
+                </span>
+                <ArrowRight className="size-3.5 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-extrabold text-fg">Weekly Roster</p>
+                <p className="mt-0.5 truncate text-[10.5px] text-fg-muted">Bulk 7-day schedule</p>
+              </div>
+            </button>
+          )}
+
+          {canHrManage && (
+            <button
+              type="button"
+              onClick={() => setCreateLeaveOpen(true)}
+              className="group flex flex-col justify-between gap-2 rounded-xl border border-line bg-surface-2/35 p-3 text-left text-fg transition-all hover:border-line-strong hover:bg-surface-2/80"
+            >
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-line/80 bg-surface text-amber-500">
+                  <CalendarDays className="size-4" strokeWidth={2.2} />
+                </span>
+                <ArrowRight className="size-3.5 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-extrabold text-fg">Log Leave</p>
+                <p className="mt-0.5 truncate text-[10.5px] text-fg-muted">Annual or sick absence</p>
+              </div>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('LEAVE');
+              setLeaveStatusFilter('PENDING');
+              router.replace('/hr?tab=LEAVE', { scroll: false });
+            }}
+            className="group flex flex-col justify-between gap-2 rounded-xl border border-line bg-surface-2/35 p-3 text-left text-fg transition-all hover:border-line-strong hover:bg-surface-2/80"
+          >
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-line/80 bg-surface text-rose-500">
+                <CheckCircle2 className="size-4" strokeWidth={2.2} />
+              </span>
+              {(overview?.pendingLeaveRequests ?? 0) > 0 ? (
+                <span className="rounded-full border border-amber-500/35 bg-amber-500/12 px-2 py-0.5 text-[10px] font-bold tabular text-warning">
+                  {overview?.pendingLeaveRequests} pending
+                </span>
+              ) : (
+                <ArrowRight className="size-3.5 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-extrabold text-fg">Review Leaves</p>
+              <p className="mt-0.5 truncate text-[10.5px] text-fg-muted">
+                {(overview?.pendingLeaveRequests ?? 0) > 0
+                  ? `${overview?.pendingLeaveRequests} awaiting review`
+                  : 'Time-off queue clear'}
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('PAYROLL');
+              router.replace('/hr?tab=PAYROLL', { scroll: false });
+            }}
+            className="group flex flex-col justify-between gap-2 rounded-xl border border-line bg-surface-2/35 p-3 text-left text-fg transition-all hover:border-line-strong hover:bg-surface-2/80"
+          >
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-line/80 bg-surface text-emerald-500">
+                <DollarSign className="size-4" strokeWidth={2.2} />
+              </span>
+              {payrollSummary.pendingCount > 0 ? (
+                <span className="rounded-full border border-amber-500/35 bg-amber-500/12 px-2 py-0.5 text-[10px] font-bold tabular text-warning">
+                  {payrollSummary.pendingCount} unpaid
+                </span>
+              ) : (
+                <ArrowRight className="size-3.5 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-extrabold text-fg">Process Payroll</p>
+              <p className="mt-0.5 truncate text-[10.5px] text-fg-muted">{payrollMonth} PAYE & NSSF</p>
+            </div>
+          </button>
+
+          <Link
+            href="/departments"
+            className="group flex flex-col justify-between gap-2 rounded-xl border border-line bg-surface-2/35 p-3 text-fg transition-all hover:border-line-strong hover:bg-surface-2/80"
+          >
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-line/80 bg-surface text-sky-600 dark:text-sky-400">
+                <Building2 className="size-4" strokeWidth={2.2} />
+              </span>
+              <ArrowRight className="size-3.5 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-extrabold text-fg">Departments</p>
+              <p className="mt-0.5 truncate text-[10.5px] text-fg-muted">{departments?.length ?? 9} hotel cost centers</p>
+            </div>
+          </Link>
+        </div>
+      </section>
+
+      {/* 2. Interactive KPI Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('STAFF');
+            router.replace('/hr', { scroll: false });
+          }}
+          className={cn(
+            'group rounded-2xl border p-4 shadow-xs text-left transition-all hover:shadow-md cursor-pointer',
+            activeTab === 'STAFF'
+              ? 'border-line-strong bg-surface ring-2 ring-fg/10'
+              : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2/40',
+          )}
+        >
           <div className="flex items-center justify-between text-fg-subtle">
             <span className="text-[11px] font-bold uppercase tracking-wider">Active Headcount</span>
-            <Users className="h-4 w-4 text-emerald-600" />
+            <Users className="h-4 w-4 text-emerald-600 transition-transform group-hover:scale-110" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-extrabold tracking-tight text-fg">
@@ -554,25 +753,50 @@ export default function HrPage() {
             </span>
             <span className="text-xs text-fg-muted">of {overview?.totalStaff ?? 0} staff</span>
           </div>
-          <p className="mt-1 text-[11px] text-fg-subtle">Across {departments?.length ?? 9} hotel departments</p>
-        </div>
+          <div className="mt-1 flex items-center justify-between text-[11px] text-fg-subtle">
+            <span>Across {departments?.length ?? 9} depts</span>
+            <span className="font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100">
+              View Directory →
+            </span>
+          </div>
+        </button>
 
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+        <Link
+          href="/settings/users"
+          className="group rounded-2xl border border-line bg-surface p-4 shadow-xs text-left transition-all hover:border-line-strong hover:bg-surface-2/40 hover:shadow-md cursor-pointer"
+        >
           <div className="flex items-center justify-between text-fg-subtle">
             <span className="text-[11px] font-bold uppercase tracking-wider">System Access Linked</span>
-            <ShieldCheck className="h-4 w-4 text-violet-600" />
+            <ShieldCheck className="h-4 w-4 text-violet-600 transition-transform group-hover:scale-110" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-extrabold tracking-tight text-fg">{linkedRolesCount}</span>
             <span className="text-xs text-violet-600 dark:text-violet-400 font-semibold">active roles</span>
           </div>
-          <p className="mt-1 text-[11px] text-fg-subtle">Linked to House Login & RBAC</p>
-        </div>
+          <div className="mt-1 flex items-center justify-between text-[11px] text-fg-subtle">
+            <span>Linked to RBAC</span>
+            <span className="font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100">
+              Manage Roles →
+            </span>
+          </div>
+        </Link>
 
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('ROSTER');
+            router.replace('/hr?tab=ROSTER', { scroll: false });
+          }}
+          className={cn(
+            'group rounded-2xl border p-4 shadow-xs text-left transition-all hover:shadow-md cursor-pointer',
+            activeTab === 'ROSTER'
+              ? 'border-line-strong bg-surface ring-2 ring-fg/10'
+              : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2/40',
+          )}
+        >
           <div className="flex items-center justify-between text-fg-subtle">
             <span className="text-[11px] font-bold uppercase tracking-wider">Shifts Today</span>
-            <Clock className="h-4 w-4 text-sky-600" />
+            <Clock className="h-4 w-4 text-sky-600 transition-transform group-hover:scale-110" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-extrabold tracking-tight text-fg">
@@ -580,13 +804,30 @@ export default function HrPage() {
             </span>
             <span className="text-xs text-sky-600 dark:text-sky-400 font-semibold">on duty</span>
           </div>
-          <p className="mt-1 text-[11px] text-fg-subtle">Morning, Evening & Night coverage</p>
-        </div>
+          <div className="mt-1 flex items-center justify-between text-[11px] text-fg-subtle">
+            <span>Morning, Eve & Night</span>
+            <span className="font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100">
+              Open Roster →
+            </span>
+          </div>
+        </button>
 
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('LEAVE');
+            router.replace('/hr?tab=LEAVE', { scroll: false });
+          }}
+          className={cn(
+            'group rounded-2xl border p-4 shadow-xs text-left transition-all hover:shadow-md cursor-pointer',
+            activeTab === 'LEAVE'
+              ? 'border-line-strong bg-surface ring-2 ring-fg/10'
+              : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2/40',
+          )}
+        >
           <div className="flex items-center justify-between text-fg-subtle">
             <span className="text-[11px] font-bold uppercase tracking-wider">Leave & Absence</span>
-            <CalendarDays className="h-4 w-4 text-amber-600" />
+            <CalendarDays className="h-4 w-4 text-amber-600 transition-transform group-hover:scale-110" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-extrabold tracking-tight text-fg">
@@ -596,21 +837,43 @@ export default function HrPage() {
               away · {overview?.pendingLeaveRequests ?? 0} pending
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-fg-subtle">Statutory 21d annual entitlement</p>
-        </div>
+          <div className="mt-1 flex items-center justify-between text-[11px] text-fg-subtle">
+            <span>Statutory 21d leave</span>
+            <span className="font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100">
+              Leave Queue →
+            </span>
+          </div>
+        </button>
 
-        <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('PAYROLL');
+            router.replace('/hr?tab=PAYROLL', { scroll: false });
+          }}
+          className={cn(
+            'group rounded-2xl border p-4 shadow-xs text-left transition-all hover:shadow-md cursor-pointer',
+            activeTab === 'PAYROLL'
+              ? 'border-line-strong bg-surface ring-2 ring-fg/10'
+              : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2/40',
+          )}
+        >
           <div className="flex items-center justify-between text-fg-subtle">
             <span className="text-[11px] font-bold uppercase tracking-wider">Monthly Base Payroll</span>
-            <DollarSign className="h-4 w-4 text-emerald-600" />
+            <DollarSign className="h-4 w-4 text-emerald-600 transition-transform group-hover:scale-110" />
           </div>
           <div className="mt-2">
             <span className="font-mono text-xl font-extrabold tracking-tight text-emerald-600 dark:text-emerald-400">
               {money(overview?.totalMonthlyPayrollMinor || '0', 'UGX')}
             </span>
           </div>
-          <p className="mt-1 text-[11px] text-fg-subtle">Before overtime, PAYE & NSSF</p>
-        </div>
+          <div className="mt-1 flex items-center justify-between text-[11px] text-fg-subtle">
+            <span>Before PAYE & NSSF</span>
+            <span className="font-semibold text-accent opacity-0 transition-opacity group-hover:opacity-100">
+              Open Payroll →
+            </span>
+          </div>
+        </button>
       </div>
 
       {/* Tabs Navigation */}

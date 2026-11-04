@@ -8,10 +8,14 @@ import {
   BedDouble,
   BookOpenText,
   BrushCleaning,
+  Building2,
+  CalendarDays,
   CheckCheck,
   CheckCircle2,
   ClipboardCheck,
+  Clock,
   ConciergeBell,
+  CreditCard,
   DoorOpen,
   Dumbbell,
   FileSpreadsheet,
@@ -511,6 +515,49 @@ export default function Today() {
           : (pulse?.operations.pendingRequisitions ?? 0) > 0
             ? { text: `${pulse?.operations.pendingRequisitions} pending`, tone: 'amber' }
             : undefined,
+    });
+  }
+
+  if (canHr) {
+    quickActions.push({
+      key: 'hr-staff',
+      label: me.role === 'HR' ? '+ Add / Staff Directory' : 'Staff Directory',
+      sub: `${pulse?.hr.activeStaff ?? 0} active · ${pulse?.hr.departmentsCount ?? 0} depts`,
+      href: '/hr?tab=STAFF',
+      icon: Users,
+      primary: me.role === 'HR' && !can('bookings:write'),
+      iconColor: 'text-rose-500',
+    });
+
+    quickActions.push({
+      key: 'hr-roster',
+      label: 'Shift Rosters',
+      sub: `${pulse?.hr.shiftsToday ?? 0} shifts scheduled today`,
+      href: '/hr?tab=ROSTER',
+      icon: Clock,
+      iconColor: 'text-sky-500',
+    });
+
+    quickActions.push({
+      key: 'hr-leave',
+      label: 'Leave Requests',
+      sub: 'Annual & statutory time off',
+      href: '/hr?tab=LEAVE',
+      icon: CalendarDays,
+      iconColor: 'text-amber-500',
+      badge:
+        (pulse?.hr.pendingLeaves ?? 0) > 0
+          ? { text: `${pulse?.hr.pendingLeaves} pending`, tone: 'amber' }
+          : undefined,
+    });
+
+    quickActions.push({
+      key: 'hr-payroll',
+      label: 'Payroll & Taxes',
+      sub: 'URA PAYE, NSSF & payslips',
+      href: '/hr?tab=PAYROLL',
+      icon: CreditCard,
+      iconColor: 'text-emerald-500',
     });
   }
 
