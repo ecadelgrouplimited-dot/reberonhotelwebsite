@@ -61,7 +61,7 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Section, Skeleton, Status } from '@/components/ui/bits';
 import { BarList, ColumnChart } from '@/components/charts/charts';
-import { LiveOperationsConsole, type DashboardLens } from '@/components/house/live-console';
+import { type DashboardLens } from '@/components/house/live-console';
 import {
   AssignRoomDialog,
   CheckInDialog,
@@ -924,10 +924,7 @@ export default function Today() {
           </section>
         )}
 
-        {/* 3. LIVE OPERATIONS CONSOLE (Priority Task Spotlight & Live Activity Stream) */}
-        <LiveOperationsConsole lens={lens} onLensChange={setLens} />
-
-        {/* 4. INTERACTIVE WORKBENCHES: FRONT DESK & HOUSEKEEPING */}
+        {/* 3. INTERACTIVE WORKBENCHES: FRONT DESK & HOUSEKEEPING */}
         {((showDesk && canDesk) || (showHk && canRooms)) && (
           <div
             className={cn(

@@ -477,6 +477,14 @@ export function LiveOperationsConsole({
   lens = 'ALL',
   onLensChange,
 }: LiveOperationsConsoleProps) {
+  // Deactivated for now throughout the app as requested
+  return null;
+}
+
+function _DeactivatedLiveOperationsConsole({
+  lens = 'ALL',
+  onLensChange,
+}: LiveOperationsConsoleProps) {
   const me = useMe();
   const can = useCan();
 
