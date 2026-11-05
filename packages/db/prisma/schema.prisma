@@ -1662,16 +1662,42 @@ model PosOrder {
   notes         String?
   servedById    String?          @db.Uuid
   servedByName  String?
+  /// The managed table this bill is for; tableOrRoom keeps the name as printed
+  tableId       String?          @db.Uuid
+  /// When payment was taken (receipt issued or posted to a folio); null = still open
+  settledAt     DateTime?
   isSeed        Boolean          @default(false)
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
   outlet PosOutlet      @relation(fields: [outletId], references: [id])
+  table  PosTable?      @relation(fields: [tableId], references: [id], onDelete: SetNull)
   items  PosOrderItem[]
 
   @@index([outletId, createdAt])
   @@index([status])
   @@index([reservationId])
+  @@index([settledAt])
+  @@index([tableId])
+}
+
+/// A table or service spot waiters bill against (Table 4, Terrace 1, Counter, Room Service)
+model PosTable {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique
+  /// Free-text grouping shown as a section on the floor: Dining Room, Terrace, Lounge…
+  area      String   @default("Dining Room")
+  seats     Int      @default(4)
+  sortOrder Int      @default(10)
+  isActive  Boolean  @default(true)
+  notes     String?
+  isSeed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders PosOrder[]
+
+  @@index([isActive, sortOrder])
 }
 
 model PosOrderItem {

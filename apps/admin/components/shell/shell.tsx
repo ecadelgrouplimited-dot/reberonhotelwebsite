@@ -291,6 +291,9 @@ function SidebarContent({ onNavigate, onToggleCollapse }: { onNavigate?: () => v
     if (href === '/inventory') {
       return pathname === '/inventory';
     }
+    if (href === '/pos') {
+      return pathname === '/pos';
+    }
     if (href === '/settings') {
       return pathname === '/settings';
     }

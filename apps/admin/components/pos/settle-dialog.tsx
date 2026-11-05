@@ -66,6 +66,7 @@ export function SettleDialog({
       qc.invalidateQueries({ queryKey: ['pos', 'orders'] });
       qc.invalidateQueries({ queryKey: ['documents'] });
       qc.invalidateQueries({ queryKey: ['admin-pulse'] });
+      qc.invalidateQueries({ queryKey: ['pos', 'tables'] });
       onClose();
       toast.success(`${o.orderNumber} paid · ${money(o.totalMinor, o.currency)} by ${PAYMENT_LABELS[o.paymentMethod]}`, {
         action: o.documentId

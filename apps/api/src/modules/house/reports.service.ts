@@ -59,7 +59,7 @@ export class ReportsService {
       this.prisma.feedback.groupBy({ by: ['score'], where: { createdAt: { gte: start, lt: endExcl } }, _count: true }),
       this.booking.roomTypeNames(),
       this.prisma.posOrder.findMany({
-        where: { createdAt: { gte: start, lt: endExcl }, status: { in: ['COMPLETED', 'READY', 'PREPARING'] } },
+        where: { settledAt: { gte: start, lt: endExcl }, status: { not: 'CANCELLED' } },
         include: { outlet: true },
       }),
       this.prisma.healthClubMembership.findMany({
@@ -166,11 +166,11 @@ export class ReportsService {
     /* ───── Multi-Department Aggregation ───── */
     const kitchenOrders = posOrders.filter((o) => o.outlet.type === 'KITCHEN');
     const kitchenRev = zero();
-    for (const o of kitchenOrders) kitchenRev.UGX += o.totalMinor;
+    for (const o of kitchenOrders) kitchenRev[o.currency as Cur] += o.totalMinor;
 
     const barOrders = posOrders.filter((o) => o.outlet.type === 'BAR');
     const barRev = zero();
-    for (const o of barOrders) barRev.UGX += o.totalMinor;
+    for (const o of barOrders) barRev[o.currency as Cur] += o.totalMinor;
 
     const gymRev = zero();
     for (const m of memberships) gymRev.UGX += m.amountMinor;
@@ -362,8 +362,10 @@ export class ReportsService {
       r.count += 1;
       railMap.set(method, r);
     }
+    // Money actually taken at the POS. Room-folio bills are paid later through the folio, so they are not a rail here.
     for (const o of posOrders) {
-      const cur = 'UGX' as Cur;
+      if (o.paymentMethod === 'ROOM_FOLIO') continue;
+      const cur = o.currency as Cur;
       const m = o.paymentMethod ?? 'CASH';
       const r = railMap.get(m) ?? { amount: zero(), count: 0 };
       r.amount[cur] += o.totalMinor;

@@ -1,5 +1,6 @@
 import type { Permission } from '@reberon/contracts';
 import {
+  Armchair,
   BedDouble,
   BookOpenText,
   Boxes,
@@ -136,6 +137,7 @@ export const NAV: NavGroup[] = [
     defaultOpen: true,
     items: [
       { label: 'POS: Kitchen & Bar', href: '/pos', icon: UtensilsCrossed, perm: 'pos:operate', badge: 'pos' },
+      { label: 'Tables & Floor', href: '/pos/tables', icon: Armchair, perm: 'pos:operate' },
       { label: 'Health Club & Spa', href: '/health-club', icon: Dumbbell, perm: 'healthclub:operate', badge: 'healthclub' },
       { label: 'Inventory & Linen', href: '/inventory', icon: Boxes, perm: 'inventory:manage', badge: 'inventory' },
       { label: 'Item Categories', href: '/inventory/categories', icon: Tags, perm: 'inventory:manage' },

@@ -708,10 +708,10 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
         where: { status: 'SUCCEEDED', paidAt: { gte: monthStart, lt: end } },
       }),
       this.prisma.posOrder.findMany({
-        where: { status: 'COMPLETED', createdAt: { gte: start, lt: end } },
+        where: { status: { not: 'CANCELLED' }, settledAt: { gte: start, lt: end } },
       }),
       this.prisma.posOrder.findMany({
-        where: { status: 'COMPLETED', createdAt: { gte: monthStart, lt: end } },
+        where: { status: { not: 'CANCELLED' }, settledAt: { gte: monthStart, lt: end } },
       }),
       this.prisma.healthClubAccessLog.findMany({
         where: { checkedInAt: { gte: start, lt: end } },

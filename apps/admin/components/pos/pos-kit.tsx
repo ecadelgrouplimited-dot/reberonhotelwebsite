@@ -8,8 +8,9 @@ import {
   Timer,
   type LucideIcon,
 } from 'lucide-react';
-import type { CurrencyCode, PosItemDTO, PosPaymentMethod } from '@reberon/contracts';
+import type { CurrencyCode, PosItemDTO, PosPaymentMethod, PosStaffDTO } from '@reberon/contracts';
 import { money, toMinorStr } from '@/lib/money';
+import { useState } from 'react';
 import { cn } from '@/lib/cn';
 
 export { useNow } from '@/lib/use-now';
@@ -32,22 +33,7 @@ const PAYMENT_ICONS: Record<PosPaymentMethod, LucideIcon> = {
 
 const PAYMENT_ORDER: PosPaymentMethod[] = ['CASH', 'MOBILE_MONEY', 'CARD', 'ROOM_FOLIO', 'BANK_TRANSFER'];
 
-/** Table spots and line modifiers are staff-facing shortcuts, not guest content. */
-export const QUICK_SPOTS = [
-  'Counter',
-  'Table 1',
-  'Table 2',
-  'Table 3',
-  'Table 4',
-  'Table 5',
-  'Table 6',
-  'Terrace 1',
-  'Terrace 2',
-  'Bar Lounge',
-  'VIP Lounge',
-  'Room Service',
-];
-
+/** Line modifiers are staff-facing shortcuts, not guest content. */
 export const QUICK_MODIFIERS = [
   'No Sugar',
   'Extra Hot',
@@ -257,5 +243,111 @@ export function CashPad({
         onChange={(e) => onTendered(e.target.value)}
       />
     </div>
+  );
+}
+
+const OTHER = '__other__';
+
+/**
+ * Pick who is serving from the staff directory (today's rota first). "Someone else…" falls back
+ * to a typed name for people not in the directory yet.
+ */
+export function StaffPicker({
+  staff,
+  value,
+  onChange,
+  placeholder = 'Choose a person',
+  allowAll,
+  only,
+  className,
+  ariaLabel,
+}: {
+  staff: PosStaffDTO[];
+  value: string;
+  onChange: (name: string, person: PosStaffDTO | null) => void;
+  placeholder?: string;
+  /** Adds an "All open bills" choice that maps to an empty value. */
+  allowAll?: string;
+  /** Restrict the list to these names (e.g. waiters who hold open bills). */
+  only?: string[];
+  className?: string;
+  ariaLabel?: string;
+}) {
+  const list = only ? staff.filter((p) => only.includes(p.name)) : staff;
+  // Names on bills that are not in the directory (typed earlier) stay selectable.
+  const extra = (only ?? []).filter((n) => !staff.some((p) => p.name === n));
+  const known = !value || list.some((p) => p.name === value) || extra.includes(value);
+  const [typing, setTyping] = useState(false);
+  const onShift = list.filter((p) => p.onShiftToday);
+  const others = list.filter((p) => !p.onShiftToday);
+
+  if (typing) {
+    return (
+      <div className={cn('flex gap-1', className)}>
+        <input
+          autoFocus
+          aria-label={ariaLabel}
+          className="input !min-h-8 !py-1 text-xs"
+          placeholder="Type a name"
+          value={value}
+          onChange={(e) => onChange(e.target.value, null)}
+        />
+        {list.length > 0 && (
+          <button type="button" onClick={() => setTyping(false)} className="shrink-0 rounded-md px-2 text-[11px] font-semibold text-fg-muted hover:bg-surface-2 hover:text-fg">
+            List
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const label = (p: PosStaffDTO) =>
+    `${p.name}${p.jobTitle ? ` · ${p.jobTitle}` : ''}${p.onShiftToday && p.shiftType ? ` (${p.shiftType.toLowerCase()} shift)` : ''}`;
+
+  return (
+    <select
+      aria-label={ariaLabel}
+      className={cn('input !min-h-8 !py-1 text-xs', className)}
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === OTHER) {
+          setTyping(true);
+          onChange('', null);
+          return;
+        }
+        onChange(e.target.value, list.find((p) => p.name === e.target.value) ?? null);
+      }}
+    >
+      <option value="">{allowAll ?? placeholder}</option>
+      {value && !known && <option value={value}>{value}</option>}
+      {onShift.length > 0 && (
+        <optgroup label="On shift today">
+          {onShift.map((p) => (
+            <option key={p.id} value={p.name}>
+              {label(p)}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {others.length > 0 && (
+        <optgroup label={onShift.length ? 'Everyone else' : 'Staff'}>
+          {others.map((p) => (
+            <option key={p.id} value={p.name}>
+              {label(p)}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {extra.length > 0 && (
+        <optgroup label="Named on bills">
+          {extra.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {!only && <option value={OTHER}>Someone else…</option>}
+    </select>
   );
 }

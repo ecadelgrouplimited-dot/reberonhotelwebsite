@@ -137,9 +137,46 @@ export interface PosOrderDTO {
   notes: string | null;
   servedById?: string | null;
   servedByName: string | null;
+  tableId: string | null;
   items: PosOrderItemDTO[];
   createdAt: string;
+  /** When payment was taken; null while the bill is open. */
+  settledAt: string | null;
 }
+
+export interface PosTableDTO {
+  id: string;
+  name: string;
+  area: string;
+  seats: number;
+  sortOrder: number;
+  isActive: boolean;
+  notes: string | null;
+  /** Open (unpaid, not void) bills currently on this table. */
+  openBills: { id: string; orderNumber: string; totalMinor: string; currency: CurrencyCode; createdAt: string; servedByName: string | null }[];
+  billsToday: number;
+}
+
+/** Someone who can serve a bill: HR staff directory first, plus sign-in users with no HR record. */
+export interface PosStaffDTO {
+  id: string;
+  name: string;
+  jobTitle: string | null;
+  department: string | null;
+  userId: string | null;
+  onShiftToday: boolean;
+  shiftType: string | null;
+}
+
+export const zPosTableInput = z.object({
+  name: z.string().trim().min(1).max(60),
+  area: z.string().trim().min(1).max(60).default('Dining Room'),
+  seats: z.number().int().min(1).max(100).default(4),
+  sortOrder: z.number().int().min(0).max(9999).default(10),
+  isActive: z.boolean().default(true),
+  notes: z.string().trim().max(300).optional().nullable(),
+});
+export const zPosTablePatch = zPosTableInput.partial();
 
 export interface PosInHouseGuestDTO {
   reservationId: string;
@@ -155,6 +192,7 @@ export const zCreatePosOrderInput = z.object({
   outletId: z.string().uuid(),
   reservationId: z.string().uuid().optional().nullable(),
   tableOrRoom: z.string().trim().max(60).optional(),
+  tableId: z.string().uuid().optional().nullable(),
   customerName: z.string().trim().max(120).optional(),
   customerPhone: z.string().trim().max(40).optional(),
   servedByName: z.string().trim().max(120).optional(),
@@ -186,6 +224,7 @@ export const zAppendPosOrderItemsInput = z.object({
 
 export const zUpdatePosOrderInput = z.object({
   tableOrRoom: z.string().trim().max(60).optional().nullable(),
+  tableId: z.string().uuid().optional().nullable(),
   customerName: z.string().trim().max(120).optional().nullable(),
   customerPhone: z.string().trim().max(40).optional().nullable(),
   discountMinor: z.string().regex(/^\d+$/).optional(),

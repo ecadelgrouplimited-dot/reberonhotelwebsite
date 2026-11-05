@@ -29,6 +29,8 @@ import {
   zUpdatePosOrderInput,
   zUpdatePosOrderStatusInput,
   zUpdateQuotationStatusInput,
+  zPosTableInput,
+  zPosTablePatch,
 } from '@reberon/contracts';
 import { CurrentUser, Requires, type AuthUser } from '../../common/auth.js';
 import { ZodPipe } from '../../common/zod.pipe.js';
@@ -36,6 +38,8 @@ import { env } from '../../config.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import type { Paper } from '../documents/render.js';
 import { OperationsService } from './operations.service.js';
+
+const zReorderTables = z.object({ ids: z.array(z.string().uuid()).min(1).max(500) });
 
 @Controller('v1/admin')
 export class OperationsController {
@@ -188,6 +192,53 @@ export class OperationsController {
   @Requires('pos:operate')
   deleteItem(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.ops.deleteItem(id, user);
+  }
+
+  @Get('pos/tables')
+  @Requires('pos:operate')
+  tables(@Query('all') all?: string) {
+    return this.ops.tables(all === '1');
+  }
+
+  @Post('pos/tables')
+  @Requires('pos:operate')
+  createTable(
+    @Body(new ZodPipe(zPosTableInput)) body: z.infer<typeof zPosTableInput>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.createTable(body, user);
+  }
+
+  @Post('pos/tables/reorder')
+  @HttpCode(200)
+  @Requires('pos:operate')
+  reorderTables(
+    @Body(new ZodPipe(zReorderTables)) body: z.infer<typeof zReorderTables>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.reorderTables(body.ids, user);
+  }
+
+  @Patch('pos/tables/:id')
+  @Requires('pos:operate')
+  updateTable(
+    @Param('id') id: string,
+    @Body(new ZodPipe(zPosTablePatch)) body: z.infer<typeof zPosTablePatch>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ops.updateTable(id, body, user);
+  }
+
+  @Delete('pos/tables/:id')
+  @Requires('pos:operate')
+  deleteTable(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ops.deleteTable(id, user);
+  }
+
+  @Get('pos/staff')
+  @Requires('pos:operate')
+  posStaff() {
+    return this.ops.posStaff();
   }
 
   /* ───── Health Club & Spa (Gym, Steam, Sauna) ───── */

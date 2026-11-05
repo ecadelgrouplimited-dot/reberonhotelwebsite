@@ -14,6 +14,8 @@ import type {
   PosInHouseGuestDTO,
   PosOrderDTO,
   PosOutletDTO,
+  PosStaffDTO,
+  PosTableDTO,
   QuotationDTO,
   RequisitionDTO,
   StaffAnnouncementDTO,
@@ -21,6 +23,7 @@ import type {
   TerminalDeviceDTO,
 } from '@reberon/contracts';
 import { z } from 'zod';
+import { hotelToday } from '@reberon/utils';
 import {
   zAppendPosOrderItemsInput,
   zAdjustStockCountInput,
@@ -38,6 +41,8 @@ import {
   zCreateQuotationInput,
   zCreateRequisitionInput,
   zHandoverPosShiftInput,
+  zPosTableInput,
+  zPosTablePatch,
   zRecordStockMovementInput,
   zReviewRequisitionInput,
   zSettlePosOrderInput,
@@ -122,17 +127,204 @@ export class OperationsService {
     }));
   }
 
+  /** Every open bill, plus anything opened or paid in the last 7 days. */
   async orders(q: { outletId?: string; status?: string } = {}): Promise<PosOrderDTO[]> {
+    const since = new Date(Date.now() - 7 * 86_400_000);
     const rows = await this.prisma.posOrder.findMany({
       where: {
         ...(q.outletId ? { outletId: q.outletId } : {}),
         ...(q.status ? { status: q.status as any } : {}),
+        OR: [
+          { settledAt: null, documentId: null, folioLineId: null, status: { not: 'CANCELLED' } },
+          { createdAt: { gte: since } },
+          { settledAt: { gte: since } },
+        ],
       },
       include: { outlet: true, items: true },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 400,
     });
     return rows.map((r) => this.mapOrder(r));
+  }
+
+  // ───────────── Tables ─────────────
+
+  private async resolveTable(tableId: string | null | undefined) {
+    if (!tableId) return null;
+    const t = await this.prisma.posTable.findUnique({ where: { id: tableId } });
+    if (!t) throw notFound('Table');
+    return t;
+  }
+
+  private assertTableManager(actor: AuthUser) {
+    if (actor.role !== 'OWNER' && actor.role !== 'MANAGER') {
+      throw forbidden('Only the owner or a manager can change tables');
+    }
+  }
+
+  async tables(includeInactive = false): Promise<PosTableDTO[]> {
+    const todayStart = new Date(`${hotelToday()}T00:00:00+03:00`);
+    const rows = await this.prisma.posTable.findMany({
+      where: includeInactive ? {} : { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: {
+        orders: {
+          where: {
+            status: { not: 'CANCELLED' },
+            OR: [{ settledAt: null, documentId: null, folioLineId: null }, { createdAt: { gte: todayStart } }],
+          },
+          select: {
+            id: true,
+            orderNumber: true,
+            totalMinor: true,
+            currency: true,
+            createdAt: true,
+            servedByName: true,
+            settledAt: true,
+            documentId: true,
+            folioLineId: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    return rows.map((t) => ({
+      id: t.id,
+      name: t.name,
+      area: t.area,
+      seats: t.seats,
+      sortOrder: t.sortOrder,
+      isActive: t.isActive,
+      notes: t.notes,
+      openBills: t.orders
+        .filter((o) => !o.settledAt && !o.documentId && !o.folioLineId && o.totalMinor > 0n)
+        .map((o) => ({
+          id: o.id,
+          orderNumber: o.orderNumber,
+          totalMinor: o.totalMinor.toString(),
+          currency: o.currency as CurrencyCode,
+          createdAt: o.createdAt.toISOString(),
+          servedByName: o.servedByName,
+        })),
+      billsToday: t.orders.filter((o) => o.createdAt >= todayStart).length,
+    }));
+  }
+
+  async createTable(input: z.infer<typeof zPosTableInput>, actor: AuthUser): Promise<PosTableDTO> {
+    this.assertTableManager(actor);
+    if (await this.prisma.posTable.findUnique({ where: { name: input.name } })) {
+      throw badRequest(`A table called ${input.name} already exists`);
+    }
+    const t = await this.prisma.posTable.create({ data: { ...input, notes: input.notes ?? null } });
+    await this.audit.record({
+      actor,
+      action: 'pos.table.create',
+      entityType: 'PosTable',
+      entityId: t.id,
+      summary: `Added table ${t.name} (${t.area}, ${t.seats} seats)`,
+      after: input,
+    });
+    return (await this.tables(true)).find((x) => x.id === t.id)!;
+  }
+
+  async updateTable(id: string, input: z.infer<typeof zPosTablePatch>, actor: AuthUser): Promise<PosTableDTO> {
+    this.assertTableManager(actor);
+    const before = await this.prisma.posTable.findUnique({ where: { id } });
+    if (!before) throw notFound('Table');
+    if (input.name && input.name !== before.name && (await this.prisma.posTable.findUnique({ where: { name: input.name } }))) {
+      throw badRequest(`A table called ${input.name} already exists`);
+    }
+    await this.prisma.posTable.update({ where: { id }, data: input });
+    await this.audit.record({
+      actor,
+      action: 'pos.table.update',
+      entityType: 'PosTable',
+      entityId: id,
+      summary: `Updated table ${input.name ?? before.name}`,
+      before: { name: before.name, area: before.area, seats: before.seats, sortOrder: before.sortOrder, isActive: before.isActive },
+      after: input,
+    });
+    return (await this.tables(true)).find((x) => x.id === id)!;
+  }
+
+  /** Reorder in one go: ids in display order. */
+  async reorderTables(ids: string[], actor: AuthUser): Promise<PosTableDTO[]> {
+    this.assertTableManager(actor);
+    await this.prisma.$transaction(
+      ids.map((id, i) => this.prisma.posTable.update({ where: { id }, data: { sortOrder: (i + 1) * 10 } })),
+    );
+    await this.audit.record({
+      actor,
+      action: 'pos.table.reorder',
+      entityType: 'PosTable',
+      entityId: actor.id,
+      summary: `Reordered ${ids.length} tables`,
+    });
+    return this.tables(true);
+  }
+
+  async deleteTable(id: string, actor: AuthUser): Promise<{ ok: true }> {
+    this.assertTableManager(actor);
+    const t = await this.prisma.posTable.findUnique({ where: { id } });
+    if (!t) throw notFound('Table');
+    const open = await this.prisma.posOrder.count({
+      where: { tableId: id, settledAt: null, documentId: null, folioLineId: null, status: { not: 'CANCELLED' } },
+    });
+    if (open) throw badRequest(`${t.name} has ${open} open bill(s) — settle or move them first`);
+    // Past bills keep the table name they were printed with (tableOrRoom); the link is cleared.
+    await this.prisma.posTable.delete({ where: { id } });
+    await this.audit.record({
+      actor,
+      action: 'pos.table.delete',
+      entityType: 'PosTable',
+      entityId: id,
+      summary: `Deleted table ${t.name}`,
+      before: { name: t.name, area: t.area, seats: t.seats },
+    });
+    return { ok: true };
+  }
+
+  /** People who can serve a bill: active HR staff (on shift today first), plus sign-in users with no HR record. */
+  async posStaff(): Promise<PosStaffDTO[]> {
+    const today = new Date(`${hotelToday()}T00:00:00.000Z`);
+    const [profiles, users] = await Promise.all([
+      this.prisma.staffProfile.findMany({
+        where: { status: 'ACTIVE' },
+        include: { shifts: { where: { date: today }, select: { shiftType: true, attendanceStatus: true } } },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      }),
+      this.prisma.user.findMany({
+        where: { status: 'ACTIVE' },
+        select: { id: true, name: true, jobTitle: true, role: true },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+    const linked = new Set(profiles.map((p) => p.userId).filter(Boolean));
+    const onShift = (shifts: { attendanceStatus: string }[]) =>
+      shifts.some((sh) => !['ABSENT', 'ON_LEAVE', 'EXCUSED'].includes(sh.attendanceStatus));
+    const staff: PosStaffDTO[] = [
+      ...profiles.map((p) => ({
+        id: p.id,
+        name: [p.firstName, p.lastName].filter(Boolean).join(' '),
+        jobTitle: p.jobTitle,
+        department: p.departmentCode,
+        userId: p.userId,
+        onShiftToday: onShift(p.shifts),
+        shiftType: p.shifts[0]?.shiftType ?? null,
+      })),
+      ...users
+        .filter((u) => !linked.has(u.id))
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+          jobTitle: u.jobTitle,
+          department: u.role,
+          userId: u.id,
+          onShiftToday: false,
+          shiftType: null,
+        })),
+    ];
+    return staff.sort((a, b) => Number(b.onShiftToday) - Number(a.onShiftToday) || a.name.localeCompare(b.name));
   }
 
   /** UGX and USD are never converted: a USD bill can only carry items with a USD price. */
@@ -155,7 +347,7 @@ export class OperationsService {
       reservationId: r.reservationId,
       folioLineId: r.folioLineId ?? null,
       documentId: r.documentId,
-      isSettled: Boolean(r.documentId || r.folioLineId || r.totalMinor === 0n),
+      isSettled: Boolean(r.settledAt || r.documentId || r.folioLineId || r.totalMinor === 0n),
       tableOrRoom: r.tableOrRoom,
       customerName: r.customerName,
       customerPhone: r.customerPhone,
@@ -168,6 +360,7 @@ export class OperationsService {
       notes: r.notes,
       servedById: r.servedById ?? null,
       servedByName: r.servedByName,
+      tableId: r.tableId ?? null,
       items: r.items.map((i: any) => ({
         id: i.id,
         itemId: i.itemId,
@@ -178,6 +371,7 @@ export class OperationsService {
         notes: i.notes,
       })),
       createdAt: r.createdAt.toISOString(),
+      settledAt: r.settledAt ? r.settledAt.toISOString() : null,
     };
   }
 
@@ -258,6 +452,7 @@ export class OperationsService {
 
     const discount = BigInt(input.discountMinor || '0');
     const total = subtotal > discount ? subtotal - discount : 0n;
+    const table = await this.resolveTable(input.tableId);
     const orderNumber = await this.nextSeq('ORD');
     const settleNow = input.settleNow !== false;
 
@@ -335,7 +530,9 @@ export class OperationsService {
         reservationId: input.reservationId ?? null,
         folioLineId,
         documentId,
-        tableOrRoom: input.tableOrRoom ?? null,
+        settledAt: folioLineId || documentId || (settleNow && total === 0n) ? new Date() : null,
+        tableId: table?.id ?? null,
+        tableOrRoom: input.tableOrRoom || table?.name || null,
         customerName: guestName,
         customerPhone: guestPhone,
         status: defaultStatus,
@@ -591,6 +788,7 @@ export class OperationsService {
         totalMinor: total,
         folioLineId,
         documentId,
+        settledAt: new Date(),
         status: 'COMPLETED',
       },
       include: { outlet: true, items: true },
@@ -717,6 +915,7 @@ export class OperationsService {
         where: { id: orderId },
         data: {
           ...(input.tableOrRoom !== undefined ? { tableOrRoom: input.tableOrRoom } : {}),
+          ...(input.tableId !== undefined ? { tableId: (await this.resolveTable(input.tableId))?.id ?? null } : {}),
           ...(input.customerName !== undefined ? { customerName: input.customerName || 'Walk-in Guest' } : {}),
           ...(input.customerPhone !== undefined ? { customerPhone: input.customerPhone } : {}),
           ...(input.notes !== undefined ? { notes: input.notes } : {}),
@@ -763,6 +962,7 @@ export class OperationsService {
       status: { not: 'CANCELLED' },
       documentId: null,
       folioLineId: null,
+      settledAt: null,
     };
     if (input.orderIds && input.orderIds.length > 0) {
       whereClause.id = { in: input.orderIds };

@@ -1,16 +1,15 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowRightLeft, Printer, Trophy } from 'lucide-react';
-import type { PosOrderDTO, PosPaymentMethod } from '@reberon/contracts';
+import { ArrowRight, ArrowRightLeft, Printer, Trophy } from 'lucide-react';
+import type { PosOrderDTO, PosPaymentMethod, PosStaffDTO } from '@reberon/contracts';
 import { ApiError, post } from '@/lib/api';
 import { money } from '@/lib/money';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { TextInput } from '@/components/ui/field';
-import { PAYMENT_LABELS } from './pos-kit';
+import { PAYMENT_LABELS, StaffPicker } from './pos-kit';
 
 interface WaiterStat {
   openCount: number;
@@ -20,40 +19,49 @@ interface WaiterStat {
 }
 
 /**
- * Today's Z-report (UGX bills; USD is listed separately, never summed in) plus the waiter
- * handover that moves open bills to the incoming shift.
+ * Today's Z-report — bills paid today by payment time, UGX summed, USD shown separately and
+ * never converted — plus the handover that moves open bills to the incoming shift.
  */
 export function ShiftDialog({
   open,
   onClose,
-  todayOrders,
+  paidToday,
+  voidedToday,
   openTabs,
+  staff,
   defaultFrom,
 }: {
   open: boolean;
   onClose: () => void;
-  todayOrders: PosOrderDTO[];
+  paidToday: PosOrderDTO[];
+  voidedToday: number;
   openTabs: PosOrderDTO[];
+  staff: PosStaffDTO[];
   defaultFrom: string;
 }) {
   const qc = useQueryClient();
-  const [from, setFrom] = useState(defaultFrom);
-  const [to, setTo] = useState('');
+  const holders = useMemo(
+    () => [...new Set(openTabs.map((o) => o.servedByName || 'Staff'))].sort(),
+    [openTabs],
+  );
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState<{ name: string; person: PosStaffDTO | null }>({ name: '', person: null });
   const [notes, setNotes] = useState('');
 
+  useEffect(() => {
+    if (open) setFrom(holders.includes(defaultFrom) ? defaultFrom : '');
+  }, [open, holders, defaultFrom]);
+
   const report = useMemo(() => {
-    const paid = todayOrders.filter((o) => o.isSettled && o.status !== 'CANCELLED');
-    const voided = todayOrders.filter((o) => o.status === 'CANCELLED').length;
-    const ugxPaid = paid.filter((o) => o.currency === 'UGX');
-    const usdPaidMinor = paid.filter((o) => o.currency === 'USD').reduce((s, o) => s + BigInt(o.totalMinor), 0n);
+    const ugxPaid = paidToday.filter((o) => o.currency === 'UGX');
+    const usdPaidMinor = paidToday.filter((o) => o.currency === 'USD').reduce((s, o) => s + BigInt(o.totalMinor), 0n);
     const paidTotal = ugxPaid.reduce((s, o) => s + BigInt(o.totalMinor), 0n);
     const waitingTotal = openTabs.filter((o) => o.currency === 'UGX').reduce((s, o) => s + BigInt(o.totalMinor), 0n);
 
     const byMethod = new Map<PosPaymentMethod, bigint>();
     const items = new Map<string, { qty: number; total: bigint }>();
     for (const o of ugxPaid) {
-      const amt = BigInt(o.totalMinor);
-      byMethod.set(o.paymentMethod, (byMethod.get(o.paymentMethod) ?? 0n) + amt);
+      byMethod.set(o.paymentMethod, (byMethod.get(o.paymentMethod) ?? 0n) + BigInt(o.totalMinor));
       for (const it of o.items) {
         const prev = items.get(it.itemName) ?? { qty: 0, total: 0n };
         items.set(it.itemName, { qty: prev.qty + it.quantity, total: prev.total + BigInt(it.totalMinor) });
@@ -81,23 +89,31 @@ export function ShiftDialog({
     }
 
     const topItems = [...items.entries()].sort((a, b) => b[1].qty - a[1].qty).slice(0, 6);
-    return { paid, voided, paidTotal, usdPaidMinor, waitingTotal, byMethod, byWaiter, topItems };
-  }, [todayOrders, openTabs]);
+    return { paidTotal, usdPaidMinor, waitingTotal, byMethod, byWaiter, topItems };
+  }, [paidToday, openTabs]);
+
+  const moving = openTabs.filter((o) => !from || (o.servedByName || 'Staff') === from);
+  const samePerson = !!from && from === to.name;
 
   const handover = useMutation({
     mutationFn: () =>
       post<{ transferredCount: number; toStaffName: string }>('/pos/orders/handover-shift', {
-        fromServedByName: from.trim() || undefined,
-        toStaffName: to.trim(),
+        fromServedByName: from || undefined,
+        orderIds: moving.map((o) => o.id),
+        toStaffId: to.person?.userId ?? null,
+        toStaffName: to.name.trim(),
         notes: notes.trim() || undefined,
       }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['pos', 'orders'] });
-      setTo('');
+      qc.invalidateQueries({ queryKey: ['pos', 'tables'] });
+      qc.invalidateQueries({ queryKey: ['announcements'] });
+      setTo({ name: '', person: null });
       setNotes('');
+      setFrom('');
       toast.success(`${res.transferredCount} open bill(s) handed to ${res.toStaffName}`);
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not hand over shift'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not hand over the shift'),
   });
 
   const maxMethod = [...report.byMethod.values()].reduce((m, v) => (v > m ? v : m), 0n);
@@ -108,14 +124,14 @@ export function ShiftDialog({
       onClose={onClose}
       size="lg"
       title="Shift report & handover"
-      description="Today's takings by method, outlet and waiter, and handing open bills to the next shift."
+      description="Bills paid today by method and waiter, and handing open bills to the next shift."
     >
       <div className="grid gap-4">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <Tile label="Paid today" value={money(report.paidTotal, 'UGX')} tone="text-success" />
           <Tile label="Waiting payment" value={money(report.waitingTotal, 'UGX')} tone="text-warning" />
-          <Tile label="Receipts" value={String(report.paid.length)} />
-          <Tile label="Open bills" value={String(openTabs.length)} sub={report.voided ? `${report.voided} voided today` : undefined} />
+          <Tile label="Receipts today" value={String(paidToday.length)} />
+          <Tile label="Open bills" value={String(openTabs.length)} sub={voidedToday ? `${voidedToday} voided today` : undefined} />
         </div>
         {report.usdPaidMinor > 0n && (
           <p className="-mt-2 text-[11.5px] text-fg-muted">
@@ -192,7 +208,7 @@ export function ShiftDialog({
                 </thead>
                 <tbody className="divide-y divide-line">
                   {[...report.byWaiter.entries()].map(([waiter, s]) => (
-                    <tr key={waiter}>
+                    <tr key={waiter} className={cn(from === waiter && 'bg-accent/5')}>
                       <td className="py-2 pr-2 font-semibold">{waiter}</td>
                       <td className="px-2 py-2 font-mono tabular text-warning">
                         {s.openCount} · {money(s.openTotal, 'UGX')}
@@ -230,24 +246,68 @@ export function ShiftDialog({
             <ArrowRightLeft className="size-3.5" /> Change of shift
           </h4>
           <p className="mb-3 mt-0.5 text-[11.5px] text-fg-muted">
-            Moves the outgoing waiter&apos;s open bills to the incoming waiter and posts a handover note.
+            Pick who is leaving and who is taking over. Their open bills move across and a handover note is posted.
           </p>
-          <div className="grid gap-2.5 sm:grid-cols-3">
-            <TextInput label="From" placeholder="Blank = all open bills" value={from} onChange={(e) => setFrom(e.target.value)} />
-            <TextInput label="To" required placeholder="Incoming waiter" value={to} onChange={(e) => setTo(e.target.value)} />
-            <TextInput label="Note" placeholder="e.g. Table 4 paying by MoMo" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-          <div className="mt-3 flex justify-end">
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              loading={handover.isPending}
-              disabled={to.trim().length < 2 || openTabs.length === 0}
-            >
-              Hand over open bills
-            </Button>
-          </div>
+          {openTabs.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-line px-3 py-3 text-center text-[12px] text-fg-muted">
+              No open bills to hand over — the incoming waiter starts fresh.
+            </p>
+          ) : (
+            <>
+              <div className="grid items-end gap-2.5 sm:grid-cols-[1fr_auto_1fr]">
+                <label className="grid gap-1.5 text-[12px] font-medium">
+                  Outgoing
+                  <StaffPicker
+                    ariaLabel="Outgoing waiter"
+                    staff={staff}
+                    only={holders}
+                    allowAll={`Everyone (${openTabs.length} open bills)`}
+                    value={from}
+                    onChange={(n) => setFrom(n)}
+                  />
+                </label>
+                <ArrowRight className="mb-2 hidden size-4 text-fg-subtle sm:block" />
+                <label className="grid gap-1.5 text-[12px] font-medium">
+                  Incoming
+                  <StaffPicker
+                    ariaLabel="Incoming waiter"
+                    staff={staff}
+                    placeholder="Choose who takes over"
+                    value={to.name}
+                    onChange={(name, person) => setTo({ name, person })}
+                  />
+                </label>
+              </div>
+              <input
+                className="input mt-2.5 !min-h-8 !py-1 text-xs"
+                placeholder="Handover note (optional) — e.g. Table 4 paying by MoMo"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="min-w-0 text-[11.5px] text-fg-muted">
+                  {samePerson ? (
+                    <span className="text-danger">Choose a different person to take over.</span>
+                  ) : (
+                    <>
+                      Moves <strong className="text-fg">{moving.length}</strong> bill{moving.length === 1 ? '' : 's'}
+                      {moving.length > 0 && `: ${moving.slice(0, 4).map((o) => o.tableOrRoom || o.orderNumber).join(', ')}${moving.length > 4 ? '…' : ''}`}
+                    </>
+                  )}
+                </p>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  icon={<ArrowRightLeft className="size-3.5" />}
+                  loading={handover.isPending}
+                  disabled={to.name.trim().length < 2 || moving.length === 0 || samePerson}
+                >
+                  Hand over {moving.length || ''}
+                </Button>
+              </div>
+            </>
+          )}
         </form>
 
         <div className="flex justify-end gap-2">

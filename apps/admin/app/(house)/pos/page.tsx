@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
+  Armchair,
   ArrowLeft,
   BarChart3,
   ChefHat,
@@ -39,6 +40,8 @@ import type {
   PosOutletDTO,
   PosOutletType,
   PosPaymentMethod,
+  PosStaffDTO,
+  PosTableDTO,
 } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useMe } from '@/lib/providers';
@@ -58,7 +61,7 @@ import {
   PAYMENT_LABELS,
   PayMethodPicker,
   QUICK_MODIFIERS,
-  QUICK_SPOTS,
+  StaffPicker,
   businessDay,
   parseMajor,
   printPosSlip,
@@ -70,6 +73,7 @@ import { BillCard, KitchenBoard } from '@/components/pos/boards';
 import { SettleDialog } from '@/components/pos/settle-dialog';
 import { CategoryDialog, MenuItemDialog, type PosStockItem } from '@/components/pos/menu-dialogs';
 import { ShiftDialog } from '@/components/pos/shift-dialog';
+import { FloorView, TableChips } from '@/components/pos/floor';
 
 interface CartLine {
   item: PosItemDTO;
@@ -77,7 +81,7 @@ interface CartLine {
   notes: string;
 }
 
-type View = 'SELL' | 'BILLS' | 'KITCHEN';
+type View = 'SELL' | 'TABLES' | 'BILLS' | 'KITCHEN';
 type BillFilter = 'OPEN' | 'PAID' | 'ALL';
 
 const OUTLET_ICON: Record<PosOutletType, LucideIcon> = {
@@ -95,6 +99,7 @@ export default function PosPage() {
   const me = useMe();
   const confirm = useConfirm();
   const isOwner = me.role === 'OWNER';
+  const canManageTables = isOwner || me.role === 'MANAGER';
   const now = useNow();
   const searchRef = useRef<HTMLInputElement>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
@@ -115,6 +120,7 @@ export default function PosPage() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [tableOrRoom, setTableOrRoom] = useState('');
+  const [tableId, setTableId] = useState<string | null>(null);
   const [orderNotes, setOrderNotes] = useState('');
   const [discountPercent, setDiscountPercent] = useState(0);
   const [customDiscount, setCustomDiscount] = useState('');
@@ -148,6 +154,16 @@ export default function PosPage() {
   const { data: inHouseGuests } = useQuery({
     queryKey: ['pos', 'in-house-guests'],
     queryFn: () => get<PosInHouseGuestDTO[]>('/pos/in-house-guests'),
+  });
+  const { data: tables } = useQuery({
+    queryKey: ['pos', 'tables'],
+    queryFn: () => get<PosTableDTO[]>('/pos/tables'),
+    refetchInterval: 15_000,
+  });
+  const { data: staff } = useQuery({
+    queryKey: ['pos', 'staff'],
+    queryFn: () => get<PosStaffDTO[]>('/pos/staff'),
+    staleTime: 5 * 60_000,
   });
   const { data: stockItems } = useQuery({
     queryKey: ['pos', 'stock-items'],
@@ -188,13 +204,17 @@ export default function PosPage() {
     () => (orders ?? []).filter((o) => !o.isSettled && o.status !== 'CANCELLED'),
     [orders],
   );
-  const todayOrders = useMemo(
-    () => (orders ?? []).filter((o) => businessDay(o.createdAt) === today),
+  // "Today" for money means paid today, whenever the bill was opened.
+  const paidToday = useMemo(
+    () =>
+      (orders ?? []).filter(
+        (o) => o.isSettled && o.status !== 'CANCELLED' && businessDay(o.settledAt ?? o.createdAt) === today,
+      ),
     [orders, today],
   );
-  const paidToday = useMemo(
-    () => todayOrders.filter((o) => o.isSettled && o.status !== 'CANCELLED'),
-    [todayOrders],
+  const voidedToday = useMemo(
+    () => (orders ?? []).filter((o) => o.status === 'CANCELLED' && businessDay(o.createdAt) === today).length,
+    [orders, today],
   );
   const kitchenQueue = useMemo(
     () => (orders ?? []).filter((o) => ACTIVE_KITCHEN.includes(o.status)),
@@ -223,7 +243,10 @@ export default function PosPage() {
   const itemCount = cart.reduce((a, l) => a + l.quantity, 0);
   const tendered = paymentMethod === 'CASH' ? parseMajor(cashTendered, currency) : null;
   const shortPaid = tendered !== null && tendered > 0n && tendered < total;
-  const busyTables = new Set(openTabs.map((o) => o.tableOrRoom).filter(Boolean));
+  const pickedTable = (tables ?? []).find((t) => t.id === tableId) ?? null;
+  const pickedTableBill = pickedTable?.openBills[0]
+    ? openTabs.find((o) => o.id === pickedTable.openBills[0]!.id) ?? null
+    : null;
   const ticketLocked = !!(editingOpenOrder || targetOpenOrder);
 
   // ── Keyboard: "/" jumps to search wherever focus is not already in a field ──
@@ -290,6 +313,7 @@ export default function PosPage() {
     setCustomerName('');
     setCustomerPhone('');
     setTableOrRoom('');
+    setTableId(null);
     setOrderNotes('');
     setDiscountPercent(0);
     setCustomDiscount('');
@@ -312,6 +336,7 @@ export default function PosPage() {
     setTargetOpenOrder(o);
     setCurrency(o.currency);
     setTableOrRoom(o.tableOrRoom ?? '');
+    setTableId(o.tableId);
     setCustomerName(o.customerName ?? '');
     focusOutletOf(o);
     toast.info(`Adding a round to ${o.tableOrRoom || o.orderNumber}`);
@@ -340,6 +365,7 @@ export default function PosPage() {
       })),
     );
     setTableOrRoom(o.tableOrRoom ?? '');
+    setTableId(o.tableId);
     setCustomerName(o.customerName ?? '');
     setCustomerPhone(o.customerPhone ?? '');
     setServedByName(o.servedByName || me.name || 'Staff');
@@ -356,6 +382,7 @@ export default function PosPage() {
       if (editingOpenOrder) {
         return patch<PosOrderDTO>(`/pos/orders/${editingOpenOrder.id}`, {
           tableOrRoom: tableOrRoom.trim() || null,
+          tableId,
           customerName: customerName.trim() || null,
           customerPhone: customerPhone.trim() || null,
           servedByName: servedByName.trim() || me.name,
@@ -377,6 +404,7 @@ export default function PosPage() {
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         tableOrRoom: tableOrRoom.trim() || undefined,
+        tableId: tableId ?? undefined,
         servedByName: servedByName.trim() || me.name,
         paymentMethod: settleNow ? paymentMethod : 'CASH',
         currency,
@@ -392,6 +420,7 @@ export default function PosPage() {
       qc.invalidateQueries({ queryKey: ['documents'] });
       qc.invalidateQueries({ queryKey: ['inventory'] });
       qc.invalidateQueries({ queryKey: ['admin-pulse'] });
+      qc.invalidateQueries({ queryKey: ['pos', 'tables'] });
       const where = order.tableOrRoom || order.orderNumber;
       const printBill = { label: 'Print bill', onClick: () => printPosSlip(order.id, 'BILL') };
       if (editingOpenOrder) toast.success(`${where} bill updated`, { action: printBill });
@@ -414,6 +443,7 @@ export default function PosPage() {
     onSuccess: (o) => {
       qc.invalidateQueries({ queryKey: ['pos', 'orders'] });
       qc.invalidateQueries({ queryKey: ['pos', 'outlets'] });
+      qc.invalidateQueries({ queryKey: ['pos', 'tables'] });
       if (o.status === 'READY') toast.success(`${o.tableOrRoom || o.orderNumber} is ready to serve`);
       if (o.status === 'CANCELLED') toast.success(`${o.orderNumber} voided`);
     },
@@ -480,6 +510,7 @@ export default function PosPage() {
 
   const modes: { id: View; label: string; icon: LucideIcon; count?: number; hot?: boolean }[] = [
     { id: 'SELL', label: 'Sell', icon: ShoppingBag, count: cart.length ? itemCount : undefined },
+    { id: 'TABLES', label: 'Tables', icon: Armchair, count: (tables ?? []).filter((t) => t.openBills.length).length || undefined },
     { id: 'BILLS', label: 'Bills', icon: Receipt, count: openTabs.length || undefined },
     { id: 'KITCHEN', label: 'Kitchen', icon: ChefHat, count: kitchenQueue.length || undefined, hot: readyCount > 0 },
   ];
@@ -544,6 +575,23 @@ export default function PosPage() {
 
       {isLoading ? (
         <Skeleton className="h-96" />
+      ) : view === 'TABLES' ? (
+        <FloorView
+          tables={tables ?? []}
+          openTabs={openTabs}
+          now={now}
+          canManage={canManageTables}
+          onNewOrder={(t) => {
+            resetTicket();
+            setTableId(t.id);
+            setTableOrRoom(t.name);
+            setView('SELL');
+            toast.info(`New order for ${t.name} — tap items to add them`);
+          }}
+          onCharge={setSettleOrder}
+          onRound={startRound}
+          onEdit={editBill}
+        />
       ) : view === 'KITCHEN' ? (
         ordersLoading ? (
           <Skeleton className="h-80" />
@@ -995,30 +1043,47 @@ export default function PosPage() {
                 {/* Where & who */}
                 {!targetOpenOrder && (
                   <div className="space-y-2">
-                    <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5">
-                      {QUICK_SPOTS.map((sp) => (
-                        <button
-                          key={sp}
-                          type="button"
-                          onClick={() => setTableOrRoom(sp)}
-                          title={busyTables.has(sp) ? 'Has an open bill' : undefined}
-                          className={cn(
-                            'relative shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold transition',
-                            tableOrRoom === sp ? 'bg-accent text-white' : 'bg-surface-2 text-fg-muted hover:text-fg',
-                          )}
-                        >
-                          {sp}
-                          {busyTables.has(sp) && <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-amber-500" />}
+                    <TableChips
+                      tables={tables ?? []}
+                      value={tableId}
+                      onPick={(t) => {
+                        setTableId(t.id);
+                        setTableOrRoom(t.name);
+                      }}
+                    />
+                    {pickedTableBill && !editingOpenOrder && (
+                      <div className="fade-in flex items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11.5px]">
+                        <span className="min-w-0 truncate">
+                          <strong>{pickedTable!.name}</strong> already has a bill · {money(pickedTableBill.totalMinor, pickedTableBill.currency)}
+                        </span>
+                        <button type="button" onClick={() => startRound(pickedTableBill)} className="shrink-0 font-bold text-accent hover:underline">
+                          Add to it
                         </button>
-                      ))}
-                    </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
-                      <input className="input !min-h-8 !py-1 text-xs" aria-label="Table or spot" placeholder="Table / spot" value={tableOrRoom} onChange={(e) => setTableOrRoom(e.target.value)} />
+                      <input
+                        className="input !min-h-8 !py-1 text-xs"
+                        aria-label="Table or spot"
+                        placeholder="Table / spot"
+                        value={tableOrRoom}
+                        onChange={(e) => {
+                          setTableOrRoom(e.target.value);
+                          const match = (tables ?? []).find((t) => t.name.toLowerCase() === e.target.value.trim().toLowerCase());
+                          setTableId(match?.id ?? null);
+                        }}
+                      />
                       <input className="input !min-h-8 !py-1 text-xs" aria-label="Guest name" placeholder="Guest name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
                     </div>
                     <label className="flex items-center gap-2 text-[11px] text-fg-muted">
                       <span className="shrink-0">Served by</span>
-                      <input className="input !min-h-7 !py-0.5 text-xs" value={servedByName} onChange={(e) => setServedByName(e.target.value)} />
+                      <StaffPicker
+                        ariaLabel="Served by"
+                        staff={staff ?? []}
+                        value={servedByName}
+                        onChange={(n) => setServedByName(n)}
+                        className="min-w-0 flex-1"
+                      />
                     </label>
                   </div>
                 )}
@@ -1258,8 +1323,10 @@ export default function PosPage() {
       <ShiftDialog
         open={shiftOpen}
         onClose={() => setShiftOpen(false)}
-        todayOrders={todayOrders}
+        paidToday={paidToday}
+        voidedToday={voidedToday}
         openTabs={openTabs}
+        staff={staff ?? []}
         defaultFrom={me.name || ''}
       />
 

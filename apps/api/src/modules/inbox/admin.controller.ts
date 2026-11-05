@@ -280,7 +280,7 @@ export class DashboardController {
       canPos ? this.prisma.posOrder.count({ where: { status: { in: ['PENDING', 'PREPARING', 'READY'] } } }) : Promise.resolve(0),
       canPos
         ? this.prisma.posOrder.findMany({
-            where: { createdAt: { gte: todayKampalaStart }, status: 'COMPLETED' },
+            where: { settledAt: { gte: todayKampalaStart }, status: { not: 'CANCELLED' } },
             select: { totalMinor: true, currency: true },
           })
         : Promise.resolve([]),
