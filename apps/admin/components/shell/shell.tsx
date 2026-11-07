@@ -31,6 +31,10 @@ import { NAV, type NavBadgeKey } from './nav';
 import { CommandPalette } from './command-palette';
 import { WebsiteHealth } from './website-health';
 import { LiveAlertCenterButton } from './live-alerts';
+import { ApiError } from '@/lib/api';
+import { PwaProvider, usePwa } from '@/components/pwa/pwa-provider';
+import { ConnectionPill, InstallNudge, OfflineBanner, SyncCenter, UpdateBar } from '@/components/pwa/pwa-ui';
+import { CloudOff } from 'lucide-react';
 
 export interface BadgeInfo {
   count: number;
@@ -605,6 +609,7 @@ function AccountMenu() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const qc = useQueryClient();
+  const pwa = usePwa();
   const [dark, setDark] = useState(false);
   useEffect(() => setDark(document.documentElement.getAttribute('data-theme') === 'dark'), []);
   if (!me) return <Skeleton className="size-9 rounded-full" />;
@@ -663,7 +668,9 @@ function AccountMenu() {
                 type="button"
                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-danger hover:bg-danger/10"
                 onClick={async () => {
+                  if (pwa && pwa.pending > 0 && !window.confirm(`${pwa.pending} change(s) made offline have not synced yet. Signing out now discards them from this device. Sign out anyway?`)) return;
                   await post('/auth/logout').catch(() => undefined);
+                  await pwa?.clearOfflineData().catch(() => undefined);
                   qc.clear();
                   router.replace('/login');
                 }}
@@ -679,7 +686,7 @@ function AccountMenu() {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { data: me, isError } = useMeQuery();
+  const { data: me, isError, error } = useMeQuery();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -709,9 +716,11 @@ export function Shell({ children }: { children: ReactNode }) {
     });
   };
 
+  // Offline with nothing saved yet is not a signed-out session — only the server can say that.
+  const offlineNoMe = isError && !(error instanceof ApiError && (error.status === 401 || error.status === 403));
   useEffect(() => {
-    if (isError) router.replace('/login?expired=1');
-  }, [isError, router]);
+    if (isError && !offlineNoMe) router.replace('/login?expired=1');
+  }, [isError, offlineNoMe, router]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -729,6 +738,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
+    <PwaProvider me={me}>
     <div
       className={cn(
         'min-h-dvh transition-[grid-template-columns] duration-200 ease-in-out',
@@ -788,10 +798,12 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="flex-1 text-left">Jump to page or search…</span>
             <Kbd>⌘K</Kbd>
           </button>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <ConnectionPill />
             <AccountMenu />
           </div>
         </header>
+        <OfflineBanner />
         {me && (
           <MeProvider me={me}>
             <WebsiteHealth />
@@ -802,6 +814,13 @@ export function Shell({ children }: { children: ReactNode }) {
             <MeProvider me={me}>
               <ConfirmProvider>{children}</ConfirmProvider>
             </MeProvider>
+          ) : offlineNoMe ? (
+            <div className="mx-auto mt-16 max-w-md rounded-2xl border border-line bg-surface p-6 text-center text-[13px]">
+              <CloudOff className="mx-auto size-8 text-warning" />
+              <p className="mt-3 text-base font-semibold">Offline, and this device has nothing saved yet</p>
+              <p className="mt-1 text-fg-muted">Open The House once while connected — after that it keeps working without internet.</p>
+              <button type="button" onClick={() => location.reload()} className="mt-4 rounded-full bg-brand px-4 py-2 font-semibold text-white">Try again</button>
+            </div>
           ) : (
             <div className="grid gap-4">
               <Skeleton className="h-10 w-64" />
@@ -812,6 +831,12 @@ export function Shell({ children }: { children: ReactNode }) {
         </main>
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ConfirmProvider>
+        <SyncCenter />
+      </ConfirmProvider>
+      <UpdateBar />
+      <InstallNudge />
     </div>
+    </PwaProvider>
   );
 }

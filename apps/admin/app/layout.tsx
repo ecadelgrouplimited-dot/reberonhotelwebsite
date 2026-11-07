@@ -23,6 +23,9 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: { default: 'The House · Reberon Hotel PMS', template: '%s · The House' },
   robots: { index: false, follow: false },
+  applicationName: 'The House',
+  appleWebApp: { capable: true, title: 'The House', statusBarStyle: 'black-translucent' },
+  formatDetection: { telephone: false },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },

@@ -1,4 +1,5 @@
 'use client';
+import { usePwa } from '@/components/pwa/pwa-provider';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -241,9 +242,14 @@ export function LiveAlertCenterButton() {
     refetchInterval: 12_000,
   });
 
+  const pwa = usePwa();
+  const pushOn = !!pwa?.push.subscribed;
+
   // Watch for new live events targeted to the current user
   useEffect(() => {
     if (!consoleData?.liveAlertStream) return;
+    // The hidden "download for offline" frame must stay silent.
+    if (window.self !== window.top) return;
     const stream = consoleData.liveAlertStream;
 
     if (!initializedRef.current) {
@@ -268,8 +274,19 @@ export function LiveAlertCenterButton() {
         playAlertChime(top.soundTone);
       }
       setActiveToasts((prev) => [...newEvents, ...prev].slice(0, 4));
+      // Tab in the background and no Web Push on this device: raise a system notification ourselves.
+      if (document.visibilityState === 'hidden' && !pushOn && 'Notification' in window && Notification.permission === 'granted') {
+        void navigator.serviceWorker?.getRegistration().then((reg) => {
+          for (const ev of newEvents.slice(0, 3)) {
+            const opts = { body: ev.summary ?? ev.action, icon: '/pwa/notify-192.png', badge: '/pwa/badge-96.png', tag: ev.id, data: { url: ev.href } };
+            if (reg) void reg.showNotification(ev.ruleLabel, opts);
+            else new Notification(ev.ruleLabel, opts);
+          }
+        });
+      }
+      (navigator as Navigator & { setAppBadge?: (n: number) => Promise<void> }).setAppBadge?.(newEvents.length).catch(() => undefined);
     }
-  }, [consoleData, soundMuted]);
+  }, [consoleData, soundMuted, pushOn]);
 
   // Listen for manual/test live alerts
   useEffect(() => {

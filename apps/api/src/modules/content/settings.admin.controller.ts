@@ -12,7 +12,7 @@ import { Events } from '../../common/events.js';
 import { normalizePhone } from '@reberon/utils';
 
 /** Keys that must never change from the admin (the spec fixes the timezone). */
-const LOCKED = new Set(['hotel.timezone']);
+const LOCKED = new Set(['hotel.timezone', 'push.vapid']);
 
 @Controller('v1/admin/settings')
 export class SettingsAdminController {

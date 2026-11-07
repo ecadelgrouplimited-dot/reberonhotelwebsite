@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Events, type AuditRecordedEvent } from './events.js';
 import type { Request } from 'express';
 import type { Prisma } from '@reberon/db';
 import { PrismaService } from './prisma.service.js';
@@ -27,7 +29,10 @@ export interface AuditEntry {
 
 @Injectable()
 export class AuditService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly events?: EventEmitter2,
+  ) {}
 
   async record(e: AuditEntry, tx: Prisma.TransactionClient = this.prisma) {
     await tx.auditLog.create({
@@ -44,5 +49,8 @@ export class AuditService {
         userAgent: e.req?.headers['user-agent']?.slice(0, 300),
       },
     });
+    // Fan-out (Web Push) runs after the response; a push failure never fails the action.
+    const ev: AuditRecordedEvent = { action: e.action, entityType: e.entityType, entityId: e.entityId ?? null, summary: e.summary ?? null, actorId: e.actor?.id ?? null, actorName: e.actor?.name ?? null };
+    setImmediate(() => this.events?.emit(Events.AuditRecorded, ev));
   }
 }

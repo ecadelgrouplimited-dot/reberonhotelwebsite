@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { PushModule } from './modules/push/push.module.js';
+import { IdempotencyInterceptor } from './common/idempotency.interceptor.js';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -28,6 +30,7 @@ import { HealthController } from './modules/health.controller.js';
     CommonModule,
     IntegrationsModule,
     NotificationsModule,
+    PushModule,
     ContentModule,
     AuthModule,
     InboxModule,
@@ -42,6 +45,7 @@ import { HealthController } from './modules/health.controller.js';
   providers: [
     { provide: APP_GUARD, useClass: AppThrottlerGuard },
     { provide: APP_GUARD, useClass: AdminGuard },
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     { provide: APP_FILTER, useClass: ProblemFilter },
   ],
 })

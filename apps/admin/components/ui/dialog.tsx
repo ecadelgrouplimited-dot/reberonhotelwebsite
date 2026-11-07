@@ -13,6 +13,15 @@ export function Dialog({
     if (open && !d.open) d.showModal();
     if (!open && d.open) d.close();
   }, [open]);
+  // A form whose change was kept for offline sync is done from the user's side — close it like a save.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    const h = () => closeRef.current();
+    window.addEventListener('rb:offline-queued', h);
+    return () => window.removeEventListener('rb:offline-queued', h);
+  }, [open]);
   const width = { sm: 'w-[min(26rem,94vw)]', md: 'w-[min(36rem,94vw)]', lg: 'w-[min(52rem,96vw)]', xl: 'w-[min(72rem,96vw)]', full: 'w-[96vw]' }[size];
   return (
     <dialog ref={ref} className={cn('modal', drawer && 'drawer')} onClose={onClose} onClick={(e) => e.target === ref.current && onClose()}>

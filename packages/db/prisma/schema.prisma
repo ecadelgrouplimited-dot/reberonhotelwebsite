@@ -2162,3 +2162,19 @@ model StaffDocument {
 
   @@index([staffId])
 }
+
+/// A browser / installed app that receives Web Push for one staff member.
+model PushSubscription {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  userId        String    @db.Uuid
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  failures      Int       @default(0) @db.SmallInt
+  lastSuccessAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+}

@@ -25,6 +25,10 @@ const schema = z.object({
   STORAGE_DRIVER: z.enum(['local']).default('local'),
   STORAGE_LOCAL_DIR: z.string().default('./storage'),
   MEDIA_PUBLIC_URL: z.string().url().default('http://localhost:4000/media'),
+  /** Web Push (installed House app). When unset, a key pair is generated once and kept sealed in settings. */
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:it@reberonhotel.com'),
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().default(1025),
   SMTP_USER: z.string().optional(),

@@ -18,12 +18,18 @@ export async function idempotent<T>(redis: RedisService, scope: string, key: str
       if (v && v !== 'pending') return JSON.parse(v) as T;
     }
   }
+  let result: T;
   try {
-    const result = await fn();
-    await redis.client.set(k, JSON.stringify(result), 'EX', 86_400);
-    return result;
+    result = await fn();
   } catch (e) {
     await redis.client.del(k);
     throw e;
   }
+  // Remembering the answer must never turn a success into a failure.
+  try {
+    await redis.client.set(k, JSON.stringify(result ?? null, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)), 'EX', 86_400);
+  } catch {
+    await redis.client.del(k).catch(() => undefined);
+  }
+  return result;
 }

@@ -4,6 +4,7 @@ export const Events = {
   EnquiryCreated: 'enquiry.created',
   WaitlistCreated: 'waitlist.created',
   MediaUploaded: 'media.uploaded',
+  AuditRecorded: 'audit.recorded',
 } as const;
 
 export interface ContentChangedEvent {
@@ -14,4 +15,12 @@ export interface EnquiryCreatedEvent {
 }
 export interface WaitlistCreatedEvent {
   entryId: string;
+}
+export interface AuditRecordedEvent {
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  summary: string | null;
+  actorId: string | null;
+  actorName: string | null;
 }
