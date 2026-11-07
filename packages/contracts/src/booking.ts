@@ -211,11 +211,45 @@ export const zManualReservationInput = zBookingInput
   .omit({ consent: true, payInFull: true, payAtPremises: true, guest: true })
   .extend({
     source: z.enum(RESERVATION_SOURCES).default('PHONE'),
-    guest: z.object({ name: z.string().trim().min(2).max(120), phone: z.string().trim().min(7).max(40), email: z.string().trim().email().max(200).optional().or(z.literal('').transform(() => undefined)) }),
+    guest: z.object({ name: z.string().trim().min(2).max(120), phone: z.string().trim().min(7).max(40), email: z.string().trim().email().max(200).optional().or(z.literal('').transform(() => undefined)), country: z.string().trim().max(60).optional() }),
     confirmNow: z.boolean().default(false),
     staffNotes: z.string().max(2000).optional(),
     fromWaitlistId: z.string().uuid().optional(),
+    /** Money taken at the desk while booking (confirmed bookings only). */
+    payment: z.object({ amount: minor, method: z.enum(PAYMENT_METHODS), reference: z.string().max(80).optional() }).optional(),
+    /** A negotiated reduction on the stay; needs payments:refund. */
+    discount: z.object({ amount: minor, reason: z.string().trim().min(3).max(200) }).optional(),
   });
+
+/** Change dates, party, room or rate of an open booking. Stay charges are re-posted on the folio. */
+export const zAmendReservationInput = z.object({
+  arrival: isoDate,
+  departure: isoDate,
+  adults: z.coerce.number().int().min(1).max(12),
+  children: z.coerce.number().int().min(0).max(12).default(0),
+  roomTypeId: z.string().uuid(),
+  ratePlanId: z.string().uuid(),
+  rooms: z.coerce.number().int().min(1).max(10),
+  extras: z.array(z.object({ extraId: z.string().uuid(), quantity: z.coerce.number().int().min(1).max(20) })).max(10).optional(),
+  /** Keep the nightly prices frozen at booking for nights the stay already had. */
+  keepRates: z.boolean().default(true),
+  reason: z.string().trim().max(300).optional(),
+  notifyGuest: z.boolean().default(false),
+  preview: z.boolean().default(false),
+});
+
+export interface AmendPreviewDTO {
+  currency: string;
+  before: { arrival: string; departure: string; nights: number; rooms: number; roomType: string; ratePlan: string; adults: number; children: number; stayMinor: string; totalMinor: string };
+  after: { arrival: string; departure: string; nights: number; rooms: number; roomType: string; ratePlan: string; adults: number; children: number; stayMinor: string; totalMinor: string; depositMinor: string };
+  deltaMinor: string;
+  paidMinor: string;
+  balanceAfterMinor: string;
+  notes: string[];
+}
+
+export const zExtendHoldInput = z.object({ hours: z.coerce.number().int().min(1).max(168) });
+export const zConfirmHeldInput = z.object({ reason: z.string().trim().max(300).optional() });
 
 export const zRecordPaymentInput = z.object({
   amount: minor,

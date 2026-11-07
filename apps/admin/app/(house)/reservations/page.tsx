@@ -9,6 +9,7 @@ import {
   Download,
   ExternalLink,
   History,
+  LogIn,
   Plus,
   RotateCcw,
   Search,
@@ -59,6 +60,7 @@ export default function ReservationsPage() {
   const can = useCan();
   const qc = useQueryClient();
   const isOwner = me.role === 'OWNER';
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kampala' }).format(new Date());
 
   const [status, setStatus] = useState<string>(initialSort === 'latest' ? 'all' : 'upcoming');
   const [sort, setSort] = useState<string>(initialSort);
@@ -256,7 +258,10 @@ export default function ReservationsPage() {
               { v: 'upcoming', l: 'Upcoming' },
               { v: 'HELD', l: `Pending Payment (${c.HELD ?? 0})` },
               { v: 'CONFIRMED', l: `Confirmed (${c.CONFIRMED ?? 0})` },
+              { v: 'IN_HOUSE', l: `In house (${c.IN_HOUSE ?? 0})` },
+              { v: 'CHECKED_OUT', l: `Checked out (${c.CHECKED_OUT ?? 0})` },
               { v: 'CANCELLED', l: `Cancelled (${c.CANCELLED ?? 0})` },
+              { v: 'NO_SHOW', l: `No-show (${c.NO_SHOW ?? 0})` },
               { v: 'EXPIRED', l: `Expired (${c.EXPIRED ?? 0})` },
             ] as const).map((item) => (
               <button
@@ -447,6 +452,14 @@ export default function ReservationsPage() {
                   </td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <div className="inline-flex items-center gap-1.5">
+                      {can('desk:operate') && r.status === 'CONFIRMED' && r.arrival <= today && r.departure > today && (
+                        <Link
+                          href={`/reservations/${r.id}?checkin=1`}
+                          className="inline-flex items-center gap-1 rounded-md bg-fg px-2.5 py-1 text-[11px] font-medium text-bg hover:opacity-90 transition"
+                        >
+                          <LogIn className="size-3" /> Check in
+                        </Link>
+                      )}
                       <Link
                         href={`/reservations/${r.id}`}
                         className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[11px] font-medium hover:bg-surface-2 transition-colors"

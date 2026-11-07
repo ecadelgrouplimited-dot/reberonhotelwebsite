@@ -3,7 +3,7 @@ import { use, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Ban, BedDouble, CalendarDays, Copy, HandCoins, Mail, MessageSquareText, Phone, RotateCcw, Send, Trash2, Undo2, Users } from 'lucide-react';
+import { Ban, BedDouble, CalendarClock, CalendarDays, CheckCircle2, Copy, HandCoins, Mail, MessageSquareText, PencilLine, Phone, RotateCcw, Send, Trash2, Undo2, Users } from 'lucide-react';
 import { whatsappLink } from '@reberon/utils';
 import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
@@ -16,16 +16,18 @@ import { SelectInput, Switch, TextArea, TextInput } from '@/components/ui/field'
 import { StayPanel, type StayDetail } from '@/components/house/stay-panel';
 import { ReservationMessages } from '@/components/messages/reservation-messages';
 import { DocumentsPanel } from '@/components/documents/documents-panel';
+import { AmendDialog } from '@/components/house/amend-dialog';
+import { useConfirm } from '@/components/ui/confirm';
 
 type Detail = {
   id: string; code: string; status: string; source: string; currency: string; arrival: string; departure: string; nights: number; adults: number; children: number;
   totalMinor: string; paidMinor: string; balanceMinor: string; depositMinor: string; holdExpiresAt: string | null; eta: string | null; guestNotes: string | null; staffNotes: string | null;
   cancelReason: string | null; confirmedAt: string | null; cancelledAt: string | null; createdAt: string; guestLink: string;
   contact: { id: string; name: string; phone: string | null; email: string | null; country: string | null };
-  ratePlan: { code: string; name: { en?: string }; mealPlan: string; depositPercent: number };
+  ratePlan: { id: string; code: string; name: { en?: string }; mealPlan: string; depositPercent: number };
   cancellation: { rules?: { daysBefore: number; refundPercent: number }[]; text?: { en?: string } };
-  rooms: { name: string; quantity: number; nightly: { date: string; amountMinor: string }[] }[];
-  extras: { name: string; quantity: number; totalMinor: string }[];
+  rooms: { roomTypeId: string; name: string; quantity: number; nightly: { date: string; amountMinor: string }[] }[];
+  extras: { extraId: string; name: string; quantity: number; totalMinor: string }[];
   folio: { id: string; kind: string; description: string; date: string; amountMinor: string }[];
   payments: { id: string; reference: string; purpose: string; amountMinor: string; status: string; provider: string; method: string; redirectUrl: string | null; confirmationCode: string | null; paidAt: string | null; createdAt: string }[];
   history: { id: string; summary: string; actor: string; createdAt: string }[];
@@ -43,7 +45,8 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
   const isOwner = me.role === 'OWNER';
   const autoCheckIn = useSearchParams().get('checkin') === '1';
   const { data: r, isLoading } = useQuery({ queryKey: ['reservation', id], queryFn: () => get<Detail>(`/reservations/${id}`) });
-  const [dialog, setDialog] = useState<null | 'pay' | 'refund' | 'cancel' | 'delete'>(null);
+  const [dialog, setDialog] = useState<null | 'pay' | 'refund' | 'cancel' | 'delete' | 'amend' | 'extend'>(null);
+  const confirm = useConfirm();
   const [notes, setNotes] = useState('');
   const [eta, setEta] = useState('');
   useEffect(() => {
@@ -59,6 +62,9 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
   };
   const saveNotes = useMutation({ mutationFn: () => patch<Detail>(`/reservations/${id}`, { staffNotes: notes || null, eta: eta || null }), onSuccess: (d) => { refresh(d); toast.success('Saved'); } });
   const resend = useMutation({ mutationFn: () => post(`/reservations/${id}/resend-confirmation`), onSuccess: () => toast.success('Confirmation sent again') });
+  const failed = (e: unknown) => toast.error(e instanceof ApiError ? e.message : (e as Error).message);
+  const confirmHeld = useMutation({ mutationFn: (reason: string) => post<Detail>(`/reservations/${id}/confirm`, { reason: reason || undefined }), onSuccess: (d) => { refresh(d); toast.success('Confirmed — rooms are sold'); }, onError: failed });
+  const extendHold = useMutation({ mutationFn: (hours: number) => post<Detail>(`/reservations/${id}/extend-hold`, { hours }), onSuccess: (d) => { refresh(d); toast.success('Hold extended'); }, onError: failed });
 
   if (isLoading || !r) return <Skeleton className="h-96" />;
   const balance = BigInt(r.balanceMinor);
@@ -74,7 +80,8 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
         description={<span className="font-mono">{r.code}</span>}
         actions={
           <>
-            {can('payments:record') && open && balance > 0n && <Button variant="primary" icon={<HandCoins className="size-4" />} onClick={() => setDialog('pay')}>Record payment</Button>}
+            {can('payments:record') && (open || r.status === 'IN_HOUSE') && balance > 0n && <Button variant="primary" icon={<HandCoins className="size-4" />} onClick={() => setDialog('pay')}>Record payment</Button>}
+            {can('bookings:write') && (open || r.status === 'IN_HOUSE') && r.rooms.length === 1 && <Button icon={<PencilLine className="size-4" />} onClick={() => setDialog('amend')}>Change booking</Button>}
             {can('payments:refund') && BigInt(r.paidMinor) > 0n && ['CANCELLED', 'EXPIRED', 'CONFIRMED'].includes(r.status) && balance < 0n && <Button icon={<Undo2 className="size-4" />} onClick={() => setDialog('refund')}>Record refund</Button>}
             {can('payments:refund') && r.status === 'CANCELLED' && BigInt(r.paidMinor) > 0n && balance >= 0n && <Button icon={<Undo2 className="size-4" />} onClick={() => setDialog('refund')}>Record refund</Button>}
             {r.status === 'CONFIRMED' && r.contact.email && <Button icon={<Send className="size-4" />} loading={resend.isPending} onClick={() => resend.mutate()}>Resend confirmation</Button>}
@@ -88,6 +95,12 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
         <p className="mb-5 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-[13px]">
           Rooms held until <b>{dateTime(r.holdExpiresAt)}</b>. If no payment arrives they are released automatically.
           {pending && <> Payment link: <button type="button" className="font-semibold underline" onClick={() => { navigator.clipboard.writeText(pending.redirectUrl!); toast.success('Payment link copied'); }}>copy</button>{r.contact.phone && <> · <a className="font-semibold underline" target="_blank" rel="noreferrer" href={whatsappLink(r.contact.phone, `Hello ${r.contact.name.split(' ')[0]}, here is the link to pay the deposit for your Reberon Hotel booking ${r.code}: ${pending.redirectUrl}`)}>send on WhatsApp</a></>}</>}
+          {can('bookings:write') && (
+            <span className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant="primary" icon={<CheckCircle2 className="size-3.5" />} loading={confirmHeld.isPending} onClick={async () => { if (await confirm({ title: `Confirm ${r.code} without a deposit?`, body: 'The rooms are sold now and the guest gets a confirmation. Take payment later at the desk.', confirm: 'Confirm booking' })) confirmHeld.mutate(''); }}>Confirm without deposit</Button>
+              <Button size="sm" icon={<CalendarClock className="size-3.5" />} loading={extendHold.isPending} onClick={() => extendHold.mutate(24)}>Hold 24h longer</Button>
+            </span>
+          )}
         </p>
       )}
 
@@ -156,7 +169,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
         </div>
 
         <aside className="grid gap-5 xl:sticky xl:top-20">
-          <StayPanel r={{ ...r, guest: { name: r.contact.name } }} onChange={() => refresh()} autoCheckIn={autoCheckIn} />
+          <StayPanel r={{ ...r, guest: { name: r.contact.name } }} onChange={() => refresh()} autoCheckIn={autoCheckIn} onExtend={can('bookings:write') && r.rooms.length === 1 ? () => setDialog('extend') : undefined} />
           <div className="card p-5">
             <p className="text-[12px] text-fg-muted">Total</p>
             <p className="text-[1.8rem] font-semibold tabular">{money(r.totalMinor, r.currency)}</p>
@@ -183,6 +196,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <PaymentDialog kind={dialog === 'refund' ? 'refund' : 'pay'} open={dialog === 'pay' || dialog === 'refund'} onClose={() => setDialog(null)} r={r} onDone={(d) => { refresh(d); setDialog(null); }} />
+      {(open || r.status === 'IN_HOUSE') && <AmendDialog<Detail> r={r} mode={dialog === 'extend' ? 'extend' : 'full'} open={dialog === 'amend' || dialog === 'extend'} onClose={() => setDialog(null)} onDone={(d) => { refresh(d); setDialog(null); }} />}
       <CancelDialog open={dialog === 'cancel'} onClose={() => setDialog(null)} r={r} onDone={() => { refresh(); setDialog(null); }} />
       {isOwner && <DeleteReservationDialog open={dialog === 'delete'} onClose={() => setDialog(null)} r={r} onDeleted={() => { qc.invalidateQueries({ queryKey: ['reservations'] }); router.push('/reservations'); }} />}
     </div>

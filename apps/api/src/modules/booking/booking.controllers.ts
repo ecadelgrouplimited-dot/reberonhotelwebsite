@@ -4,7 +4,7 @@ import type { Request } from 'express';
 import { z } from 'zod';
 import {
   zAvailabilityQuery, zBookingInput, zStayLookup, zStayVerify, zManualReservationInput, zRecordPaymentInput, zCancelInput, zReservationPatch, zRatePlanInput, zRateBulkInput,
-  zInventoryPatch, zExtraInput, zPackageInput,
+  zInventoryPatch, zExtraInput, zPackageInput, zAmendReservationInput, zConfirmHeldInput, zExtendHoldInput,
 } from '@reberon/contracts';
 import { normalizePhone } from '@reberon/utils';
 import type { Prisma } from '@reberon/db';
@@ -289,6 +289,33 @@ export class ReservationsAdminController {
   @Requires('bookings:write')
   cancel(@Param('id') id: string, @Body(new ZodPipe(zCancelInput)) body: z.infer<typeof zCancelInput>, @CurrentUser() user: AuthUser) {
     return this.booking.cancel(id, body.reason, body.waivePenalty, user);
+  }
+
+  @Get('reservations/:id/amend-options')
+  @Requires('bookings:read')
+  amendOptions(@Param('id') id: string) {
+    return this.booking.amendOptions(id);
+  }
+
+  @Post('reservations/:id/amend')
+  @HttpCode(200)
+  @Requires('bookings:write')
+  amend(@Param('id') id: string, @Body(new ZodPipe(zAmendReservationInput)) body: z.infer<typeof zAmendReservationInput>, @CurrentUser() user: AuthUser) {
+    return this.booking.amend(id, body, user);
+  }
+
+  @Post('reservations/:id/confirm')
+  @HttpCode(200)
+  @Requires('bookings:write')
+  confirmHeld(@Param('id') id: string, @Body(new ZodPipe(zConfirmHeldInput)) body: z.infer<typeof zConfirmHeldInput>, @CurrentUser() user: AuthUser) {
+    return this.booking.confirmHeld(id, body.reason, user);
+  }
+
+  @Post('reservations/:id/extend-hold')
+  @HttpCode(200)
+  @Requires('bookings:write')
+  extendHold(@Param('id') id: string, @Body(new ZodPipe(zExtendHoldInput)) body: z.infer<typeof zExtendHoldInput>, @CurrentUser() user: AuthUser) {
+    return this.booking.extendHold(id, body.hours, user);
   }
 
   @Post('reservations/:id/resend-confirmation')

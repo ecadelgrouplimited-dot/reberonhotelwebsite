@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowRightLeft, DoorOpen, LogIn, LogOut, Receipt, UserX } from 'lucide-react';
+import { ArrowRightLeft, CalendarPlus, DoorOpen, LogIn, LogOut, Receipt, UserX } from 'lucide-react';
 import { ApiError, get, post } from '@/lib/api';
 import { useCan } from '@/lib/providers';
 import { toMinorStr } from '@/lib/money';
@@ -31,7 +31,7 @@ const kampalaToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/
 const err = (e: unknown) => toast.error(e instanceof ApiError ? e.message : (e as Error).message);
 
 /** The desk's side of a reservation: rooms, arrival, departure, charges. */
-export function StayPanel({ r, onChange, autoCheckIn }: { r: StayDetail; onChange: () => void; autoCheckIn?: boolean }) {
+export function StayPanel({ r, onChange, autoCheckIn, onExtend }: { r: StayDetail; onChange: () => void; autoCheckIn?: boolean; onExtend?: () => void }) {
   const can = useCan();
   const confirm = useConfirm();
   const [dialog, setDialog] = useState<null | 'in' | 'out' | 'assign' | 'move' | 'charge'>(null);
@@ -81,6 +81,7 @@ export function StayPanel({ r, onChange, autoCheckIn }: { r: StayDetail; onChang
           {r.status === 'IN_HOUSE' && <Button variant={r.departure <= today ? 'primary' : 'secondary'} size="touch" icon={<LogOut className="size-5" />} onClick={() => setDialog('out')}>Check out</Button>}
           <div className="flex flex-wrap gap-2">
             {['HELD', 'CONFIRMED'].includes(r.status) && <Button size="sm" icon={<DoorOpen className="size-3.5" />} onClick={() => setDialog('assign')}>{live.length ? 'Change room' : 'Give a room'}</Button>}
+            {r.status === 'IN_HOUSE' && onExtend && <Button size="sm" icon={<CalendarPlus className="size-3.5" />} onClick={onExtend}>Extend stay</Button>}
             {r.status === 'IN_HOUSE' && <Button size="sm" icon={<ArrowRightLeft className="size-3.5" />} onClick={() => setDialog('move')}>Move room</Button>}
             {['CONFIRMED', 'IN_HOUSE'].includes(r.status) && <Button size="sm" icon={<Receipt className="size-3.5" />} onClick={() => setDialog('charge')}>Add charge</Button>}
             {r.status === 'CONFIRMED' && r.arrival <= today && <Button size="sm" variant="danger" icon={<UserX className="size-3.5" />} loading={noShow.isPending} onClick={async () => { if (await confirm({ title: `Mark ${r.code} as a no-show?`, body: 'Rooms go back on sale; payments are kept.', confirm: 'Mark no-show', danger: true })) noShow.mutate(); }}>No-show</Button>}

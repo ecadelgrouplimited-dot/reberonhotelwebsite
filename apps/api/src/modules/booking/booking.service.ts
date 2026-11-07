@@ -4,7 +4,7 @@ import { Queue, Worker } from 'bullmq';
 import { timingSafeEqual } from 'node:crypto';
 import { stayToken } from '../../common/stay-token.js';
 import type { z } from 'zod';
-import type { BookingStartedDTO, CurrencyCode, GuestStayDTO, ReservationSummaryDTO, zBookingInput, zManualReservationInput } from '@reberon/contracts';
+import type { AmendPreviewDTO, BookingStartedDTO, CurrencyCode, GuestStayDTO, ReservationSummaryDTO, zAmendReservationInput, zBookingInput, zManualReservationInput } from '@reberon/contracts';
 import { t } from '@reberon/contracts';
 import { formatMoney, hotelToday, normalizePhone, randomCode } from '@reberon/utils';
 import type { Prisma, Reservation } from '@reberon/db';
@@ -12,7 +12,7 @@ import { PrismaService } from '../../common/prisma.service.js';
 import { RedisService } from '../../common/redis.service.js';
 import { AuditService } from '../../common/audit.service.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../../common/errors.js';
-import type { AuthUser } from '../../common/auth.js';
+import { has, type AuthUser } from '../../common/auth.js';
 import { env } from '../../config.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { MessagingService } from '../notifications/messaging.service.js';
@@ -24,6 +24,14 @@ import { PaymentsService, type ProviderStatus } from './payments.service.js';
 
 type BookingInput = z.infer<typeof zBookingInput>;
 type ManualInput = z.infer<typeof zManualReservationInput>;
+type AmendInput = z.infer<typeof zAmendReservationInput>;
+
+/** Thrown inside a transaction to roll back a dry run and carry its result out. */
+class PreviewRollback extends Error {
+  constructor(readonly data: AmendPreviewDTO) {
+    super('preview');
+  }
+}
 
 const full = {
   contact: true,
@@ -391,9 +399,23 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   /* ───────── the House ───────── */
 
   async manual(input: ManualInput, actor: AuthUser) {
+    if (input.payment && !input.confirmNow) throw badRequest('Take payment on a confirmed booking, or send the payment link for a hold.');
+    if (input.payment && !has(actor, 'payments:record')) throw forbidden('You cannot take payments');
+    if (input.discount && !has(actor, 'payments:refund')) throw forbidden('Only the owner or a manager can give a discount');
     const built = await this.prisma.$transaction(async (tx) => {
       const b = await this.build(tx, input, { source: input.source, status: input.confirmNow ? 'CONFIRMED' : 'HELD', holdMinutes: 24 * 60, actorId: actor.id, guest: input.guest });
       if (input.staffNotes) await tx.reservation.update({ where: { id: b.reservation.id }, data: { staffNotes: input.staffNotes } });
+      if (input.guest.country && !b.contact.country) await tx.contact.update({ where: { id: b.contact.id }, data: { country: input.guest.country } });
+      if (input.discount && input.discount.amount > 0n) {
+        const amount = input.discount.amount;
+        if (amount >= b.total) throw badRequest('The discount is more than the stay');
+        const folio = await tx.folio.findUniqueOrThrow({ where: { reservationId: b.reservation.id } });
+        await tx.folioLine.create({ data: { folioId: folio.id, kind: 'ADJUSTMENT', description: `Discount: ${input.discount.reason}`, date: day(input.arrival), amountMinor: -amount, postedById: actor.id } });
+        const total = b.total - amount;
+        const deposit = b.plan.depositPercent > 0 ? roundDeposit((total * BigInt(b.plan.depositPercent)) / 100n, input.currency) : total;
+        b.reservation = await tx.reservation.update({ where: { id: b.reservation.id }, data: { totalMinor: total, depositMinor: deposit > total ? total : deposit } });
+        await this.change(tx, b.reservation.id, 'discount', `Discount ${this.money(amount, input.currency)}: ${input.discount.reason}`, actor.id);
+      }
       if (input.fromWaitlistId) {
         await tx.waitlistEntry.update({ where: { id: input.fromWaitlistId }, data: { status: 'CONVERTED', staffNotes: `Converted to ${b.reservation.code}` } }).catch(() => undefined);
       }
@@ -409,9 +431,277 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       }
       await this.queue.add('expire', { reservationId: r.id }, { delay: 24 * 3600_000 + 5_000, jobId: `expire-${r.id}` });
     }
-    await this.audit.record({ actor, action: 'reservation.create', entityType: 'Reservation', entityId: r.id, summary: `${input.confirmNow ? 'Confirmed' : 'Held'} ${r.code} for ${built.contact.name} (${input.source.toLowerCase()})` });
+    await this.audit.record({ actor, action: 'reservation.create', entityType: 'Reservation', entityId: r.id, summary: `${input.confirmNow ? 'Confirmed' : 'Held'} ${r.code} for ${built.contact.name} (${input.source.toLowerCase()})${input.discount ? ` with ${this.money(input.discount.amount, input.currency)} discount` : ''}` });
+    let paymentError: string | null = null;
+    if (input.payment && input.payment.amount > 0n) {
+      try {
+        await this.recordPayment(r.id, { amount: input.payment.amount, method: input.payment.method, reference: input.payment.reference }, actor);
+      } catch (e) {
+        paymentError = (e as Error).message;
+        this.log.error(`payment at booking for ${r.code}: ${paymentError}`);
+      }
+    }
     if (input.confirmNow) await this.sendConfirmation(r.id);
-    return { id: r.id, code: r.code, paymentLink };
+    return { id: r.id, code: r.code, paymentLink, paymentError };
+  }
+
+  /**
+   * Change an open booking: dates (incl. extending or shortening an in-house
+   * stay), party size, room type, rate or extras. Inventory moves atomically,
+   * the folio gets correcting lines (never edits), and `preview` rolls the
+   * whole thing back so the desk can see the new price before committing.
+   */
+  async amend(id: string, input: AmendInput, actor: AuthUser) {
+    if (input.arrival >= input.departure) throw badRequest('Departure must be after arrival');
+    let result: AmendPreviewDTO;
+    let code = '';
+    let status = '';
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Reservation" WHERE id = ${id}::uuid FOR UPDATE`;
+        const r = await tx.reservation.findUnique({ where: { id }, include: { rooms: true, extras: true, folio: true, ratePlan: true, assignments: { where: { releasedAt: null }, include: { room: true } } } });
+        if (!r) throw notFound('Reservation');
+        code = r.code;
+        status = r.status;
+        if (!['HELD', 'CONFIRMED', 'IN_HOUSE'].includes(r.status)) throw badRequest(`A ${r.status.toLowerCase().replace('_', ' ')} booking cannot be changed`);
+        if (r.rooms.length !== 1) throw badRequest('This booking mixes room types. Cancel and rebook to change it.');
+        const rr = r.rooms[0]!;
+        const today = hotelToday();
+        const oldArr = iso(r.arrival);
+        const oldDep = iso(r.departure);
+        const inHouse = r.status === 'IN_HOUSE';
+        if (inHouse) {
+          if (input.arrival !== oldArr) throw badRequest('The guest is already in — only the departure date can change.');
+          if (input.roomTypeId !== rr.roomTypeId || input.rooms !== rr.quantity) throw badRequest('Use "Move room" to change rooms for a guest in the house.');
+          if (input.ratePlanId !== r.ratePlanId) throw badRequest('The rate cannot change once the guest is in. Add a charge or credit instead.');
+          if (input.departure <= today) throw badRequest('To leave today, check the guest out.');
+        } else if (input.arrival !== oldArr && input.arrival < today) {
+          throw badRequest('Arrival cannot move into the past');
+        }
+
+        const [plan, roomType] = await Promise.all([
+          tx.ratePlan.findFirst({ where: { id: input.ratePlanId, ...(input.ratePlanId === r.ratePlanId ? {} : { isActive: true }) }, include: { cancellationPolicy: true } }),
+          tx.roomType.findFirst({ where: { id: input.roomTypeId, deletedAt: null } }),
+        ]);
+        if (!plan || !roomType) throw notFound('Room or rate');
+        const capacity = input.rooms * (roomType.sleepsAdults + roomType.sleepsChildren);
+        if (input.adults > input.rooms * roomType.sleepsAdults || input.adults + input.children > capacity) throw badRequest(`${input.rooms} ${t(lt(roomType.name))} room(s) sleep up to ${capacity}. Add a room or choose a larger type.`);
+
+        const oldNights = nightsOf(oldArr, oldDep);
+        const newNights = nightsOf(input.arrival, input.departure);
+        const sameProduct = plan.id === r.ratePlanId && roomType.id === rr.roomTypeId;
+        const keep = (input.keepRates || inHouse) && sameProduct;
+        if (!inHouse && newNights.length < plan.minNights && !(sameProduct && newNights.length >= oldNights.length)) throw badRequest(`Minimum ${plan.minNights} nights on this rate`);
+
+        // Nightly prices: frozen ones stay, the rest come from today's rate sheet.
+        const frozen = new Map((rr.nightly as { date: string; amountMinor: string }[]).map((n) => [n.date, BigInt(n.amountMinor)]));
+        const toPrice = keep ? newNights.filter((n) => !frozen.has(n)) : newNights;
+        const fresh = new Map<string, bigint>();
+        if (toPrice.length) {
+          const rates = await tx.rate.findMany({ where: { ratePlanId: plan.id, roomTypeId: roomType.id, currency: r.currency, date: { in: toPrice.map(day) } } });
+          for (const x of rates) fresh.set(iso(x.date), x.amountMinor);
+          const missing = toPrice.filter((n) => !fresh.has(n));
+          if (missing.length) throw badRequest(`No ${r.currency} price on this rate for ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '…' : ''}. Set it in Calendar & Rates first.`);
+        }
+        const nightly = newNights.map((date) => ({ date, amountMinor: keep && frozen.has(date) ? frozen.get(date)! : fresh.get(date)! }));
+        const perRoom = nightly.reduce((a, n) => a + n.amountMinor, 0n);
+        const oldPerRoom = [...frozen.values()].reduce((a, n) => a + n, 0n);
+        const oldRoomStay = oldPerRoom * BigInt(rr.quantity);
+        const newRoomStay = perRoom * BigInt(input.rooms);
+
+        // Extras: unchanged selections keep their booked price unless the night count changes a per-night extra.
+        const sel = input.extras ?? r.extras.map((e) => ({ extraId: e.extraId, quantity: e.quantity }));
+        const extraRows = sel.length ? await tx.extra.findMany({ where: { id: { in: sel.map((e) => e.extraId) } } }) : [];
+        const extraLines = sel.map((s) => {
+          const e = extraRows.find((x) => x.id === s.extraId);
+          if (!e) throw badRequest('One of the extras is no longer offered');
+          const prev = r.extras.find((x) => x.extraId === s.extraId && x.quantity === s.quantity);
+          if (prev && (e.unit !== 'PER_NIGHT' || newNights.length === oldNights.length)) return { e, qty: s.quantity, unit: prev.unitMinor, total: prev.totalMinor };
+          if (e.deletedAt) throw badRequest(`${t(lt(e.name))} is no longer offered`);
+          const total = extraTotal(e, r.currency as CurrencyCode, s.quantity, newNights.length);
+          if (total === null) throw badRequest(`${t(lt(e.name))} has no ${r.currency} price`);
+          return { e, qty: s.quantity, unit: total / BigInt(e.unit === 'PER_NIGHT' ? s.quantity * newNights.length : s.quantity), total };
+        });
+        const oldExtras = r.extras.reduce((a, x) => a + x.totalMinor, 0n);
+        const newExtras = extraLines.reduce((a, l) => a + l.total, 0n);
+        const extrasChanged = oldExtras !== newExtras || r.extras.length !== extraLines.length || extraLines.some((l) => !r.extras.some((x) => x.extraId === l.e.id && x.quantity === l.qty));
+
+        const delta = newRoomStay + newExtras - (oldRoomStay + oldExtras);
+        const total = r.totalMinor + delta;
+        if (total < 0n) throw badRequest('That change would leave the bill below zero. Add a credit instead.');
+        const newStay = newRoomStay + newExtras;
+        const depositRaw = plan.depositPercent > 0 ? roundDeposit((newStay * BigInt(plan.depositPercent)) / 100n, r.currency as CurrencyCode) : newStay;
+        const deposit = depositRaw > total ? total : depositRaw;
+
+        const names = await this.roomTypeNames();
+        const oldType = names.get(rr.roomTypeId) ?? 'Room';
+        const newType = t(lt(roomType.name));
+        const notes: string[] = [];
+
+        // Inventory: give back the old nights, take the new ones — all or nothing.
+        const from = r.status === 'HELD' ? 'held' : 'sold';
+        await this.inventory.release(tx, rr.roomTypeId, oldNights, rr.quantity, from);
+        try {
+          if (r.status === 'HELD') await this.inventory.hold(tx, roomType.id, newNights, input.rooms);
+          else await this.inventory.sell(tx, roomType.id, newNights, input.rooms);
+        } catch (e) {
+          if (e instanceof InventoryUnavailable) throw conflict(`Not enough free ${newType} rooms on some of the new nights.`, 'CONFLICT');
+          throw e;
+        }
+
+        // Numbered rooms follow the new dates where they can.
+        const clashOf = async (roomId: string, fromD: string, toD: string) => {
+          const other = await tx.roomAssignment.findFirst({ where: { roomId, releasedAt: null, reservationId: { not: id }, fromDate: { lt: day(toD) }, toDate: { gt: day(fromD) } }, include: { reservation: { select: { code: true } } } });
+          if (other) return `promised to ${other.reservation.code} from ${iso(other.fromDate)}`;
+          const block = await tx.roomBlock.findFirst({ where: { roomId, releasedAt: null, fromDate: { lt: day(toD) }, toDate: { gt: day(fromD) } } });
+          return block ? 'blocked on some of those nights' : null;
+        };
+        const reassign: { id: string; fromDate: string }[] = [];
+        const drop: string[] = [];
+        if (r.assignments.length) {
+          if (!sameProduct && roomType.id !== rr.roomTypeId) {
+            drop.push(...r.assignments.map((a) => a.id));
+            notes.push(`Room ${r.assignments.map((a) => a.room.number).join(', ')} released — give a ${newType} room.`);
+          } else if (input.rooms !== rr.quantity) {
+            drop.push(...r.assignments.map((a) => a.id));
+            notes.push('Room numbers cleared because the room count changed — give rooms again.');
+          } else if (input.arrival !== oldArr || input.departure !== oldDep) {
+            for (const a of r.assignments) {
+              const fromD = inHouse ? iso(a.fromDate) : input.arrival < today ? today : input.arrival;
+              const clash = await clashOf(a.roomId, inHouse ? oldDep < input.departure ? oldDep : input.departure : fromD, input.departure);
+              if (clash && inHouse) throw conflict(`Room ${a.room.number} is ${clash}. Move the guest or re-room that booking first.`);
+              if (clash) {
+                drop.push(a.id);
+                notes.push(`Room ${a.room.number} is ${clash} — it was released; give another room.`);
+              } else reassign.push({ id: a.id, fromDate: fromD });
+            }
+          }
+        }
+
+        const preview: AmendPreviewDTO = {
+          currency: r.currency,
+          before: { arrival: oldArr, departure: oldDep, nights: oldNights.length, rooms: rr.quantity, roomType: oldType, ratePlan: t(lt(r.ratePlan.name)), adults: r.adults, children: r.children, stayMinor: (oldRoomStay + oldExtras).toString(), totalMinor: r.totalMinor.toString() },
+          after: { arrival: input.arrival, departure: input.departure, nights: newNights.length, rooms: input.rooms, roomType: newType, ratePlan: t(lt(plan.name)), adults: input.adults, children: input.children, stayMinor: newStay.toString(), totalMinor: total.toString(), depositMinor: deposit.toString() },
+          deltaMinor: delta.toString(),
+          paidMinor: r.paidMinor.toString(),
+          balanceAfterMinor: (total - r.paidMinor).toString(),
+          notes,
+        };
+        if (!sameProduct && !input.keepRates) notes.push('All nights priced at today’s rates.');
+        if (keep && toPrice.length && toPrice.length < newNights.length) notes.push(`${newNights.length - toPrice.length} night(s) keep the booked price; ${toPrice.length} new night(s) at today’s rate.`);
+        if (input.preview) throw new PreviewRollback(preview);
+
+        /* ── write ── */
+        if (drop.length) await tx.roomAssignment.deleteMany({ where: { id: { in: drop } } });
+        for (const a of reassign) await tx.roomAssignment.update({ where: { id: a.id }, data: { fromDate: day(a.fromDate), toDate: day(input.departure) } });
+        await tx.reservationRoom.update({ where: { id: rr.id }, data: { roomTypeId: roomType.id, quantity: input.rooms, nightly: nightly.map((n) => ({ date: n.date, amountMinor: n.amountMinor.toString() })) } });
+        if (extrasChanged) {
+          await tx.reservationExtra.deleteMany({ where: { reservationId: id } });
+          if (extraLines.length) await tx.reservationExtra.createMany({ data: extraLines.map((l) => ({ reservationId: id, extraId: l.e.id, quantity: l.qty, unitMinor: l.unit, totalMinor: l.total })) });
+        }
+
+        const folioId = r.folio!.id;
+        const label = `${newType} × ${input.rooms} — ${t(lt(plan.name))}`;
+        const lines: Prisma.FolioLineCreateManyInput[] = [];
+        const adj = (description: string, amountMinor: bigint, date = today) => lines.push({ folioId, kind: 'ADJUSTMENT', description, date: day(date), amountMinor, postedById: actor.id });
+        if (sameProduct && input.rooms === rr.quantity) {
+          const newMap = new Map(nightly.map((n) => [n.date, n.amountMinor]));
+          for (const n of newNights) if (!frozen.has(n)) lines.push({ folioId, kind: 'ROOM', description: `${label} (added night)`, date: day(n), quantity: input.rooms, amountMinor: newMap.get(n)! * BigInt(input.rooms), postedById: actor.id });
+          for (const n of oldNights) if (!newMap.has(n)) adj(`Night of ${n} removed`, -frozen.get(n)! * BigInt(rr.quantity));
+          for (const n of oldNights) if (newMap.has(n) && newMap.get(n) !== frozen.get(n)) adj(`Re-priced night of ${n}`, (newMap.get(n)! - frozen.get(n)!) * BigInt(input.rooms));
+        } else if (oldRoomStay !== newRoomStay || !sameProduct || input.rooms !== rr.quantity) {
+          adj(`Changed booking — previous room charges reversed (${oldType} × ${rr.quantity})`, -oldRoomStay);
+          for (const n of nightly) lines.push({ folioId, kind: 'ROOM', description: label, date: day(n.date), quantity: input.rooms, amountMinor: n.amountMinor * BigInt(input.rooms), postedById: actor.id });
+        }
+        if (extrasChanged) {
+          if (oldExtras) adj('Changed booking — previous extras reversed', -oldExtras);
+          for (const l of extraLines) lines.push({ folioId, kind: 'EXTRA', description: `${t(lt(l.e.name))} × ${l.qty}`, date: day(input.arrival < today ? today : input.arrival), quantity: l.qty, amountMinor: l.total, postedById: actor.id });
+        }
+        if (lines.length) await tx.folioLine.createMany({ data: lines });
+
+        await tx.reservation.update({
+          where: { id },
+          data: {
+            arrival: day(input.arrival),
+            departure: day(input.departure),
+            adults: input.adults,
+            children: input.children,
+            ratePlanId: plan.id,
+            totalMinor: total,
+            depositMinor: deposit,
+            version: { increment: 1 },
+            ...(plan.id !== r.ratePlanId ? { cancellationSnapshot: { rules: (plan.cancellationPolicy?.rules as unknown as PolicyRule[]) ?? [], text: lt(plan.cancellationPolicy?.text) } as unknown as Prisma.InputJsonValue } : {}),
+          },
+        });
+
+        const what: string[] = [];
+        if (input.arrival !== oldArr || input.departure !== oldDep) what.push(inHouse ? (input.departure > oldDep ? `stay extended to ${input.departure}` : `departure brought forward to ${input.departure}`) : `dates ${oldArr} → ${oldDep} now ${input.arrival} → ${input.departure}`);
+        if (input.adults !== r.adults || input.children !== r.children) what.push(`guests now ${input.adults}+${input.children}`);
+        if (roomType.id !== rr.roomTypeId || input.rooms !== rr.quantity) what.push(`room now ${input.rooms} × ${newType}`);
+        if (plan.id !== r.ratePlanId) what.push(`rate now ${t(lt(plan.name))}`);
+        if (extrasChanged) what.push('extras updated');
+        await this.change(tx, id, 'amended', `Changed: ${what.join('; ') || 'no change'}. ${delta === 0n ? 'Price unchanged' : `${delta > 0n ? '+' : '−'}${this.money(delta < 0n ? -delta : delta, r.currency)}`}${input.reason ? ` — ${input.reason}` : ''}`, actor.id, { before: preview.before, after: preview.after });
+        return preview;
+      }, { timeout: 20_000 });
+    } catch (e) {
+      if (e instanceof PreviewRollback) return e.data;
+      throw e;
+    }
+    await this.audit.record({ actor, action: 'reservation.amend', entityType: 'Reservation', entityId: id, summary: `Changed ${code}: ${result.before.arrival}→${result.before.departure} to ${result.after.arrival}→${result.after.departure}, ${result.after.rooms} × ${result.after.roomType}`, before: result.before, after: result.after });
+    if (input.notifyGuest && status === 'CONFIRMED') await this.sendConfirmation(id).catch((e) => this.log.error(e));
+    return this.detail(id);
+  }
+
+  /** What the desk can switch a booking to: room types, active rates, extras. */
+  async amendOptions(id: string) {
+    const r = await this.prisma.reservation.findUnique({ where: { id }, include: { extras: true } });
+    if (!r) throw notFound('Reservation');
+    const [roomTypes, plans, extras] = await Promise.all([
+      this.prisma.roomType.findMany({ where: { deletedAt: null }, orderBy: { order: 'asc' }, select: { id: true, name: true, sleepsAdults: true, sleepsChildren: true } }),
+      this.prisma.ratePlan.findMany({ where: { OR: [{ isActive: true }, { id: r.ratePlanId }] }, orderBy: { order: 'asc' } }),
+      this.prisma.extra.findMany({ where: { OR: [{ status: 'PUBLISHED', deletedAt: null }, { id: { in: r.extras.map((e) => e.extraId) } }] }, orderBy: { order: 'asc' } }),
+    ]);
+    return {
+      roomTypes: roomTypes.map((x) => ({ id: x.id, name: t(lt(x.name)), sleepsAdults: x.sleepsAdults, sleepsChildren: x.sleepsChildren })),
+      ratePlans: plans.map((p) => ({ id: p.id, name: t(lt(p.name)), mealPlan: p.mealPlan, depositPercent: p.depositPercent, isPublic: p.isPublic })),
+      extras: extras.filter((e) => r.currency === 'UGX' || e.priceUsd !== null).map((e) => ({ id: e.id, name: t(lt(e.name)), unit: e.unit, priceMinor: (r.currency === 'UGX' ? e.priceUgx : e.priceUsd!).toString() })),
+    };
+  }
+
+  /** Confirm a held booking without waiting for the deposit (trusted guest, company, cash later). */
+  async confirmHeld(id: string, reason: string | undefined, actor: AuthUser) {
+    const code = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Reservation" WHERE id = ${id}::uuid FOR UPDATE`;
+      const r = await tx.reservation.findUnique({ where: { id }, include: { rooms: true } });
+      if (!r) throw notFound('Reservation');
+      if (r.status !== 'HELD') throw badRequest('Only a held booking can be confirmed this way');
+      for (const rr of r.rooms) await this.inventory.convertHeldToSold(tx, rr.roomTypeId, nightsOf(iso(r.arrival), iso(r.departure)), rr.quantity);
+      await tx.reservation.update({ where: { id }, data: { status: 'CONFIRMED', confirmedAt: new Date(), holdExpiresAt: null, version: { increment: 1 } } });
+      await this.change(tx, id, 'confirmed', `Confirmed without deposit${reason ? `: ${reason}` : ''}`, actor.id);
+      return r.code;
+    });
+    await this.queue.remove(`expire-${id}`).catch(() => undefined);
+    await this.audit.record({ actor, action: 'reservation.confirm', entityType: 'Reservation', entityId: id, summary: `Confirmed ${code} without deposit${reason ? `: ${reason}` : ''}` });
+    await this.sendConfirmation(id).catch((e) => this.log.error(e));
+    return this.detail(id);
+  }
+
+  /** Give a held booking more time to pay. */
+  async extendHold(id: string, hours: number, actor: AuthUser) {
+    const r = await this.prisma.reservation.findUnique({ where: { id } });
+    if (!r) throw notFound('Reservation');
+    if (r.status !== 'HELD') throw badRequest('Only a held booking has a hold to extend');
+    const base = r.holdExpiresAt && r.holdExpiresAt > new Date() ? r.holdExpiresAt.getTime() : Date.now();
+    const until = new Date(base + hours * 3600_000);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.reservation.update({ where: { id }, data: { holdExpiresAt: until, version: { increment: 1 } } });
+      await tx.paymentIntent.updateMany({ where: { reservationId: id, status: 'PENDING' }, data: { expiresAt: until } });
+      await this.change(tx, id, 'hold_extended', `Hold extended by ${hours}h to ${until.toISOString()}`, actor.id);
+    });
+    await this.queue.remove(`expire-${id}`).catch(() => undefined);
+    await this.queue.add('expire', { reservationId: id }, { delay: until.getTime() - Date.now() + 5_000, jobId: `expire-${id}` });
+    await this.audit.record({ actor, action: 'reservation.extend_hold', entityType: 'Reservation', entityId: id, summary: `Extended hold on ${r.code} by ${hours}h` });
+    return this.detail(id);
   }
 
   async recordPayment(id: string, p: { amount: bigint; method: 'MOBILE_MONEY' | 'CARD' | 'CASH' | 'BANK' | 'UNKNOWN'; reference?: string; note?: string }, actor: AuthUser) {
@@ -565,7 +855,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       confirmedAt: r.confirmedAt?.toISOString() ?? null,
       cancelledAt: r.cancelledAt?.toISOString() ?? null,
       rooms: r.rooms.map((x) => ({ roomTypeId: x.roomTypeId, name: names.get(x.roomTypeId) ?? 'Room', quantity: x.quantity, nightly: x.nightly })),
-      extras: r.extras.map((x) => ({ name: extraNames.get(x.extraId) ?? 'Extra', quantity: x.quantity, totalMinor: x.totalMinor.toString() })),
+      extras: r.extras.map((x) => ({ extraId: x.extraId, name: extraNames.get(x.extraId) ?? 'Extra', quantity: x.quantity, totalMinor: x.totalMinor.toString() })),
       folio: (r.folio?.lines ?? []).map((l) => ({ id: l.id, kind: l.kind, description: l.description, date: iso(l.date), amountMinor: l.amountMinor.toString() })),
       payments: r.payments.map((p) => ({ id: p.id, reference: p.merchantReference, purpose: p.purpose, amountMinor: p.amountMinor.toString(), status: p.status, provider: p.provider, method: p.method, redirectUrl: p.status === 'PENDING' ? p.redirectUrl : null, confirmationCode: p.confirmationCode, paidAt: p.paidAt?.toISOString() ?? null, createdAt: p.createdAt.toISOString() })),
       history: r.changes.map((c) => ({ id: c.id, kind: c.kind, summary: c.summary, actor: c.actorId ? (staff.get(c.actorId) ?? 'Staff') : c.kind === 'created' && r.source === 'DIRECT' ? 'Guest (website)' : 'System', createdAt: c.createdAt.toISOString() })),
