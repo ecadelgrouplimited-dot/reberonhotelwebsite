@@ -1090,8 +1090,10 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
 
     const roomTodayUgx = sum(cleared, 'UGX');
     const roomTodayUsd = sum(cleared, 'USD');
-    const posTodayUgx = sumPos(posToday, 'UGX');
-    const posTodayUsd = sumPos(posToday, 'USD');
+    // Bills sent to a room folio are not money yet — they arrive when the guest settles the room bill.
+    const posPaidToday = posToday.filter((o) => o.paymentMethod !== 'ROOM_FOLIO');
+    const posTodayUgx = sumPos(posPaidToday, 'UGX');
+    const posTodayUsd = sumPos(posPaidToday, 'USD');
     const hcTodayUgx = sumHc(hcToday, 'UGX');
     const hcTodayUsd = sumHc(hcToday, 'USD');
 
@@ -1169,7 +1171,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
           roomsUSD: roomTodayUsd.toString(),
           roomPaymentsCount: cleared.length,
           posUGX: posTodayUgx.toString(),
-          posOrdersCount: posToday.length,
+          posOrdersCount: posPaidToday.length,
           posOpenTabsUGX: '0',
           posOpenTabsCount: 0,
           healthClubUGX: hcTodayUgx.toString(),
@@ -1181,8 +1183,8 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
         mtd: {
           roomsUGX: sum(mtdPayments, 'UGX').toString(),
           roomsUSD: sum(mtdPayments, 'USD').toString(),
-          posUGX: sumPos(posMtd, 'UGX').toString(),
-          totalUGX: (sum(mtdPayments, 'UGX') + sumPos(posMtd, 'UGX')).toString(),
+          posUGX: sumPos(posMtd.filter((o) => o.paymentMethod !== 'ROOM_FOLIO'), 'UGX').toString(),
+          totalUGX: (sum(mtdPayments, 'UGX') + sumPos(posMtd.filter((o) => o.paymentMethod !== 'ROOM_FOLIO'), 'UGX')).toString(),
         },
       },
       houseReadiness: {
@@ -1231,8 +1233,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  /** 19:00 Kampala every evening: tomorrow's names, occupancy, money (spec M21). */
-  @Cron('0 19 * * *', { timeZone: 'Africa/Kampala' })
+  /** Plain brief email; the scheduled 19:00 brief is FinanceService.sendBrief, which adds month-to-date and attention items. */
   async sendOwnerBrief() {
     const brief = await this.ownerBrief();
     const owners = (await this.prisma.user.findMany({ where: { role: 'OWNER', status: 'ACTIVE', deletedAt: null, email: { not: null } } })) as { email: string; name: string }[];

@@ -345,6 +345,28 @@ describe('the house (Movement IV)', () => {
     assert.ok(BigInt(t.roomRevenue.UGX) > 0n);
     assert.equal((await owner.get(`/admin/reports/house?from=${today}&to=${from}`)).status, 422);
   });
+
+  test('the finance report adds up and the desk cannot read it', async () => {
+    const owner = await as(OWNER);
+    const desk = await as(DESK);
+    const today = (await owner.get('/admin/desk')).body.date as string;
+    const from = new Date(Date.parse(`${today}T00:00:00Z`) - 30 * 86_400_000).toISOString().slice(0, 10);
+    const r = await owner.get(`/admin/reports/finance?from=${from}&to=${today}&compare=yoy`);
+    assert.equal(r.status, 200);
+    const f = r.body;
+    const sum = (k: string) => f.daily.reduce((a: bigint, d: Record<string, string>) => a + BigInt(d[k]!), 0n);
+    assert.equal(sum('roomUGX').toString(), f.kpis.roomRevenue.UGX, 'daily room revenue = total');
+    assert.equal(sum('collectedUGX').toString(), f.kpis.collected.UGX, 'daily collections = total');
+    const railsIn = f.cash.rails.reduce((a: bigint, x: { inflow: { UGX: string } }) => a + BigInt(x.inflow.UGX), 0n);
+    assert.equal(railsIn.toString(), f.cash.totals.inflow.UGX, 'rails add up');
+    const owed = f.receivables.debtors.filter((d: { currency: string }) => d.currency === 'UGX').reduce((a: bigint, d: { balanceMinor: string }) => a + BigInt(d.balanceMinor), 0n);
+    assert.equal(owed.toString(), f.receivables.total.UGX, 'debtors add up');
+    assert.equal(f.compareFrom.slice(0, 4), String(Number(from.slice(0, 4)) - 1));
+    assert.equal((await desk.get(`/admin/reports/finance?from=${from}&to=${today}`)).status, 403);
+    const b = await owner.get(`/admin/owner/brief/insights?date=${today}`);
+    assert.equal(b.status, 200);
+    assert.equal(b.body.forecast30.length, 30);
+  });
 });
 
 describe('the walk (Movement III) and messaging', () => {

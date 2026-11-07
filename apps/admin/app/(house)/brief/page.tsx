@@ -33,6 +33,8 @@ import { money } from '@/lib/money';
 import { cn } from '@/lib/cn';
 import { exportToCsv } from '@/lib/export-csv';
 import { Button } from '@/components/ui/button';
+import type { BriefInsightsDTO } from '@reberon/contracts';
+import { AttentionList, BriefKpis, Forecast30, MtdCompare, TodayRails } from '@/components/reports/brief-insights';
 import { Empty, PageHeader, Pill, Section, Skeleton, Status } from '@/components/ui/bits';
 
 type BriefGuestItem = {
@@ -207,6 +209,13 @@ export default function BriefPage() {
     refetchInterval: 60_000,
   });
 
+  const { data: x } = useQuery({
+    queryKey: ['brief-insights', date],
+    queryFn: () => get<BriefInsightsDTO>(`/owner/brief/insights?date=${date}`),
+    enabled: can('reports:read'),
+    refetchInterval: 60_000,
+  });
+
   const send = useMutation({
     mutationFn: () => post('/owner/brief/send'),
     onSuccess: () => toast.success('Executive brief emailed to directors'),
@@ -308,7 +317,12 @@ export default function BriefPage() {
         }
       />
 
-      {/* 6-Card Executive KPI Strip */}
+      {x ? (
+        <div className="grid gap-4">
+          <BriefKpis x={x} tomorrowArrivals={b.arrivals.length} todayIn={todayArrivals.length} todayOut={todayDepartures.length} />
+          <AttentionList items={x.attention} />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-6">
         <div className="card p-3.5">
           <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
@@ -394,6 +408,8 @@ export default function BriefPage() {
         </div>
       </div>
 
+      )}
+
       {/* 7-Day Occupancy & Movement Forecast */}
       {forecast.length > 0 && (
         <Section
@@ -435,6 +451,13 @@ export default function BriefPage() {
         </Section>
       )}
 
+      {x && (
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_1fr]">
+          <MtdCompare x={x} />
+          <Forecast30 x={x} />
+        </div>
+      )}
+
       {/* Financial Pulse + Suite Readiness Breakdown */}
       <div className="grid gap-4 xl:grid-cols-2">
         {fp && (
@@ -467,6 +490,7 @@ export default function BriefPage() {
               </div>
             </div>
 
+            {x ? <TodayRails x={x} /> : (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3.5 py-2.5 text-xs">
               <span className="font-semibold text-fg-muted">Room Collections by Payment Method (Today):</span>
               <div className="flex flex-wrap items-center gap-3 font-mono">
@@ -476,6 +500,7 @@ export default function BriefPage() {
                 <span>Bank: <b>{money(fp.today.byMethod?.BANK ?? '0', 'UGX')}</b></span>
               </div>
             </div>
+            )}
           </Section>
         )}
 

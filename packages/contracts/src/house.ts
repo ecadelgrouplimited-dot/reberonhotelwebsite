@@ -119,6 +119,10 @@ export const zFeedbackInput = z.object({
 });
 
 export const zReportQuery = z.object({ from: isoDate, to: isoDate }).refine((v) => v.from <= v.to, { path: ['to'], message: 'After the start' });
+export const zFinanceQuery = z
+  .object({ from: isoDate, to: isoDate, compare: z.enum(['prev', 'yoy']).default('prev') })
+  .refine((v) => v.from <= v.to, { path: ['to'], message: 'After the start' });
+export const zBriefQuery = z.object({ date: isoDate.optional() });
 
 /* ───────── DTOs ───────── */
 
@@ -308,6 +312,10 @@ export interface HouseReportDTO {
     grossOperatingProfit: MoneyByCurrency;
     trevpar: MoneyByCurrency;
     goppar: MoneyByCurrency;
+    /** Discounts, goodwill credits and write-offs taken off bills in the period. */
+    allowances?: MoneyByCurrency;
+    /** Gross revenue less allowances. */
+    netRevenue?: MoneyByCurrency;
   };
   /** Cross-departmental revenue and traffic breakdown */
   departments?: DepartmentTrafficDTO[];
@@ -327,3 +335,115 @@ export interface HouseReportDTO {
 }
 
 export type { CurrencyCode };
+
+/* ───────── Finance (owner reports) ───────── */
+
+export interface FinanceKpisDTO {
+  grossRevenue: MoneyByCurrency;
+  netRevenue: MoneyByCurrency;
+  roomRevenue: MoneyByCurrency;
+  fnbRevenue: MoneyByCurrency;
+  otherRevenue: MoneyByCurrency;
+  collected: MoneyByCurrency;
+  expenses: MoneyByCurrency;
+  gop: MoneyByCurrency;
+  adr: MoneyByCurrency;
+  revpar: MoneyByCurrency;
+  trevpar: MoneyByCurrency;
+  occupancy: number;
+  roomNightsSold: number;
+  roomNightsAvailable: number;
+  bookings: number;
+  cancellations: number;
+  noShows: number;
+  averageStay: number;
+  posOrders: number;
+}
+
+export interface CashRailDTO {
+  method: string;
+  label: string;
+  inCount: number;
+  inflow: MoneyByCurrency;
+  refunds: MoneyByCurrency;
+  outflow: MoneyByCurrency;
+  net: MoneyByCurrency;
+  /** Digital payments recorded without a transaction reference — the ones to chase when matching statements. */
+  missingRefs: number;
+  bySource: { rooms: MoneyByCurrency; pos: MoneyByCurrency; healthClub: MoneyByCurrency };
+}
+
+export interface FinanceReportDTO {
+  from: string;
+  to: string;
+  compareMode: 'prev' | 'yoy';
+  compareFrom: string;
+  compareTo: string;
+  generatedAt: string;
+  kpis: FinanceKpisDTO;
+  compare: FinanceKpisDTO;
+  house: HouseReportDTO;
+  daily: { date: string; roomUGX: string; fnbUGX: string; otherUGX: string; collectedUGX: string; expensesUGX: string; occupancy: number }[];
+  roomTypes: { id: string; name: string; rooms: number; roomNightsSold: number; roomNightsAvailable: number; occupancy: number; revenue: MoneyByCurrency; adr: MoneyByCurrency; revpar: MoneyByCurrency }[];
+  ratePlans: { id: string; name: string; bookings: number; roomNights: number; revenue: MoneyByCurrency; adr: MoneyByCurrency }[];
+  channels: { source: string; bookings: number; roomNights: number; revenue: MoneyByCurrency; share: number }[];
+  lengthOfStay: { bucket: string; bookings: number }[];
+  dayOfWeek: { day: string; occupancy: number; roomNights: number }[];
+  pos: {
+    outlets: { id: string; name: string; type: string; orders: number; revenue: MoneyByCurrency; avgCheck: MoneyByCurrency; discounts: MoneyByCurrency; toRoomFolio: number }[];
+    topItems: { name: string; quantity: number; revenue: MoneyByCurrency }[];
+    byHour: { hour: number; orders: number; revenueUGX: string }[];
+    deskFnb: MoneyByCurrency;
+  };
+  cash: {
+    rails: CashRailDTO[];
+    totals: { inflow: MoneyByCurrency; refunds: MoneyByCurrency; outflow: MoneyByCurrency; net: MoneyByCurrency; transactions: number; missingRefs: number };
+  };
+  receivables: {
+    asOf: string;
+    buckets: { key: string; label: string; count: number; amount: MoneyByCurrency }[];
+    debtors: { id: string; code: string; name: string; phone: string | null; status: string; arrival: string; departure: string; currency: string; totalMinor: string; paidMinor: string; balanceMinor: string; daysPastDeparture: number }[];
+    total: MoneyByCurrency;
+    advanceDeposits: MoneyByCurrency;
+    advanceDepositCount: number;
+  };
+  adjustments: {
+    discounts: MoneyByCurrency;
+    credits: MoneyByCurrency;
+    writeOffs: MoneyByCurrency;
+    refunds: MoneyByCurrency;
+    cancellationFees: MoneyByCurrency;
+    noShowRevenue: MoneyByCurrency;
+    posDiscounts: MoneyByCurrency;
+    lines: { date: string; reservationId: string; code: string; guest: string; kind: string; description: string; currency: string; amountMinor: string }[];
+  };
+  onTheBooks: {
+    months: { month: string; roomNights: number; roomNightsAvailable: number; occupancy: number; revenue: MoneyByCurrency; bookings: number }[];
+    pickup7d: { bookings: number; roomNights: number; revenue: MoneyByCurrency };
+  };
+  topGuests: { contactId: string; name: string; stays: number; nights: number; revenue: MoneyByCurrency }[];
+  tax: { label: string; ratePercent: number; inclusive: boolean; vat: MoneyByCurrency } | null;
+  insights: { tone: 'good' | 'warn' | 'bad' | 'info'; title: string; detail: string }[];
+}
+
+export interface BriefInsightsDTO {
+  date: string;
+  mtd: FinanceKpisDTO;
+  mtdLastMonth: FinanceKpisDTO;
+  mtdLastYear: FinanceKpisDTO;
+  today: {
+    collected: MoneyByCurrency;
+    refunds: MoneyByCurrency;
+    expenses: MoneyByCurrency;
+    byRail: { method: string; label: string; amount: MoneyByCurrency; count: number }[];
+    bookingsMade: number;
+    bookingsValue: MoneyByCurrency;
+    cancellations: number;
+    roomRevenueTonight: MoneyByCurrency;
+  };
+  onBooksTonight: { rooms: number; total: number; percent: number; inHouse: number; arrivingStill: number };
+  forecast30: { date: string; rooms: number; percent: number; revenueUGX: string; arrivals: number; departures: number }[];
+  forecast30Totals: { roomNights: number; occupancy: number; revenue: MoneyByCurrency };
+  receivables: { total: MoneyByCurrency; overdue: MoneyByCurrency; overdueCount: number; advanceDeposits: MoneyByCurrency };
+  attention: { tone: 'bad' | 'warn' | 'info'; title: string; detail: string; href?: string }[];
+}

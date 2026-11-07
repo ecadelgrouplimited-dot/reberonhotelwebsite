@@ -36,6 +36,10 @@
   --sidebar-muted: #A9AFCB;
   --sidebar-active: rgb(215 110 27 / 0.22);
   --series: #1A1E43;
+  /* Categorical chart slots (validated: dataviz reference order blue · orange · aqua). */
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
   --shadow-soft: 0 1px 2px rgb(26 30 67 / 0.06);
   --shadow-lift: 0 4px 12px rgb(26 30 67 / 0.12), 0 20px 40px -16px rgb(26 30 67 / 0.2);
 }
@@ -65,6 +69,9 @@
   --sidebar-muted: #9DA4CC;
   --sidebar-active: rgb(215 110 27 / 0.25);
   --series: #E88432;
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
   --shadow-soft: 0 1px 3px rgb(0 0 0 / 0.35);
   --shadow-lift: 0 4px 16px rgb(0 0 0 / 0.45), 0 24px 48px -16px rgb(0 0 0 / 0.65);
 }
@@ -155,4 +162,12 @@ dialog.drawer { margin: 0 0 0 auto; height: 100dvh; max-height: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Print: reports and the owner brief print as clean A4 pages. */
+@media print {
+  aside, header, nav, .no-print { display: none !important; }
+  main { padding: 0 !important; margin: 0 !important; }
+  .card { break-inside: avoid; box-shadow: none !important; }
+  body { background: #fff !important; }
 }

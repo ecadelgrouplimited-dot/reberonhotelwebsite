@@ -3,7 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import {
   zAssignRoomsInput, zCheckInInput, zCheckOutInput, zFeedbackInput, zFolioChargeInput, zGuestMergeInput, zGuestPatch,
-  zHkStatusInput, zHkTaskCreateInput, zHkTaskPatch, zMoveRoomInput, zNoShowInput, zReportQuery, zRoomBlockInput,
+  zHkStatusInput, zHkTaskCreateInput, zHkTaskPatch, zMoveRoomInput, zNoShowInput, zReportQuery, zFinanceQuery, zBriefQuery, zRoomBlockInput,
   zRoomCreateInput, zRoomUpdateInput,
 } from '@reberon/contracts';
 import { hotelToday } from '@reberon/utils';
@@ -15,6 +15,7 @@ import { DeskService } from './desk.service.js';
 import { RackService } from './rack.service.js';
 import { GuestsService } from './guests.service.js';
 import { ReportsService } from './reports.service.js';
+import { FinanceService } from './finance.service.js';
 
 const dateParam = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : hotelToday());
 
@@ -182,6 +183,7 @@ export class GuestsController {
   constructor(
     private readonly guests: GuestsService,
     private readonly reports: ReportsService,
+    private readonly finance: FinanceService,
   ) {}
 
   @Get('guests')
@@ -247,6 +249,25 @@ export class GuestsController {
   @Requires('reports:read')
   report(@Query(new ZodPipe(zReportQuery)) q: z.infer<typeof zReportQuery>) {
     return this.reports.house(q.from, q.to);
+  }
+
+  @Get('reports/finance')
+  @Requires('reports:read')
+  financeReport(@Query(new ZodPipe(zFinanceQuery)) q: z.infer<typeof zFinanceQuery>) {
+    return this.finance.finance(q.from, q.to, q.compare);
+  }
+
+  @Post('owner/brief/send')
+  @HttpCode(200)
+  @Requires('settings:features')
+  async sendBrief() {
+    return { ok: true, sent: await this.finance.sendBrief() };
+  }
+
+  @Get('owner/brief/insights')
+  @Requires('reports:read')
+  briefInsights(@Query(new ZodPipe(zBriefQuery)) q: z.infer<typeof zBriefQuery>) {
+    return this.finance.briefInsights(q.date);
   }
 }
 

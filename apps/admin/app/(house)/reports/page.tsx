@@ -1,982 +1,478 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Calendar,
-  CreditCard,
-  DollarSign,
-  Download,
-  Filter,
-  Layers,
-  PieChart,
-  Plus,
-  Receipt,
-  Search,
-  Trash2,
-  TrendingUp,
-  Utensils,
-  Zap,
-} from 'lucide-react';
-import type {
-  Department,
-  ExpenseCategory,
-  ExpenseDTO,
-  ExpensePaymentMethod,
-  HouseReportDTO,
-} from '@reberon/contracts';
-import { ApiError, del, get, post } from '@/lib/api';
+import { Suspense, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, CheckCircle2, Download, Info, Plus, Printer, TrendingDown, XCircle } from 'lucide-react';
+import type { FinanceReportDTO, MoneyByCurrency } from '@reberon/contracts';
+import { get } from '@/lib/api';
 import { useCan } from '@/lib/providers';
-import { money, toMinorStr } from '@/lib/money';
-import { dateRange } from '@/lib/format';
+import { money } from '@/lib/money';
 import { cn } from '@/lib/cn';
 import { exportToCsv } from '@/lib/export-csv';
 import { Button } from '@/components/ui/button';
-import { Empty, PageHeader, Pill, Section, Skeleton, Tabs } from '@/components/ui/bits';
-import { Dialog } from '@/components/ui/dialog';
-import { SelectInput, TextArea, TextInput } from '@/components/ui/field';
-import { BarList, ColumnChart, StatTile } from '@/components/charts/charts';
+import { PageHeader, Pill, Section, Skeleton } from '@/components/ui/bits';
+import { TextInput } from '@/components/ui/field';
+import { BarList, ColumnChart } from '@/components/charts/charts';
+import { ExpensesPanel } from '@/components/reports/expenses-panel';
+import { DataTable, Delta, Kpi, RevenueTrend, ShareBars, big, fmtDay, fmtMonth, mm } from '@/components/reports/finance-ui';
 
-const today = () =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kampala' }).format(new Date());
-const plus = (d: string, n: number) =>
-  new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
-
-const SOURCE: Record<string, string> = {
-  DIRECT: 'Website Direct',
-  WHATSAPP: 'WhatsApp Concierge',
-  WALK_IN: 'Walk-in Desk',
-  PHONE: 'Phone Reservation',
-  PORTAL: 'Corporate Portal',
+const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kampala' }).format(new Date());
+const plus = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+const monthStart = (d: string) => `${d.slice(0, 8)}01`;
+const lastMonth = () => {
+  const end = plus(monthStart(today()), -1);
+  return [monthStart(end), end] as const;
 };
 
 const PERIODS = {
-  last30: { label: 'Last 30 Days', range: () => [plus(today(), -30), plus(today(), -1)] },
-  month: { label: 'This Month', range: () => [`${today().slice(0, 8)}01`, today()] },
-  last90: { label: 'Last 90 Days', range: () => [plus(today(), -90), plus(today(), -1)] },
-  next30: { label: 'Next 30 Days (On Books)', range: () => [today(), plus(today(), 29)] },
+  today: { label: 'Today', range: () => [today(), today()] },
+  yesterday: { label: 'Yesterday', range: () => [plus(today(), -1), plus(today(), -1)] },
+  month: { label: 'Month to date', range: () => [monthStart(today()), today()] },
+  lastMonth: { label: 'Last month', range: lastMonth },
+  last30: { label: 'Last 30 days', range: () => [plus(today(), -29), today()] },
+  last90: { label: 'Last 90 days', range: () => [plus(today(), -89), today()] },
+  ytd: { label: 'Year to date', range: () => [`${today().slice(0, 4)}-01-01`, today()] },
 } as const;
 type Period = keyof typeof PERIODS | 'custom';
 
-type ReportTab = 'OVERVIEW' | 'DEPARTMENTS' | 'EXPENSES' | 'PAYMENTS';
+const TABS = [
+  { id: 'OVERVIEW', label: 'Overview & P&L' },
+  { id: 'ROOMS', label: 'Rooms' },
+  { id: 'OUTLETS', label: 'Departments & POS' },
+  { id: 'CASH', label: 'Cash & rails' },
+  { id: 'RECEIVABLES', label: 'Owed & deposits' },
+  { id: 'ADJUSTMENTS', label: 'Discounts & refunds' },
+  { id: 'EXPENSES', label: 'Expenses' },
+] as const;
+type Tab = (typeof TABS)[number]['id'];
 
-const DEPT_LABELS: Record<string, string> = {
-  KITCHEN: 'Restaurant & Kitchen',
-  BAR: 'Bar & Lounge',
-  HEALTH_CLUB: 'Health Club & Spa',
-  HOUSEKEEPING: 'Housekeeping & Laundry',
-  FRONT_DESK: 'Front Desk & Guest Services',
-  CONFERENCE: 'Conferences & Banqueting',
-  MAINTENANCE: 'Maintenance & Repairs',
-  ENERGY_UTILITIES: 'Energy & Utilities',
-  ADMIN_GENERAL: 'General Administration',
+const SOURCE: Record<string, string> = { DIRECT: 'Website', WHATSAPP: 'WhatsApp', WALK_IN: 'Walk-in', PHONE: 'Phone', PORTAL: 'Portal' };
+const ADJ: Record<string, { label: string; tone: 'red' | 'amber' | 'green' | 'neutral' | 'blue' }> = {
+  DISCOUNT: { label: 'Discount', tone: 'amber' },
+  CREDIT: { label: 'Credit', tone: 'amber' },
+  WRITE_OFF: { label: 'Write-off', tone: 'red' },
+  REFUND: { label: 'Refund', tone: 'neutral' },
+  CANCELLATION_FEE: { label: 'Cancellation fee', tone: 'green' },
+  NO_SHOW: { label: 'No-show charge', tone: 'green' },
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  COGS_FOOD: 'Kitchen Food Supplies (COGS)',
-  COGS_BEVERAGE: 'Bar Beverage Stock (COGS)',
-  UTILITIES_ELECTRICITY: 'Electricity (Umeme)',
-  UTILITIES_DIESEL_FUEL: 'Diesel Generator Fuel',
-  UTILITIES_WATER_GAS: 'Water & Cooking Gas',
-  MAINTENANCE_REPAIRS: 'Facility Maintenance & Repairs',
-  HOUSEKEEPING_AMENITIES: 'Linen, Cleaning & Toiletries',
-  STAFF_PAYROLL_WELFARE: 'Staff Payroll & Welfare',
-  MARKETING_COMMISSIONS: 'Marketing, Ads & OTA Fees',
-  ADMIN_GENERAL: 'General Administration & IT',
-};
-
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  CASH: 'Cash at Premises',
-  MOMO_MTN: 'MTN Mobile Money',
-  MOMO_AIRTEL: 'Airtel Money',
-  BANK_TRANSFER: 'Bank Transfer / Wire',
-  CHEQUE: 'Bank Cheque',
-  CARD: 'Credit / Debit Card',
-};
-
-export default function ReportsPage() {
-  const qc = useQueryClient();
+function Reports() {
   const can = useCan();
+  const router = useRouter();
+  const params = useSearchParams();
+  const tab = (TABS.find((t) => t.id === params.get('tab'))?.id ?? 'OVERVIEW') as Tab;
+  const setTab = (t: Tab) => router.replace(`/reports?tab=${t}`, { scroll: false });
+  const [period, setPeriod] = useState<Period>('month');
+  const [custom, setCustom] = useState({ from: plus(today(), -30), to: today() });
+  const [compare, setCompare] = useState<'prev' | 'yoy'>('prev');
+  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [from, to] = period === 'custom' ? [custom.from, custom.to] : PERIODS[period].range();
   const canManageExpenses = can('expenses:manage') || can('requisitions:approve');
 
-  const [activeTab, setActiveTab] = useState<ReportTab>('OVERVIEW');
-  const [period, setPeriod] = useState<Period>('last30');
-  const [custom, setCustom] = useState({ from: plus(today(), -30), to: today() });
-  const [from, to] = period === 'custom' ? [custom.from, custom.to] : PERIODS[period].range();
-
-  // Expense modal & search
-  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
-  const [expenseSearch, setExpenseSearch] = useState('');
-  const [expenseDeptFilter, setExpenseDeptFilter] = useState('ALL');
-  const [expenseForm, setExpenseForm] = useState({
-    date: today(),
-    department: 'KITCHEN' as Department,
-    category: 'COGS_FOOD' as ExpenseCategory,
-    title: '',
-    vendor: '',
-    description: '',
-    amount: '',
-    currency: 'UGX' as 'UGX' | 'USD',
-    paymentMethod: 'CASH' as ExpensePaymentMethod,
-    referenceNumber: '',
-  });
-
-  const { data: r, isLoading: isReportLoading } = useQuery({
-    queryKey: ['report', from, to],
-    queryFn: () => get<HouseReportDTO>(`/reports/house?from=${from}&to=${to}`),
+  const { data: r, isLoading, isFetching, error } = useQuery({
+    queryKey: ['finance', from, to, compare],
+    queryFn: () => get<FinanceReportDTO>(`/reports/finance?from=${from}&to=${to}&compare=${compare}`),
     enabled: from <= to,
+    placeholderData: (prev) => prev,
   });
-
-  const { data: expensesList, isLoading: isExpensesLoading } = useQuery({
-    queryKey: ['expenses', from, to],
-    queryFn: () => get<ExpenseDTO[]>(`/expenses?from=${from}&to=${to}`),
-  });
-
-  const createExpenseMut = useMutation({
-    mutationFn: async () => {
-      if (!expenseForm.title.trim()) throw new Error('Enter expense title or item description');
-      if (!expenseForm.amount.trim() || Number.isNaN(Number(expenseForm.amount))) {
-        throw new Error('Enter a valid expense amount');
-      }
-      return post<ExpenseDTO>('/expenses', {
-        date: expenseForm.date,
-        department: expenseForm.department,
-        category: expenseForm.category,
-        title: expenseForm.title.trim(),
-        vendor: expenseForm.vendor.trim() || null,
-        description: expenseForm.description.trim() || null,
-        amountMinor: toMinorStr(expenseForm.amount.trim(), expenseForm.currency),
-        currency: expenseForm.currency,
-        paymentMethod: expenseForm.paymentMethod,
-        referenceNumber: expenseForm.referenceNumber.trim() || null,
-      });
-    },
-    onSuccess: (exp) => {
-      toast.success(`Expense ${exp.number} recorded successfully`);
-      qc.invalidateQueries({ queryKey: ['report'] });
-      qc.invalidateQueries({ queryKey: ['expenses'] });
-      setExpenseModalOpen(false);
-      setExpenseForm({
-        date: today(),
-        department: 'KITCHEN',
-        category: 'COGS_FOOD',
-        title: '',
-        vendor: '',
-        description: '',
-        amount: '',
-        currency: 'UGX',
-        paymentMethod: 'CASH',
-        referenceNumber: '',
-      });
-    },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : (e as Error).message),
-  });
-
-  const deleteExpenseMut = useMutation({
-    mutationFn: (id: string) => del(`/expenses/${id}`),
-    onSuccess: () => {
-      toast.success('Expense removed');
-      qc.invalidateQueries({ queryKey: ['report'] });
-      qc.invalidateQueries({ queryKey: ['expenses'] });
-    },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : (e as Error).message),
-  });
-
-  const ugx = (m?: string) => money(m ?? '0', 'UGX');
-  const usdNote = (m?: string) => (m && m !== '0' ? ` + ${money(m, 'USD')}` : '');
-
-  const filteredExpenses = useMemo(() => {
-    let list = expensesList ?? [];
-    if (expenseDeptFilter !== 'ALL') {
-      list = list.filter((e) => e.department === expenseDeptFilter);
-    }
-    if (expenseSearch.trim()) {
-      const q = expenseSearch.toLowerCase();
-      list = list.filter(
-        (e) =>
-          e.title.toLowerCase().includes(q) ||
-          e.number.toLowerCase().includes(q) ||
-          (e.vendor && e.vendor.toLowerCase().includes(q)) ||
-          CATEGORY_LABELS[e.category]?.toLowerCase().includes(q),
-      );
-    }
-    return list;
-  }, [expensesList, expenseDeptFilter, expenseSearch]);
 
   const csv = () => {
     if (!r) return;
-    if (activeTab === 'EXPENSES') {
-      exportToCsv(
-        `reberon-expenses-${from}-to-${to}.csv`,
-        ['Number', 'Date', 'Department', 'Category', 'Title', 'Vendor', 'Payment Method', 'Reference', 'Currency', 'Amount', 'Recorded By'],
-        filteredExpenses.map((e) => [
-          e.number,
-          e.date,
-          DEPT_LABELS[e.department] ?? e.department,
-          CATEGORY_LABELS[e.category] ?? e.category,
-          e.title,
-          e.vendor ?? '',
-          PAYMENT_METHOD_LABELS[e.paymentMethod] ?? e.paymentMethod,
-          e.referenceNumber ?? '',
-          e.currency,
-          money(e.amountMinor, e.currency),
-          e.recordedByName ?? '',
-        ]),
-      );
-      return;
-    }
-
-    const rows: Array<Array<string | number>> = [
-      ['SECTION', 'METRIC / ITEM', 'VALUE UGX', 'VALUE USD / NOTES'],
-      ['Executive Summary', 'Period', `${from} to ${to}`, `${r.days.length} days`],
-      ['Executive Summary', 'Occupancy %', `${r.totals.occupancy}%`, `${r.totals.roomNightsSold} / ${r.totals.roomNightsAvailable} room nights`],
-      ['Executive Summary', 'Total Gross Revenue', ugx(r.financialSummary?.totalGrossRevenue?.UGX), money(r.financialSummary?.totalGrossRevenue?.USD ?? '0', 'USD')],
-      ['Executive Summary', 'Cost of Sales (COGS)', ugx(r.financialSummary?.costOfSales?.UGX), money(r.financialSummary?.costOfSales?.USD ?? '0', 'USD')],
-      ['Executive Summary', 'Operating Expenses (OPEX)', ugx(r.financialSummary?.operatingExpenses?.UGX), money(r.financialSummary?.operatingExpenses?.USD ?? '0', 'USD')],
-      ['Executive Summary', 'Gross Operating Profit (GOP)', ugx(r.financialSummary?.grossOperatingProfit?.UGX), money(r.financialSummary?.grossOperatingProfit?.USD ?? '0', 'USD')],
-      ['Executive Summary', 'Room Revenue', ugx(r.totals.roomRevenue.UGX), `${r.totals.bookings} bookings`],
-      ...(r.departments ?? []).map((d) => ['Department Revenue', d.label, ugx(d.revenue.UGX), `${d.ordersCount} orders (${d.sharePercent}%)`]),
-      ...r.roomTypes.map((rt) => ['Suite Performance', rt.name, `${rt.roomNightsSold} nights sold`, `${rt.occupancy}% occupancy`]),
-      ...(r.paymentReconciliation ?? []).map((m) => ['Payment Channel', m.label, ugx(m.amount.UGX), `${m.count} transactions`]),
-      ...r.days.map((d) => ['Daily Occupancy', d.date, `${d.sold} / ${d.available} rooms`, `${d.occupancy}%`]),
-      ...(expensesList ?? []).map((e) => ['Expense Ledger', `${e.date} · ${e.number} · ${e.title}`, money(e.amountMinor, e.currency), DEPT_LABELS[e.department] ?? e.department]),
+    const k = r.kpis;
+    const c = r.compare;
+    const u = (m?: MoneyByCurrency) => (m ? money(m.UGX, 'UGX') : '');
+    const d = (m?: MoneyByCurrency) => (m && big(m.USD) ? money(m.USD, 'USD') : '');
+    const rows: (string | number | undefined)[][] = [
+      ['Section', 'Item', 'UGX', 'USD', `Comparison (${r.compareFrom} – ${r.compareTo}) UGX`, 'Notes'],
+      ['Summary', 'Period', `${r.from} to ${r.to}`, '', '', ''],
+      ...([
+        ['Gross revenue', k.grossRevenue, c.grossRevenue],
+        ['Net revenue', k.netRevenue, c.netRevenue],
+        ['Room revenue', k.roomRevenue, c.roomRevenue],
+        ['Food & drink', k.fnbRevenue, c.fnbRevenue],
+        ['Other revenue', k.otherRevenue, c.otherRevenue],
+        ['Expenses', k.expenses, c.expenses],
+        ['Gross operating profit', k.gop, c.gop],
+        ['Collected (net of refunds)', k.collected, c.collected],
+        ['ADR', k.adr, c.adr],
+        ['RevPAR', k.revpar, c.revpar],
+        ['TRevPAR', k.trevpar, c.trevpar],
+      ] as const).map(([l, a, b]) => ['Summary', l, u(a), d(a), u(b), '']),
+      ['Summary', 'Occupancy', `${k.occupancy}%`, '', `${c.occupancy}%`, `${k.roomNightsSold}/${k.roomNightsAvailable} room nights`],
+      ...(r.house.departments ?? []).map((x) => ['Department', x.label, u(x.revenue), d(x.revenue), '', x.secondaryMetric]),
+      ...r.roomTypes.map((x) => ['Room type', x.name, u(x.revenue), d(x.revenue), '', `${x.roomNightsSold} nights · ${x.occupancy}% · ADR ${u(x.adr)}`]),
+      ...r.ratePlans.map((x) => ['Rate plan', x.name, u(x.revenue), d(x.revenue), '', `${x.roomNights} nights · ${x.bookings} bookings`]),
+      ...r.channels.map((x) => ['Channel', SOURCE[x.source] ?? x.source, u(x.revenue), d(x.revenue), '', `${x.roomNights} nights · ${x.share}%`]),
+      ...r.cash.rails.map((x) => ['Cash rail', x.label, u(x.net), d(x.net), '', `in ${u(x.inflow)} · refunds ${u(x.refunds)} · out ${u(x.outflow)} · ${x.inCount} payments`]),
+      ...r.receivables.debtors.map((x) => ['Owed', `${x.code} ${x.name}`, x.currency === 'UGX' ? money(x.balanceMinor, 'UGX') : '', x.currency === 'USD' ? money(x.balanceMinor, 'USD') : '', '', `${x.status} · ${x.daysPastDeparture} days after departure`]),
+      ...r.adjustments.lines.map((x) => ['Adjustment', `${x.date} ${x.code} ${x.guest}`, x.currency === 'UGX' ? money(x.amountMinor, 'UGX') : '', x.currency === 'USD' ? money(x.amountMinor, 'USD') : '', '', x.description]),
+      ...r.daily.map((x) => ['Daily', x.date, money(big(x.roomUGX) + big(x.fnbUGX) + big(x.otherUGX), 'UGX'), '', '', `collected ${money(x.collectedUGX, 'UGX')} · spent ${money(x.expensesUGX, 'UGX')} · ${x.occupancy}%`]),
     ];
-    exportToCsv(`reberon-hotel-report-${from}-to-${to}.csv`, rows[0] as string[], rows.slice(1));
+    exportToCsv(`reberon-finance-${r.from}-to-${r.to}.csv`, rows[0] as string[], rows.slice(1).map((row) => row.map((v) => v ?? '')));
   };
+
+  const vs = compare === 'prev' ? 'vs previous period' : 'vs last year';
 
   return (
     <div className="fade-in">
       <PageHeader
-        title="Entire Hotel Performance & Reports"
-        description={
-          r
-            ? `${dateRange(r.from, plus(r.to, 1))} · Executive P&L, multi-department aggregation, cost drivers & cash reconciliation`
-            : 'Aggregated hotel revenue, occupancy, expenses and cash flow'
-        }
+        title="Financial reports"
+        description={r ? `${fmtDay(r.from)} – ${fmtDay(r.to)} ${r.from.slice(0, 4)} · compared with ${fmtDay(r.compareFrom)} – ${fmtDay(r.compareTo)} ${r.compareFrom.slice(0, 4)} · UGX and USD never mixed` : 'Revenue, profit, cash, receivables and costs across the hotel'}
         actions={
-          <div className="flex items-center gap-2">
-            {canManageExpenses && (
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Plus className="size-3.5" />}
-                onClick={() => setExpenseModalOpen(true)}
-              >
-                Record Expense
-              </Button>
-            )}
-            {r && (
-              <Button size="sm" variant="secondary" icon={<Download className="size-3.5" />} onClick={csv}>
-                Export CSV
-              </Button>
-            )}
+          <div className="no-print flex flex-wrap items-center gap-2">
+            {canManageExpenses && <Button variant="primary" size="sm" icon={<Plus className="size-3.5" />} onClick={() => { setTab('EXPENSES'); setExpenseOpen(true); }}>Record expense</Button>}
+            <Button size="sm" icon={<Printer className="size-3.5" />} onClick={() => window.print()}>Print</Button>
+            <Button size="sm" icon={<Download className="size-3.5" />} disabled={!r} onClick={csv}>Export CSV</Button>
           </div>
         }
       />
 
-      {/* Date Range & Quick Presets */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
+      <div className="no-print mb-4 grid gap-3 border-b border-line pb-3.5">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap rounded-lg border border-line bg-surface p-0.5 text-xs">
             {(Object.keys(PERIODS) as (keyof typeof PERIODS)[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setPeriod(k)}
-                className={cn(
-                  'rounded-md px-3 py-1 font-medium transition',
-                  period === k ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg',
-                )}
-              >
-                {PERIODS[k].label}
-              </button>
+              <button key={k} type="button" onClick={() => setPeriod(k)} className={cn('rounded-md px-2.5 py-1 font-medium transition', period === k ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg')}>{PERIODS[k].label}</button>
             ))}
-            <button
-              type="button"
-              onClick={() => setPeriod('custom')}
-              className={cn(
-                'rounded-md px-3 py-1 font-medium transition',
-                period === 'custom' ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg',
-              )}
-            >
-              Custom Range
-            </button>
+            <button type="button" onClick={() => setPeriod('custom')} className={cn('rounded-md px-2.5 py-1 font-medium transition', period === 'custom' ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg')}>Custom</button>
           </div>
           {period === 'custom' && (
             <div className="flex items-center gap-2">
-              <TextInput
-                type="date"
-                aria-label="From"
-                value={custom.from}
-                onChange={(e) => setCustom({ ...custom, from: e.target.value })}
-              />
-              <TextInput
-                type="date"
-                aria-label="To"
-                value={custom.to}
-                onChange={(e) => setCustom({ ...custom, to: e.target.value })}
-              />
+              <TextInput type="date" aria-label="From" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
+              <span className="text-xs text-fg-muted">to</span>
+              <TextInput type="date" aria-label="To" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
             </div>
           )}
+          <div className="ml-auto flex items-center gap-1.5 text-xs">
+            <span className="text-fg-muted">Compare with</span>
+            <div className="flex rounded-lg border border-line bg-surface p-0.5">
+              {([['prev', 'Previous period'], ['yoy', 'Last year']] as const).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setCompare(v)} className={cn('rounded-md px-2.5 py-1 font-medium', compare === v ? 'bg-fg text-bg' : 'text-fg-muted hover:text-fg')}>{l}</button>
+              ))}
+            </div>
+          </div>
         </div>
-
-        {/* 4 Crisp Report Tabs */}
-        <div className="flex flex-wrap rounded-lg border border-line-strong bg-surface-2 p-0.5 text-xs font-semibold">
-          {[
-            { id: 'OVERVIEW', label: 'Executive P&L' },
-            { id: 'DEPARTMENTS', label: 'Department Traffic' },
-            { id: 'EXPENSES', label: 'Expenses & Cost Drivers' },
-            { id: 'PAYMENTS', label: 'Cash & Settlement Rails' },
-          ].map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setActiveTab(t.id as ReportTab)}
-              className={cn(
-                'rounded-md px-3 py-1 transition',
-                activeTab === t.id
-                  ? 'border border-line bg-surface text-fg shadow-sm'
-                  : 'text-fg-muted hover:text-fg',
-              )}
-            >
+        <div className="flex flex-wrap gap-1 text-xs font-semibold">
+          {TABS.map((t) => (
+            <button key={t.id} type="button" onClick={() => setTab(t.id)} className={cn('rounded-lg border px-3 py-1.5 transition', tab === t.id ? 'border-fg bg-fg text-bg' : 'border-line bg-surface text-fg-muted hover:text-fg')}>
               {t.label}
+              {t.id === 'RECEIVABLES' && r && r.receivables.debtors.length > 0 && <span className="ml-1.5 rounded-full bg-danger px-1.5 text-[10px] text-white">{r.receivables.debtors.length}</span>}
             </button>
           ))}
         </div>
       </div>
 
-      {isReportLoading || !r ? (
-        <Skeleton className="h-96" />
-      ) : (
-        <div className="grid gap-5">
-          {/* ───────────────────────── TAB 1: EXECUTIVE OVERVIEW & P&L ───────────────────────── */}
-          {activeTab === 'OVERVIEW' && (
-            <div className="grid gap-5 fade-in">
-              {/* Row 1: High Level Revenue & Profitability */}
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile
-                  label="Total Hotel Gross Revenue"
-                  value={ugx(r.financialSummary?.totalGrossRevenue.UGX)}
-                  note={`All 6 operating departments${usdNote(r.financialSummary?.totalGrossRevenue.USD)}`}
-                />
-                <StatTile
-                  label="Cost of Sales (COGS)"
-                  value={ugx(r.financialSummary?.costOfSales.UGX)}
-                  note="Direct kitchen food & bar stock procurement"
-                />
-                <StatTile
-                  label="Operating Expenses (OPEX)"
-                  value={ugx(r.financialSummary?.operatingExpenses.UGX)}
-                  note="Energy, generator fuel, payroll & upkeep"
-                />
-                <StatTile
-                  label="Gross Operating Profit (GOP)"
-                  value={ugx(r.financialSummary?.grossOperatingProfit.UGX)}
-                  note="Net operating cashflow before capital reserve"
-                />
-              </div>
-
-              {/* Row 2: Hospitality Industry KPIs */}
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile
-                  label="TrevPAR (Total Rev / Available Room)"
-                  value={ugx(r.financialSummary?.trevpar.UGX)}
-                  note="Total property yield per room night"
-                />
-                <StatTile
-                  label="Room RevPAR"
-                  value={ugx(r.totals.revpar.UGX)}
-                  note="Rooms division yield per room night"
-                />
-                <StatTile
-                  label="Occupancy Rate"
-                  value={`${r.totals.occupancy}%`}
-                  note={`${r.totals.roomNightsSold}/${r.totals.roomNightsAvailable} room nights`}
-                />
-                <StatTile
-                  label="Average Daily Rate (ADR)"
-                  value={ugx(r.totals.adr.UGX)}
-                  note={`Per room night sold${usdNote(r.totals.adr.USD)}`}
-                />
-              </div>
-
-              {/* Departmental Revenue Contribution + Uniform P&L Waterfall */}
-              <div className="grid gap-5 lg:grid-cols-2">
-                <Section
-                  title="Departmental Revenue Share"
-                  description="Gross contribution by hotel revenue center"
-                >
-                  <div className="space-y-3 pt-1">
-                    {(r.departments ?? []).map((dep) => (
-                      <div key={dep.department} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs font-medium">
-                          <span className="font-semibold text-fg">{dep.label}</span>
-                          <span className="font-mono">
-                            {ugx(dep.revenue.UGX)}{' '}
-                            <span className="text-fg-subtle">({dep.sharePercent}%)</span>
-                          </span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
-                          <div
-                            className="h-full rounded-full bg-fg"
-                            style={{ width: `${Math.min(100, Math.max(1, dep.sharePercent))}%` }}
-                          />
-                        </div>
-                        <div className="text-[11px] text-fg-subtle">{dep.secondaryMetric}</div>
-                      </div>
-                    ))}
-                  </div>
-                </Section>
-
-                {/* Uniform System of Accounts for Lodging (USALI) P&L Waterfall */}
-                <Section
-                  title="Property Profit & Loss (P&L) Statement"
-                  description="Hospitality operating standard summary (UGX)"
-                >
-                  <div className="rounded-xl border border-line bg-surface-2/30 p-4 text-xs font-mono">
-                    <div className="flex items-center justify-between border-b border-line pb-2 font-bold text-fg">
-                      <span>(+) GROSS REVENUE (ALL OUTLETS)</span>
-                      <span>{ugx(r.financialSummary?.totalGrossRevenue.UGX)}</span>
-                    </div>
-
-                    <div className="space-y-1.5 py-2.5 text-fg-muted">
-                      <div className="flex justify-between pl-3 text-[11px]">
-                        <span>• Rooms Division</span>
-                        <span>{ugx(r.totals.roomRevenue.UGX)}</span>
-                      </div>
-                      <div className="flex justify-between pl-3 text-[11px]">
-                        <span>• Food & Beverage (Kitchen & Bar)</span>
-                        <span>
-                          {ugx(
-                            String(
-                              BigInt(r.departments?.find((d) => d.department === 'KITCHEN')?.revenue.UGX || '0') +
-                                BigInt(r.departments?.find((d) => d.department === 'BAR')?.revenue.UGX || '0'),
-                            ),
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between pl-3 text-[11px]">
-                        <span>• Health Club, Gym & Spa</span>
-                        <span>
-                          {ugx(r.departments?.find((d) => d.department === 'HEALTH_CLUB')?.revenue.UGX)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between pl-3 text-[11px]">
-                        <span>• Conferences & Banqueting</span>
-                        <span>
-                          {ugx(r.departments?.find((d) => d.department === 'CONFERENCE')?.revenue.UGX)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between pl-3 text-[11px]">
-                        <span>• Tours & Stay Extras</span>
-                        <span>
-                          {ugx(r.departments?.find((d) => d.department === 'EXTRAS_TOURS')?.revenue.UGX)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-line py-2 font-semibold text-amber-700 dark:text-amber-400">
-                      <span>(−) COST OF GOODS SOLD (COGS)</span>
-                      <span>{ugx(r.financialSummary?.costOfSales.UGX)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-line py-2 font-bold text-fg">
-                      <span>(=) GROSS PROFIT</span>
-                      <span>{ugx(r.financialSummary?.grossProfit.UGX)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-line py-2 font-semibold text-rose-700 dark:text-rose-400">
-                      <span>(−) OPERATING EXPENSES (OPEX)</span>
-                      <span>{ugx(r.financialSummary?.operatingExpenses.UGX)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t-2 border-fg pt-2.5 text-sm font-bold text-emerald-700 dark:text-emerald-400">
-                      <span>(=) GROSS OPERATING PROFIT (GOP)</span>
-                      <span>{ugx(r.financialSummary?.grossOperatingProfit.UGX)}</span>
-                    </div>
-                  </div>
-                </Section>
-              </div>
-
-              {/* Daily Occupancy Column Chart */}
-              <Section title="Daily Occupancy (%)" description="Tracking room utilization day-by-day">
-                <ColumnChart
-                  data={r.days.map((d) => ({ date: d.date, count: d.occupancy }))}
-                  label="Occupancy"
-                  max={100}
-                  format={(n) => `${Math.round(n)}%`}
-                  endLabel="last"
-                  caption={
-                    <>
-                      Daily occupancy · average <b className="text-fg">{r.totals.occupancy}%</b> across period
-                    </>
-                  }
-                  height={160}
-                />
-              </Section>
-            </div>
-          )}
-
-          {/* ───────────────────────── TAB 2: DEPARTMENT TRAFFIC ───────────────────────── */}
-          {activeTab === 'DEPARTMENTS' && (
-            <div className="grid gap-5 fade-in">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {(r.departments ?? []).map((dep) => (
-                  <div key={dep.department} className="card p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
-                          Department
-                        </span>
-                        <h3 className="text-base font-bold text-fg">{dep.label}</h3>
-                      </div>
-                      <Pill tone="blue">{dep.sharePercent}% Share</Pill>
-                    </div>
-
-                    <div className="mt-4 border-t border-line pt-3">
-                      <div className="text-2xl font-bold font-mono text-fg">{ugx(dep.revenue.UGX)}</div>
-                      {dep.revenue.USD !== '0' && (
-                        <div className="text-xs text-fg-muted">{money(dep.revenue.USD, 'USD')}</div>
-                      )}
-                      <p className="mt-2 text-xs font-medium text-fg-muted">{dep.secondaryMetric}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Channels & Room Types Detail */}
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Section title="Booking Channels" description="Room nights by acquisition source">
-                  {r.sourceMix.length ? (
-                    <BarList
-                      data={r.sourceMix.map((x) => ({
-                        label: SOURCE[x.source] ?? x.source,
-                        value: x.roomNights,
-                      }))}
-                    />
-                  ) : (
-                    <p className="text-xs text-fg-muted">No stays in period.</p>
-                  )}
-                </Section>
-                <Section title="Occupancy by Room Category" description="Percentage occupied (%)">
-                  <BarList data={r.roomTypes.map((x) => ({ label: x.name, value: x.occupancy }))} />
-                </Section>
-                <Section title="Booking Lead Time" description="Advance booking window">
-                  <BarList data={r.leadTime.map((x) => ({ label: x.bucket, value: x.bookings }))} />
-                </Section>
-                <Section title="Guest Sentiment & Post-Stay Ratings" description="Cleanliness and service scores">
-                  <BarList
-                    data={[
-                      { label: 'Good Experience', value: r.feedback.GOOD },
-                      { label: 'Neutral / OK', value: r.feedback.OK },
-                      { label: 'Issues Reported', value: r.feedback.BAD },
-                    ]}
-                  />
-                </Section>
-              </div>
-            </div>
-          )}
-
-          {/* ───────────────────────── TAB 3: EXPENSE MANAGEMENT & COST DRIVERS ───────────────────────── */}
-          {activeTab === 'EXPENSES' && (
-            <div className="grid gap-5 fade-in">
-              {/* Cost Drivers Top Tiles */}
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile
-                  label="Total Hotel Expenses"
-                  value={ugx(r.expenses?.total.UGX)}
-                  note="All registered costs in period"
-                />
-                <StatTile
-                  label="Cost of Sales (COGS)"
-                  value={ugx(r.financialSummary?.costOfSales.UGX)}
-                  note="Food ingredients & bar drinks"
-                />
-                <StatTile
-                  label="Energy & Generator Fuel"
-                  value={ugx(
-                    String(
-                      BigInt(
-                        r.expenses?.byCategory.find((c) => c.category === 'UTILITIES_DIESEL_FUEL')?.amount.UGX || '0',
-                      ) +
-                        BigInt(
-                          r.expenses?.byCategory.find((c) => c.category === 'UTILITIES_ELECTRICITY')?.amount.UGX || '0',
-                        ) +
-                        BigInt(
-                          r.expenses?.byCategory.find((c) => c.category === 'UTILITIES_WATER_GAS')?.amount.UGX || '0',
-                        ),
-                    ),
-                  )}
-                  note="Umeme power, diesel & gas"
-                />
-                <StatTile
-                  label="Active Invoices / Vouchers"
-                  value={String(filteredExpenses.length)}
-                  note="Recorded expense transactions"
-                />
-              </div>
-
-              {/* Breakdown Cards: By Category & By Department */}
-              <div className="grid gap-5 lg:grid-cols-2">
-                <Section title="Cost Drivers by Category" description="Where money is spent across the property">
-                  <div className="space-y-2.5 pt-1">
-                    {(r.expenses?.byCategory ?? []).map((cat) => (
-                      <div
-                        key={cat.category}
-                        className="flex items-center justify-between rounded-lg border border-line bg-surface-2/40 px-3 py-2 text-xs"
-                      >
-                        <div>
-                          <div className="font-semibold text-fg">{cat.label}</div>
-                          <div className="text-[11px] text-fg-subtle">
-                            {cat.count} voucher{cat.count === 1 ? '' : 's'} ·{' '}
-                            {cat.isDirectCost ? 'Direct Cost (COGS)' : 'Operating Expense (OPEX)'}
-                          </div>
-                        </div>
-                        <span className="font-mono font-bold text-fg">{ugx(cat.amount.UGX)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Section>
-
-                <Section title="Department Cost Allocation" description="Expenses grouped by hotel department">
-                  <div className="space-y-2.5 pt-1">
-                    {(r.expenses?.byDepartment ?? []).map((dep) => (
-                      <div
-                        key={dep.department}
-                        className="flex items-center justify-between rounded-lg border border-line bg-surface-2/40 px-3 py-2 text-xs"
-                      >
-                        <div>
-                          <div className="font-semibold text-fg">{dep.label}</div>
-                          <div className="text-[11px] text-fg-subtle">{dep.count} records</div>
-                        </div>
-                        <span className="font-mono font-bold text-fg">{ugx(dep.amount.UGX)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Section>
-              </div>
-
-              {/* Expense Ledger Table */}
-              <div className="card p-4">
-                <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-fg">Expense Transaction Ledger</h3>
-                    <p className="text-xs text-fg-muted">
-                      Audit trail of operational disbursements, supplier invoices and receipts
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-[200px]">
-                      <Search className="absolute left-2.5 top-2.5 size-3.5 text-fg-muted" />
-                      <input
-                        type="search"
-                        placeholder="Search expense, vendor, #..."
-                        value={expenseSearch}
-                        onChange={(e) => setExpenseSearch(e.target.value)}
-                        className="h-8 w-full rounded-lg border border-line bg-surface pl-8 pr-3 text-xs placeholder:text-fg-subtle focus:border-fg focus:outline-none"
-                      />
-                    </div>
-                    <select
-                      aria-label="Filter department"
-                      value={expenseDeptFilter}
-                      onChange={(e) => setExpenseDeptFilter(e.target.value)}
-                      className="h-8 rounded-lg border border-line bg-surface px-2.5 text-xs font-medium"
-                    >
-                      <option value="ALL">All Departments</option>
-                      {Object.entries(DEPT_LABELS).map(([k, l]) => (
-                        <option key={k} value={k}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
-                    {canManageExpenses && (
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        icon={<Plus className="size-3" />}
-                        onClick={() => setExpenseModalOpen(true)}
-                      >
-                        New Expense
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {isExpensesLoading ? (
-                  <Skeleton className="h-40" />
-                ) : filteredExpenses.length === 0 ? (
-                  <Empty
-                    icon={<Receipt className="size-8 text-fg-subtle" />}
-                    title="No expenses found"
-                    body="Record your first hotel expense or supplier payment using the button above."
-                  />
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="border-b border-line text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
-                          <th className="pb-2">Date / Voucher</th>
-                          <th className="pb-2">Department</th>
-                          <th className="pb-2">Category</th>
-                          <th className="pb-2">Title & Vendor</th>
-                          <th className="pb-2">Payment</th>
-                          <th className="pb-2 text-right">Amount</th>
-                          {canManageExpenses && <th className="pb-2 text-right">Actions</th>}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-line">
-                        {filteredExpenses.map((exp) => (
-                          <tr key={exp.id} className="hover:bg-surface-2/40">
-                            <td className="py-2.5 font-mono">
-                              <span className="font-semibold text-fg">{exp.number}</span>
-                              <div className="text-[11px] text-fg-subtle">{exp.date}</div>
-                            </td>
-                            <td className="py-2.5">
-                              <span className="font-medium text-fg">
-                                {DEPT_LABELS[exp.department] ?? exp.department}
-                              </span>
-                            </td>
-                            <td className="py-2.5">
-                              <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-fg-muted">
-                                {CATEGORY_LABELS[exp.category] ?? exp.category}
-                              </span>
-                            </td>
-                            <td className="py-2.5">
-                              <div className="font-medium text-fg">{exp.title}</div>
-                              {exp.vendor && (
-                                <div className="text-[11px] text-fg-subtle">Vendor: {exp.vendor}</div>
-                              )}
-                            </td>
-                            <td className="py-2.5">
-                              <span className="font-mono text-[11px]">
-                                {PAYMENT_METHOD_LABELS[exp.paymentMethod] ?? exp.paymentMethod}
-                              </span>
-                            </td>
-                            <td className="py-2.5 text-right font-mono font-bold text-fg">
-                              {money(exp.amountMinor, exp.currency)}
-                            </td>
-                            {canManageExpenses && (
-                              <td className="py-2.5 text-right">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  icon={<Trash2 className="size-3 text-rose-500" />}
-                                  onClick={() => {
-                                    if (confirm(`Delete expense ${exp.number}?`)) {
-                                      deleteExpenseMut.mutate(exp.id);
-                                    }
-                                  }}
-                                />
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ───────────────────────── TAB 4: PAYMENT RAILS & CASH RECONCILIATION ───────────────────────── */}
-          {activeTab === 'PAYMENTS' && (
-            <div className="grid gap-5 fade-in">
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-                <StatTile
-                  label="Net Inflow Collected"
-                  value={ugx(r.totals.collected.UGX)}
-                  note={`Cleared across all channels${usdNote(r.totals.collected.USD)}`}
-                />
-                <StatTile
-                  label="Settlement Settlement Rails"
-                  value={String(r.paymentReconciliation?.length ?? 0)}
-                  note="Cash, MoMo, Bank, Card & Folio"
-                />
-                <StatTile
-                  label="Audit Status"
-                  value="100% Tracked"
-                  note="Digital + POS Drawer reconciliation"
-                />
-              </div>
-
-              <Section
-                title="Cash Flow & Settlement Rail Summary"
-                description="Where hotel revenues were received and settled"
-              >
-                <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-line bg-surface-2/40 text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
-                        <th className="p-3">Payment Rail</th>
-                        <th className="p-3">Inflows Count</th>
-                        <th className="p-3 text-right">Total UGX</th>
-                        <th className="p-3 text-right">Total USD</th>
-                        <th className="p-3 text-center">Reconciliation Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line">
-                      {(r.paymentReconciliation ?? []).map((rail) => (
-                        <tr key={rail.method} className="hover:bg-surface-2/40">
-                          <td className="p-3">
-                            <div className="font-semibold text-fg">{rail.label}</div>
-                            <div className="font-mono text-[11px] text-fg-subtle">{rail.method}</div>
-                          </td>
-                          <td className="p-3 font-mono font-medium">{rail.count} transactions</td>
-                          <td className="p-3 text-right font-mono font-bold text-fg">
-                            {ugx(rail.amount.UGX)}
-                          </td>
-                          <td className="p-3 text-right font-mono text-fg-muted">
-                            {rail.amount.USD !== '0' ? money(rail.amount.USD, 'USD') : '—'}
-                          </td>
-                          <td className="p-3 text-center">
-                            <Pill tone="green" dot>
-                              Audited
-                            </Pill>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Section>
-            </div>
-          )}
+      {error && <p className="mb-4 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-[13px] text-danger">{(error as Error).message}</p>}
+      {isLoading || !r ? <Skeleton className="h-96" /> : (
+        <div className={cn('grid gap-5 transition-opacity', isFetching && 'opacity-60')}>
+          {tab === 'OVERVIEW' && <Overview r={r} vs={vs} goTab={setTab} />}
+          {tab === 'ROOMS' && <Rooms r={r} vs={vs} />}
+          {tab === 'OUTLETS' && <Outlets r={r} />}
+          {tab === 'CASH' && <Cash r={r} vs={vs} />}
+          {tab === 'RECEIVABLES' && <Receivables r={r} />}
+          {tab === 'ADJUSTMENTS' && <Adjustments r={r} />}
+          {tab === 'EXPENSES' && <ExpensesPanel from={from} to={to} r={r.house} canManageExpenses={canManageExpenses} modalOpen={expenseOpen} setModalOpen={setExpenseOpen} />}
+          <p className="text-[11px] text-fg-subtle">{r.house.currencyNote} Generated {new Date(r.generatedAt).toLocaleString('en-GB', { timeZone: 'Africa/Kampala' })} (Kampala).</p>
         </div>
       )}
-
-      {/* ───────────────────────── Record Expense Modal ───────────────────────── */}
-      <Dialog
-        open={expenseModalOpen}
-        onClose={() => setExpenseModalOpen(false)}
-        size="md"
-        title="Record Hotel Expense"
-        description="Add a cost disbursement, utility bill payment, food market procurement or maintenance voucher."
-      >
-        <form
-          className="grid gap-3.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            createExpenseMut.mutate();
-          }}
-        >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextInput
-              label="Expense Date"
-              type="date"
-              value={expenseForm.date}
-              onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
-            />
-            <SelectInput
-              label="Department Incurring Cost"
-              value={expenseForm.department}
-              onChange={(e) =>
-                setExpenseForm({ ...expenseForm, department: e.target.value as Department })
-              }
-            >
-              {Object.entries(DEPT_LABELS).map(([k, l]) => (
-                <option key={k} value={k}>
-                  {l}
-                </option>
-              ))}
-            </SelectInput>
-          </div>
-
-          <SelectInput
-            label="Cost Driver / Expense Category"
-            value={expenseForm.category}
-            onChange={(e) =>
-              setExpenseForm({ ...expenseForm, category: e.target.value as ExpenseCategory })
-            }
-          >
-            {Object.entries(CATEGORY_LABELS).map(([k, l]) => (
-              <option key={k} value={k}>
-                {l}
-              </option>
-            ))}
-          </SelectInput>
-
-          <TextInput
-            label="Title / Expense Description"
-            placeholder="e.g. 50 Litres Diesel for Generator, Market produce (vegetables & beef)..."
-            value={expenseForm.title}
-            onChange={(e) => setExpenseForm({ ...expenseForm, title: e.target.value })}
-          />
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextInput
-              label="Supplier / Vendor (Optional)"
-              placeholder="e.g. TotalEnergies Kapchorwa, Mbale Fresh Market..."
-              value={expenseForm.vendor}
-              onChange={(e) => setExpenseForm({ ...expenseForm, vendor: e.target.value })}
-            />
-            <TextInput
-              label="Invoice / Receipt #"
-              placeholder="e.g. INV-9812, VOUCHER-04"
-              value={expenseForm.referenceNumber}
-              onChange={(e) => setExpenseForm({ ...expenseForm, referenceNumber: e.target.value })}
-            />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-2">
-              <TextInput
-                label="Amount"
-                inputMode="numeric"
-                placeholder="e.g. 250000"
-                value={expenseForm.amount}
-                onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
-              />
-            </div>
-            <SelectInput
-              label="Currency"
-              value={expenseForm.currency}
-              onChange={(e) =>
-                setExpenseForm({ ...expenseForm, currency: e.target.value as 'UGX' | 'USD' })
-              }
-            >
-              <option value="UGX">UGX (Shillings)</option>
-              <option value="USD">USD ($)</option>
-            </SelectInput>
-          </div>
-
-          <SelectInput
-            label="Payment Method / Source"
-            value={expenseForm.paymentMethod}
-            onChange={(e) =>
-              setExpenseForm({
-                ...expenseForm,
-                paymentMethod: e.target.value as ExpensePaymentMethod,
-              })
-            }
-          >
-            {Object.entries(PAYMENT_METHOD_LABELS).map(([k, l]) => (
-              <option key={k} value={k}>
-                {l}
-              </option>
-            ))}
-          </SelectInput>
-
-          <TextArea
-            label="Internal Notes / Justification (Optional)"
-            placeholder="Authorized for emergency generator run during weekend storm."
-            value={expenseForm.description}
-            onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
-          />
-
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
-            <Button type="button" variant="ghost" onClick={() => setExpenseModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={createExpenseMut.isPending}>
-              Save & Record Expense
-            </Button>
-          </div>
-        </form>
-      </Dialog>
     </div>
   );
+}
+
+/* ───────────────────────── Overview ───────────────────────── */
+
+function Overview({ r, vs, goTab }: { r: FinanceReportDTO; vs: string; goTab: (t: Tab) => void }) {
+  const k = r.kpis;
+  const c = r.compare;
+  const net = big(k.netRevenue.UGX);
+  const margin = net ? Math.round((Number(big(k.gop.UGX)) / Number(net)) * 1000) / 10 : 0;
+  const fs = r.house.financialSummary;
+  const pctOf = (v?: string) => (net ? `${Math.round((Number(big(v)) / Number(net)) * 1000) / 10}%` : '—');
+  const deps = r.house.departments ?? [];
+  const pl: { label: string; now?: MoneyByCurrency; before?: MoneyByCurrency; strong?: boolean; indent?: boolean; sign?: string; invert?: boolean }[] = [
+    { label: 'Rooms', now: k.roomRevenue, before: c.roomRevenue, indent: true },
+    { label: 'Food & drink', now: k.fnbRevenue, before: c.fnbRevenue, indent: true },
+    { label: 'Extras, spa, events & fees', now: k.otherRevenue, before: c.otherRevenue, indent: true },
+    { label: 'Gross revenue', now: k.grossRevenue, before: c.grossRevenue, strong: true },
+    { label: 'Less discounts, credits & write-offs', now: fs?.allowances, sign: '−', indent: true, invert: true },
+    { label: 'Net revenue', now: k.netRevenue, before: c.netRevenue, strong: true },
+    { label: 'Cost of sales (food & drink stock)', now: fs?.costOfSales, sign: '−', indent: true, invert: true },
+    { label: 'Gross profit', now: fs?.grossProfit, strong: true },
+    { label: 'Operating expenses', now: fs?.operatingExpenses, sign: '−', indent: true, invert: true },
+    { label: 'Gross operating profit (GOP)', now: k.gop, before: c.gop, strong: true },
+  ];
+  const ICON = { good: CheckCircle2, warn: AlertTriangle, bad: XCircle, info: Info } as const;
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Net revenue" value={mm(k.netRevenue)} delta={<Delta now={big(k.netRevenue.UGX)} before={big(c.netRevenue.UGX)} label={vs} />} sub={vs} />
+        <Kpi label="Operating profit (GOP)" value={mm(k.gop)} tone={big(k.gop.UGX) < 0n ? 'bad' : undefined} delta={<Delta now={big(k.gop.UGX)} before={big(c.gop.UGX)} />} sub={`${margin}% margin`} />
+        <Kpi label="Cash collected" value={mm(k.collected)} delta={<Delta now={big(k.collected.UGX)} before={big(c.collected.UGX)} />} sub="after refunds" href="/reports?tab=CASH" />
+        <Kpi label="Owed to the hotel" value={mm(r.receivables.total)} tone={big(r.receivables.total.UGX) > 0n ? 'bad' : 'good'} sub={`${r.receivables.debtors.length} open balance${r.receivables.debtors.length === 1 ? '' : 's'} today`} href="/reports?tab=RECEIVABLES" />
+        <Kpi label="Occupancy" value={`${k.occupancy}%`} delta={<Delta kind="pts" now={k.occupancy} before={c.occupancy} />} sub={`${k.roomNightsSold}/${k.roomNightsAvailable} nights`} />
+        <Kpi label="ADR" value={mm(k.adr)} delta={<Delta now={big(k.adr.UGX)} before={big(c.adr.UGX)} />} sub="per night sold" />
+        <Kpi label="RevPAR" value={mm(k.revpar)} delta={<Delta now={big(k.revpar.UGX)} before={big(c.revpar.UGX)} />} sub="rooms ÷ available" />
+        <Kpi label="TRevPAR" value={mm(k.trevpar)} delta={<Delta now={big(k.trevpar.UGX)} before={big(c.trevpar.UGX)} />} sub="all revenue ÷ available" />
+      </div>
+
+      {r.insights.length > 0 && (
+        <Section title="What the numbers say" description="Read automatically from this period">
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {r.insights.map((i) => {
+              const Icon = ICON[i.tone];
+              return (
+                <li key={i.title} className={cn('flex gap-2.5 rounded-xl border p-3 text-[12.5px]', i.tone === 'bad' ? 'border-danger/30 bg-danger/5' : i.tone === 'warn' ? 'border-warning/30 bg-warning/5' : i.tone === 'good' ? 'border-success/25 bg-success/5' : 'border-line bg-surface-2/40')}>
+                  <Icon className={cn('mt-0.5 size-4 shrink-0', i.tone === 'bad' ? 'text-danger' : i.tone === 'warn' ? 'text-warning' : i.tone === 'good' ? 'text-success' : 'text-info')} aria-hidden />
+                  <span><b className="block text-fg">{i.title}</b><span className="text-fg-muted">{i.detail}</span></span>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
+
+      <Section title="Revenue by day" description="Rooms on the night slept, food & drink and extras on the day sold (UGX)">
+        <RevenueTrend daily={r.daily} />
+      </Section>
+
+      <div className="grid gap-5 lg:grid-cols-[1.25fr_1fr]">
+        <Section title="Profit & loss" description={`USALI-style summary · ${vs}`}>
+          <table className="w-full text-xs tabular">
+            <thead className="text-[10.5px] uppercase tracking-wider text-fg-subtle"><tr><th className="pb-2 text-left font-semibold" /><th className="pb-2 text-right font-semibold">This period</th><th className="pb-2 text-right font-semibold">% of net</th><th className="pb-2 text-right font-semibold">Compared</th><th className="pb-2 text-right font-semibold">Change</th></tr></thead>
+            <tbody>
+              {pl.map((row) => (
+                <tr key={row.label} className={cn(row.strong ? 'border-t border-line-strong font-semibold text-fg' : 'text-fg-muted')}>
+                  <td className={cn('py-1.5', row.indent && 'pl-3')}>{row.label}</td>
+                  <td className="py-1.5 text-right">{row.sign && big(row.now?.UGX) ? row.sign : ''}{mm(row.now)}</td>
+                  <td className="py-1.5 text-right">{pctOf(row.now?.UGX)}</td>
+                  <td className="py-1.5 text-right">{row.before ? mm(row.before) : ''}</td>
+                  <td className="py-1.5 text-right">{row.before && <Delta now={big(row.now?.UGX)} before={big(row.before.UGX)} invert={row.invert} />}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {r.tax && <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-[11.5px] text-fg-muted">{r.tax.label} at {r.tax.ratePercent}% {r.tax.inclusive ? 'contained in' : 'on top of'} net revenue: <b className="text-fg">{mm(r.tax.vat)}</b> — set aside for URA.</p>}
+        </Section>
+
+        <Section title="Where revenue came from" description="Share of gross revenue by department">
+          <ShareBars rows={deps.filter((d) => big(d.revenue.UGX) || big(d.revenue.USD)).sort((a, b) => Number(big(b.revenue.UGX) - big(a.revenue.UGX))).map((d) => ({ label: d.label, value: Number(big(d.revenue.UGX)), display: <>{mm(d.revenue)} <span className="text-fg-subtle">({d.sharePercent}%)</span></>, sub: d.secondaryMetric }))} />
+          <button type="button" className="no-print mt-3 text-[12px] font-medium text-fg-muted hover:text-fg" onClick={() => goTab('OUTLETS')}>Department detail →</button>
+        </Section>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Section title="On the books" description="Confirmed from today forward">
+          <ul className="grid gap-3 text-xs">
+            {r.onTheBooks.months.map((m) => (
+              <li key={m.month}>
+                <div className="flex justify-between"><span className="font-medium">{fmtMonth(m.month)}</span><span className="tabular">{m.occupancy}%</span></div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-surface-2"><div className="h-full rounded-full" style={{ width: `${Math.min(100, m.occupancy)}%`, minWidth: m.roomNights ? 4 : 0, background: 'var(--series)' }} /></div>
+                <p className="mt-0.5 text-[11px] text-fg-subtle">{m.roomNights} of {m.roomNightsAvailable} nights · {mm(m.revenue)} · {m.bookings} booking{m.bookings === 1 ? '' : 's'}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 border-t border-line pt-2 text-[11.5px] text-fg-muted">Picked up in the last 7 days: <b className="text-fg">{r.onTheBooks.pickup7d.bookings}</b> booking(s), {r.onTheBooks.pickup7d.roomNights} nights, {mm(r.onTheBooks.pickup7d.revenue)}</p>
+        </Section>
+        <Section title="Best guests" description="By room revenue in the period">
+          <DataTable head={['Guest', 'Nights', 'Revenue']} rows={r.topGuests.slice(0, 6).map((g) => [<Link key={g.contactId} href={`/guests/${g.contactId}`} className="font-medium hover:underline">{g.name}</Link>, g.nights, mm(g.revenue)])} />
+        </Section>
+        <Section title="Guest sentiment" description="Feedback left in the period">
+          <BarList data={[{ label: 'Good', value: r.house.feedback.GOOD }, { label: 'OK', value: r.house.feedback.OK }, { label: 'Not good', value: r.house.feedback.BAD }]} />
+          <p className="mt-3 text-[11.5px] text-fg-muted">{r.house.totals.returningGuests} returning guest{r.house.totals.returningGuests === 1 ? '' : 's'} arrived · {k.bookings} bookings made · {k.cancellations} cancelled · {k.noShows} no-show</p>
+        </Section>
+      </div>
+    </>
+  );
+}
+
+/* ───────────────────────── Rooms ───────────────────────── */
+
+function Rooms({ r, vs }: { r: FinanceReportDTO; vs: string }) {
+  const k = r.kpis;
+  const c = r.compare;
+  const tot = r.roomTypes.reduce((a, x) => ({ n: a.n + x.roomNightsSold, av: a.av + x.roomNightsAvailable }), { n: 0, av: 0 });
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <Kpi label="Room revenue" value={mm(k.roomRevenue)} delta={<Delta now={big(k.roomRevenue.UGX)} before={big(c.roomRevenue.UGX)} />} />
+        <Kpi label="Occupancy" value={`${k.occupancy}%`} delta={<Delta kind="pts" now={k.occupancy} before={c.occupancy} />} />
+        <Kpi label="ADR" value={mm(k.adr)} delta={<Delta now={big(k.adr.UGX)} before={big(c.adr.UGX)} />} />
+        <Kpi label="RevPAR" value={mm(k.revpar)} delta={<Delta now={big(k.revpar.UGX)} before={big(c.revpar.UGX)} />} />
+        <Kpi label="Average stay" value={`${k.averageStay} nights`} delta={<Delta now={k.averageStay} before={c.averageStay} />} />
+        <Kpi label="Cancellations" value={k.cancellations} delta={<Delta now={k.cancellations} before={c.cancellations} invert />} sub={`${k.noShows} no-show`} />
+      </div>
+      <Section title="Daily occupancy" description={`Average ${k.occupancy}% · ${vs}: ${c.occupancy}%`}>
+        <ColumnChart data={r.house.days.map((d) => ({ date: d.date, count: d.occupancy }))} label="Occupancy" max={100} format={(n) => `${Math.round(n)}%`} endLabel="last" caption={<>Rooms sold ÷ rooms available each night</>} height={170} />
+      </Section>
+      <Section title="By room type" description="Nights, occupancy and yield per category">
+        <DataTable
+          head={['Room type', 'Rooms', 'Nights sold', 'Occupancy', 'Revenue', 'ADR', 'RevPAR']}
+          rows={r.roomTypes.map((x) => [<b key={x.id}>{x.name}</b>, x.rooms, `${x.roomNightsSold} / ${x.roomNightsAvailable}`, `${x.occupancy}%`, mm(x.revenue), mm(x.adr), mm(x.revpar)])}
+          foot={['All rooms', r.roomTypes.reduce((a, x) => a + x.rooms, 0), `${tot.n} / ${tot.av}`, `${k.occupancy}%`, mm(k.roomRevenue), mm(k.adr), mm(k.revpar)]}
+        />
+      </Section>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Section title="By channel" description="Where the nights came from">
+          <DataTable head={['Channel', 'Bookings', 'Nights', 'Share', 'Revenue']} rows={r.channels.map((x) => [SOURCE[x.source] ?? x.source, x.bookings, x.roomNights, `${x.share}%`, mm(x.revenue)])} />
+        </Section>
+        <Section title="By rate plan" description="Which rates are selling">
+          <DataTable head={['Rate', 'Bookings', 'Nights', 'ADR', 'Revenue']} rows={r.ratePlans.map((x) => [x.name, x.bookings, x.roomNights, mm(x.adr), mm(x.revenue)])} />
+        </Section>
+      </div>
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Section title="Day of week" description="Average occupancy by night">
+          <BarList data={r.dayOfWeek.map((d) => ({ label: d.day, value: d.occupancy }))} />
+        </Section>
+        <Section title="Length of stay" description="Stays arriving in the period">
+          <BarList data={r.lengthOfStay.map((d) => ({ label: d.bucket, value: d.bookings }))} />
+        </Section>
+        <Section title="Booking lead time" description="Days between booking and arrival">
+          <BarList data={r.house.leadTime.map((d) => ({ label: d.bucket, value: d.bookings }))} />
+        </Section>
+      </div>
+    </>
+  );
+}
+
+/* ───────────────────────── Departments & POS ───────────────────────── */
+
+function Outlets({ r }: { r: FinanceReportDTO }) {
+  const deps = r.house.departments ?? [];
+  const peak = Math.max(1, ...r.pos.byHour.map((h) => h.orders));
+  return (
+    <>
+      <Section title="Revenue by department" description="Every revenue centre in the hotel">
+        <DataTable head={['Department', 'Activity', 'Orders', 'Share', 'Revenue']} rows={deps.map((d) => [<b key={d.department}>{d.label}</b>, <span key="m" className="text-fg-muted">{d.secondaryMetric}</span>, d.ordersCount, `${d.sharePercent}%`, mm(d.revenue)])} foot={['Gross revenue', '', '', '100%', mm(r.kpis.grossRevenue)]} />
+      </Section>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Section title="POS outlets" description="Bills settled in the period">
+          <DataTable head={['Outlet', 'Bills', 'Avg bill', 'To a room', 'Discounts', 'Revenue']} rows={r.pos.outlets.map((o) => [<span key={o.id}><b>{o.name}</b> <span className="text-fg-subtle">{o.type.toLowerCase()}</span></span>, o.orders, mm(o.avgCheck), o.toRoomFolio, mm(o.discounts), mm(o.revenue)])} empty="No POS bills settled in this period." />
+          {big(r.pos.deskFnb.UGX) + big(r.pos.deskFnb.USD) > 0n && <p className="mt-3 text-[11.5px] text-fg-muted">Plus <b className="text-fg">{mm(r.pos.deskFnb)}</b> of food & drink typed onto room bills at the desk.</p>}
+        </Section>
+        <Section title="Best sellers" description="By quantity sold">
+          <DataTable head={['Item', 'Qty', 'Revenue']} rows={r.pos.topItems.map((i) => [i.name, i.quantity, mm(i.revenue)])} empty="No items sold." />
+        </Section>
+      </div>
+      <Section title="Busiest hours" description="POS bills settled by hour of day (Kampala)">
+        <div className="flex h-32 items-end gap-[2px]">
+          {r.pos.byHour.map((h) => (
+            <div key={h.hour} className="group relative flex h-full flex-1 flex-col items-center justify-end" title={`${String(h.hour).padStart(2, '0')}:00 · ${h.orders} bills · ${money(h.revenueUGX, 'UGX')}`}>
+              <span className="w-full max-w-5 rounded-t-[4px]" style={{ height: `${(h.orders / peak) * 100}%`, minHeight: h.orders ? 3 : 0, background: 'var(--series)' }} />
+              {h.hour % 3 === 0 && <span className="absolute -bottom-4 text-[10px] text-fg-subtle">{String(h.hour).padStart(2, '0')}</span>}
+            </div>
+          ))}
+        </div>
+        <div className="h-4" />
+      </Section>
+    </>
+  );
+}
+
+/* ───────────────────────── Cash ───────────────────────── */
+
+function Cash({ r, vs }: { r: FinanceReportDTO; vs: string }) {
+  const t = r.cash.totals;
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Kpi label="Money in" value={mm(t.inflow)} sub={`${t.transactions} payments`} />
+        <Kpi label="Refunds out" value={mm(t.refunds)} />
+        <Kpi label="Expenses paid" value={mm(t.outflow)} />
+        <Kpi label="Net cash movement" value={mm(t.net)} tone={big(t.net.UGX) < 0n ? 'bad' : 'good'} delta={<Delta now={big(r.kpis.collected.UGX)} before={big(r.compare.collected.UGX)} label={`collected ${vs}`} />} sub={`collected ${vs}`} />
+        <Kpi label="Missing references" value={t.missingRefs} tone={t.missingRefs ? 'bad' : 'good'} sub="digital payments without a transaction ID" />
+      </div>
+      <Section title="By payment rail" description="What each till, phone and account should show for the period: money in, less refunds, less expenses paid from it">
+        <DataTable
+          head={['Rail', 'Payments', 'Rooms', 'POS', 'Health club', 'Money in', 'Refunds', 'Expenses', 'Net', 'Check']}
+          rows={r.cash.rails.map((x) => [
+            <b key={x.method}>{x.label}</b>, x.inCount, mm(x.bySource.rooms, { compact: true }), mm(x.bySource.pos, { compact: true }), mm(x.bySource.healthClub, { compact: true }), mm(x.inflow), mm(x.refunds), mm(x.outflow), <b key="n">{mm(x.net)}</b>,
+            x.missingRefs ? <Pill key="c" tone="red" dot>{x.missingRefs} no ref</Pill> : x.method === 'UNKNOWN' && x.inCount ? <Pill key="c" tone="amber" dot>method not recorded</Pill> : x.inCount || big(x.outflow.UGX) ? <Pill key="c" tone="green" dot>references complete</Pill> : <span key="c" className="text-fg-subtle">—</span>,
+          ])}
+          foot={['Total', t.transactions, '', '', '', mm(t.inflow), mm(t.refunds), mm(t.outflow), mm(t.net), '']}
+        />
+        <p className="mt-3 text-[11.5px] text-fg-muted">Room-folio POS bills are not counted here — that money arrives when the guest settles the room bill. Count the cash drawer against the Cash line; match MoMo, card and bank lines to their statements.</p>
+      </Section>
+      <Section title="Cash collected by day" description="All rails, after refunds (UGX)">
+        <ColumnChart data={r.daily.map((d) => ({ date: d.date, count: Number(d.collectedUGX) }))} label="Collected" endLabel="last" format={(n) => money(Math.round(n), 'UGX')} caption={<>Collected · <b className="text-fg">{mm(r.kpis.collected)}</b> in the period</>} height={160} />
+      </Section>
+    </>
+  );
+}
+
+/* ───────────────────────── Receivables ───────────────────────── */
+
+function Receivables({ r }: { r: FinanceReportDTO }) {
+  const rec = r.receivables;
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Owed to the hotel" value={mm(rec.total)} tone={big(rec.total.UGX) ? 'bad' : 'good'} sub={`as of ${fmtDay(rec.asOf)}`} />
+        <Kpi label="Overdue (after departure)" value={mm(rec.buckets.filter((b) => b.key.startsWith('d')).reduce<MoneyByCurrency>((a, b) => ({ UGX: String(big(a.UGX) + big(b.amount.UGX)), USD: String(big(a.USD) + big(b.amount.USD)) }), { UGX: '0', USD: '0' }))} />
+        <Kpi label="Deposits held" value={mm(rec.advanceDeposits)} sub={`${rec.advanceDepositCount} future stay${rec.advanceDepositCount === 1 ? '' : 's'} — owed back if cancelled`} />
+        <Kpi label="Open balances" value={rec.debtors.length} />
+      </div>
+      <Section title="Ageing" description="Balances still owed, by how long since the guest left">
+        <div className="grid gap-2 sm:grid-cols-5">
+          {rec.buckets.map((b) => (
+            <div key={b.key} className={cn('rounded-xl border p-3', b.key.startsWith('d') && b.count ? 'border-danger/30 bg-danger/5' : 'border-line')}>
+              <p className="text-[11px] text-fg-muted">{b.label}</p>
+              <p className="mt-1 font-semibold tabular">{mm(b.amount)}</p>
+              <p className="text-[11px] text-fg-subtle">{b.count} booking{b.count === 1 ? '' : 's'}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+      <Section title="Who owes what" description="Oldest first — open the booking to take payment or write off">
+        <DataTable
+          head={['Guest', 'Booking', 'Stay', 'Status', 'Total', 'Paid', 'Balance', 'Days overdue']}
+          rows={rec.debtors.map((d) => [
+            <span key={d.id}><b>{d.name}</b>{d.phone && <span className="block text-[11px] text-fg-subtle">{d.phone}</span>}</span>,
+            <Link key="c" href={`/reservations/${d.id}`} className="font-mono hover:underline">{d.code}</Link>,
+            `${fmtDay(d.arrival)} – ${fmtDay(d.departure)}`,
+            d.status.replace('_', ' ').toLowerCase(),
+            money(d.totalMinor, d.currency),
+            money(d.paidMinor, d.currency),
+            <b key="b" className="text-danger">{money(d.balanceMinor, d.currency)}</b>,
+            d.daysPastDeparture || '—',
+          ])}
+          empty="Nobody owes the hotel money. 🎉"
+        />
+      </Section>
+    </>
+  );
+}
+
+/* ───────────────────────── Adjustments ───────────────────────── */
+
+function Adjustments({ r }: { r: FinanceReportDTO }) {
+  const a = r.adjustments;
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
+        <Kpi label="Discounts" value={mm(a.discounts)} />
+        <Kpi label="Goodwill credits" value={mm(a.credits)} />
+        <Kpi label="Written off" value={mm(a.writeOffs)} tone={big(a.writeOffs.UGX) ? 'bad' : undefined} />
+        <Kpi label="POS discounts" value={mm(a.posDiscounts)} />
+        <Kpi label="Refunds paid" value={mm(a.refunds)} />
+        <Kpi label="Cancellation fees kept" value={mm(a.cancellationFees)} tone="good" />
+        <Kpi label="No-show charges kept" value={mm(a.noShowRevenue)} tone="good" />
+      </div>
+      <Section title="Every adjustment" description="Who got money off, back, or was charged a fee — each line links to its booking">
+        <DataTable
+          head={['Date', 'Type', 'Booking', 'Guest', 'Reason', 'Amount']}
+          rows={a.lines.map((l, i) => {
+            const meta = ADJ[l.kind] ?? { label: l.kind, tone: 'neutral' as const };
+            const v = big(l.amountMinor);
+            return [fmtDay(l.date), <Pill key={i} tone={meta.tone}>{meta.label}</Pill>, <Link key="c" href={`/reservations/${l.reservationId}`} className="font-mono hover:underline">{l.code}</Link>, l.guest, <span key="d" className="text-fg-muted">{l.description}</span>, <span key="a" className={cn('font-medium', v < 0n && 'text-danger')}>{v < 0n ? <TrendingDown className="mr-1 inline size-3" /> : null}{money(v < 0n ? -v : v, l.currency)}</span>];
+          })}
+          empty="No discounts, credits, write-offs or refunds in this period."
+        />
+      </Section>
+    </>
+  );
+}
+
+export default function Page() {
+  return <Suspense><Reports /></Suspense>;
 }

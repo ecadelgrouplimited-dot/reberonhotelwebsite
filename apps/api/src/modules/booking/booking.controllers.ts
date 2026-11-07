@@ -332,13 +332,6 @@ export class ReservationsAdminController {
     return this.booking.ownerBrief(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined);
   }
 
-  @Post('owner/brief/send')
-  @HttpCode(200)
-  @Requires('settings:features')
-  async sendBrief() {
-    await this.booking.sendOwnerBrief();
-    return { ok: true };
-  }
 }
 
 @Controller('v1/admin')

@@ -11,6 +11,33 @@ const out = (m: Record<Cur, bigint>): MoneyByCurrency => ({ UGX: m.UGX.toString(
 const SOLD = ['CONFIRMED', 'IN_HOUSE', 'CHECKED_OUT'] as const;
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 1000) / 10 : 0);
 
+/** Lines that only move money around inside a folio (re-postings when a stay changes, cancellation/no-show reversals). */
+export const isMechanical = (d: string) => /reversed|^Night of .* removed|^Re-priced night|^Changed booking/.test(d);
+
+/** Split ADJUSTMENT lines into allowances (money given away) and retention (fees kept). */
+export function classifyAdjustments(rows: { description: string; amountMinor: bigint; folio: { currency: string } }[]) {
+  const allowances = zero();
+  const retention = zero();
+  const discounts = zero();
+  const credits = zero();
+  const writeOffs = zero();
+  const cancellationFees = zero();
+  const noShow = zero();
+  for (const l of rows) {
+    const c = l.folio.currency as Cur;
+    if (isMechanical(l.description)) continue;
+    if (l.amountMinor > 0n && l.description.startsWith('Cancellation fee')) { retention[c] += l.amountMinor; cancellationFees[c] += l.amountMinor; continue; }
+    if (l.amountMinor > 0n && l.description.startsWith('No-show charge')) { retention[c] += l.amountMinor; noShow[c] += l.amountMinor; continue; }
+    if (l.amountMinor >= 0n) continue;
+    const a = -l.amountMinor;
+    allowances[c] += a;
+    if (l.description.startsWith('Discount')) discounts[c] += a;
+    else if (l.description.startsWith('Written off')) writeOffs[c] += a;
+    else credits[c] += a;
+  }
+  return { allowances, retention, discounts, credits, writeOffs, cancellationFees, noShow };
+}
+
 /**
  * The owner's numbers (M21). Room nights come from the frozen nightly rates, so a
  * rate change never rewrites the past. UGX and USD are summed separately.
@@ -27,6 +54,9 @@ export class ReportsService {
     if (dates.length > 400) throw badRequest('Choose up to about a year at a time');
     const start = day(from);
     const endExcl = new Date(day(to).getTime() + 86_400_000);
+    // Timestamps (payments, POS, creation) are bounded by Kampala midnights, date columns by the date itself.
+    const tsStart = new Date(`${from}T00:00:00+03:00`);
+    const tsEnd = new Date(tsStart.getTime() + dates.length * 86_400_000);
 
     const [
       rooms,
@@ -50,34 +80,40 @@ export class ReportsService {
       this.prisma.room.findMany({ where: { isActive: true }, select: { id: true, roomTypeId: true } }),
       this.prisma.roomBlock.findMany({ where: { fromDate: { lt: endExcl }, toDate: { gt: start } }, include: { room: { select: { roomTypeId: true } } } }),
       this.prisma.reservation.findMany({ where: { status: { in: [...SOLD] }, arrival: { lt: endExcl }, departure: { gt: start } }, include: { rooms: true } }),
-      this.prisma.reservation.findMany({ where: { createdAt: { gte: start, lt: endExcl }, status: { notIn: ['HELD', 'EXPIRED'] } }, select: { createdAt: true, arrival: true } }),
-      this.prisma.reservation.count({ where: { cancelledAt: { gte: start, lt: endExcl } } }),
+      this.prisma.reservation.findMany({ where: { createdAt: { gte: tsStart, lt: tsEnd }, status: { notIn: ['HELD', 'EXPIRED'] } }, select: { createdAt: true, arrival: true } }),
+      this.prisma.reservation.count({ where: { cancelledAt: { gte: tsStart, lt: tsEnd } } }),
       this.prisma.reservation.count({ where: { status: 'NO_SHOW', arrival: { gte: start, lt: endExcl } } }),
       this.prisma.folioLine.findMany({ where: { kind: { in: ['EXTRA', 'PACKAGE', 'FNB'] }, date: { gte: start, lt: endExcl }, folio: { reservation: { status: { in: [...SOLD] } } } }, include: { folio: { select: { currency: true } } } }),
-      this.prisma.paymentIntent.findMany({ where: { status: 'SUCCEEDED', paidAt: { gte: start, lt: endExcl } }, select: { amountMinor: true, currency: true, method: true } }),
+      this.prisma.paymentIntent.findMany({ where: { status: 'SUCCEEDED', paidAt: { gte: tsStart, lt: tsEnd } }, select: { amountMinor: true, currency: true, method: true } }),
       this.prisma.folioLine.findMany({ where: { kind: 'REFUND', date: { gte: start, lt: endExcl } }, include: { folio: { select: { currency: true } } } }),
-      this.prisma.feedback.groupBy({ by: ['score'], where: { createdAt: { gte: start, lt: endExcl } }, _count: true }),
+      this.prisma.feedback.groupBy({ by: ['score'], where: { createdAt: { gte: tsStart, lt: tsEnd } }, _count: true }),
       this.booking.roomTypeNames(),
       this.prisma.posOrder.findMany({
-        where: { settledAt: { gte: start, lt: endExcl }, status: { not: 'CANCELLED' } },
+        where: { settledAt: { gte: tsStart, lt: tsEnd }, status: { not: 'CANCELLED' } },
         include: { outlet: true },
       }),
       this.prisma.healthClubMembership.findMany({
-        where: { createdAt: { gte: start, lt: endExcl } },
+        where: { createdAt: { gte: tsStart, lt: tsEnd } },
       }),
       this.prisma.healthClubAccessLog.findMany({
-        where: { checkedInAt: { gte: start, lt: endExcl } },
+        where: { checkedInAt: { gte: tsStart, lt: tsEnd } },
       }),
       this.prisma.quotation.findMany({
-        where: { status: { in: ['ACCEPTED', 'CONVERTED'] }, updatedAt: { gte: start, lt: endExcl } },
+        where: { status: { in: ['ACCEPTED', 'CONVERTED'] }, updatedAt: { gte: tsStart, lt: tsEnd } },
       }),
       this.prisma.expense.findMany({
         where: { date: { gte: start, lt: endExcl } },
       }),
       this.prisma.requisition.findMany({
-        where: { status: 'DISBURSED', updatedAt: { gte: start, lt: endExcl } },
+        where: { status: 'DISBURSED', updatedAt: { gte: tsStart, lt: tsEnd } },
       }),
     ]);
+    const [adjLines, posLinked] = await Promise.all([
+      this.prisma.folioLine.findMany({ where: { kind: 'ADJUSTMENT', date: { gte: start, lt: endExcl } }, include: { folio: { select: { currency: true } } } }),
+      this.prisma.posOrder.findMany({ where: { folioLineId: { in: lines.filter((l) => l.kind === 'FNB').map((l) => l.id) } }, select: { folioLineId: true } }),
+    ]);
+    const fromPos = new Set(posLinked.map((p) => p.folioLineId));
+    const { allowances, retention } = classifyAdjustments(adjLines);
 
     const inRange = new Set(dates);
     const sold = new Map<string, number>(dates.map((d) => [d, 0]));
@@ -167,17 +203,20 @@ export class ReportsService {
     const kitchenOrders = posOrders.filter((o) => o.outlet.type === 'KITCHEN');
     const kitchenRev = zero();
     for (const o of kitchenOrders) kitchenRev[o.currency as Cur] += o.totalMinor;
+    // Food & drink typed straight onto a bill at the desk (POS bills sent to a room are already counted above).
+    const deskFnb = lines.filter((l) => l.kind === 'FNB' && !fromPos.has(l.id));
+    for (const l of deskFnb) kitchenRev[l.folio.currency as Cur] += l.amountMinor;
 
     const barOrders = posOrders.filter((o) => o.outlet.type === 'BAR');
     const barRev = zero();
     for (const o of barOrders) barRev[o.currency as Cur] += o.totalMinor;
 
     const gymRev = zero();
-    for (const m of memberships) gymRev.UGX += m.amountMinor;
-    for (const log of gymVisits) gymRev.UGX += log.amountPaidMinor;
+    for (const m of memberships) gymRev[m.currency as Cur] += m.amountMinor;
+    for (const log of gymVisits) gymRev[log.currency as Cur] += log.amountPaidMinor;
 
     const eventsRev = zero();
-    for (const q of acceptedQuotes) eventsRev.UGX += q.totalMinor;
+    for (const q of acceptedQuotes) eventsRev[q.currency as Cur] += q.totalMinor;
 
     const extrasRev = zero();
     for (const l of lines) {
@@ -194,7 +233,8 @@ export class ReportsService {
         barRev[c] +
         gymRev[c] +
         eventsRev[c] +
-        extrasRev[c];
+        extrasRev[c] +
+        retention[c];
     }
 
     const depList = [
@@ -210,8 +250,8 @@ export class ReportsService {
         department: 'KITCHEN',
         label: 'Restaurant & Kitchen Dining',
         revenue: out(kitchenRev),
-        ordersCount: kitchenOrders.length,
-        secondaryMetric: `${kitchenOrders.length} meal orders served`,
+        ordersCount: kitchenOrders.length + deskFnb.length,
+        secondaryMetric: `${kitchenOrders.length} meal orders served${deskFnb.length ? ` · ${deskFnb.length} desk charges` : ''}`,
         sharePercent: totalHotelGross.UGX ? pct(Number(kitchenRev.UGX), Number(totalHotelGross.UGX)) : 0,
       },
       {
@@ -245,6 +285,14 @@ export class ReportsService {
         ordersCount: lines.length,
         secondaryMetric: `${lines.length} excursions, laundry & extras`,
         sharePercent: totalHotelGross.UGX ? pct(Number(extrasRev.UGX), Number(totalHotelGross.UGX)) : 0,
+      },
+      {
+        department: 'RETENTION',
+        label: 'Cancellation & No-show Fees',
+        revenue: out(retention),
+        ordersCount: adjLines.filter((l) => l.amountMinor > 0n && /^(Cancellation fee|No-show charge)/.test(l.description)).length,
+        secondaryMetric: 'Kept under the booked cancellation terms',
+        sharePercent: totalHotelGross.UGX ? pct(Number(retention.UGX), Number(totalHotelGross.UGX)) : 0,
       },
     ];
 
@@ -345,10 +393,12 @@ export class ReportsService {
     const trevpar = zero();
     const goppar = zero();
 
+    const netRevenue = zero();
     for (const c of ['UGX', 'USD'] as Cur[]) {
-      grossProfit[c] = totalHotelGross[c] - cogsTotal[c];
+      netRevenue[c] = totalHotelGross[c] - allowances[c];
+      grossProfit[c] = netRevenue[c] - cogsTotal[c];
       gop[c] = grossProfit[c] - opexTotal[c];
-      trevpar[c] = roomNightsAvailable ? totalHotelGross[c] / BigInt(roomNightsAvailable) : 0n;
+      trevpar[c] = roomNightsAvailable ? netRevenue[c] / BigInt(roomNightsAvailable) : 0n;
       goppar[c] = roomNightsAvailable ? gop[c] / BigInt(roomNightsAvailable) : 0n;
     }
 
@@ -427,6 +477,8 @@ export class ReportsService {
         grossOperatingProfit: out(gop),
         trevpar: out(trevpar),
         goppar: out(goppar),
+        allowances: out(allowances),
+        netRevenue: out(netRevenue),
       },
       departments: depList,
       expenses: {
