@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -72,6 +72,11 @@ export default function DeskPage() {
   const today = kampalaToday();
   const [date, setDate] = useState(today);
   const [tab, setTab] = useState<Tab>('arrivals');
+  // Quick actions elsewhere link here with ?tab=departures etc.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'arrivals' || t === 'inHouse' || t === 'departures' || t === 'late') setTab(t);
+  }, []);
   const [q, setQ] = useState('');
   const [balFilter, setBalFilter] = useState<BalanceFilter>('all');
   const [dialog, setDialog] = useState<{

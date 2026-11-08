@@ -58,9 +58,9 @@ export function AttentionRail({ items, loading }: { items: AttentionItem[]; load
 
   if (loading) {
     return (
-      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
         {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-[84px] rounded-xl" />
+          <Skeleton key={i} className="h-11 rounded-lg" />
         ))}
       </div>
     );
@@ -68,28 +68,19 @@ export function AttentionRail({ items, loading }: { items: AttentionItem[]; load
 
   if (!sorted.length) {
     return (
-      <section className="fade-in flex items-center gap-3.5 rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/12 via-emerald-500/5 to-transparent px-4 py-3.5">
-        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-500 text-white shadow-md">
-          <PartyPopper className="size-5" />
-        </span>
-        <div>
-          <p className="text-[14px] font-bold text-fg">All clear — nothing is waiting on you.</p>
-          <p className="text-[12px] text-fg-muted">Rooms, guests and bills are all up to date. New work will appear here the moment it arrives.</p>
-        </div>
-      </section>
+      <p className="fade-in flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2 text-[12.5px] font-semibold text-success">
+        <PartyPopper className="size-4 shrink-0" />
+        All clear — nothing is waiting on you.
+      </p>
     );
   }
 
   return (
-    <section aria-label="Needs your attention" className="space-y-2.5">
+    <section aria-label="Needs your attention" className="space-y-1.5">
       <div className="flex items-center justify-between gap-2 px-0.5">
-        <h2 className="flex items-center gap-2 text-[13px] font-bold">
-          <span className="relative flex size-2.5">
-            {urgent > 0 && <span className="absolute inline-flex size-full animate-ping rounded-full bg-rose-500 opacity-60" />}
-            <span className={cn('relative inline-flex size-2.5 rounded-full', urgent > 0 ? 'bg-rose-500' : 'bg-amber-500')} />
-          </span>
-          Needs you now
-          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-bold tabular text-fg-muted">{sorted.length}</span>
+        <h2 className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fg-muted">
+          <span className={cn('size-2 rounded-full', urgent > 0 ? 'animate-pulse bg-rose-500' : 'bg-amber-500')} />
+          Needs you · {sorted.length}
         </h2>
         {sorted.length > VISIBLE && (
           <button type="button" onClick={() => setExpanded((v) => !v)} className="text-[12px] font-semibold text-fg-muted hover:text-fg">
@@ -97,7 +88,7 @@ export function AttentionRail({ items, loading }: { items: AttentionItem[]; load
           </button>
         )}
       </div>
-      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
         {shown.map((it) => {
           const t = TONE[it.tone];
           const Icon = it.icon;
@@ -105,19 +96,15 @@ export function AttentionRail({ items, loading }: { items: AttentionItem[]; load
             <Link
               key={it.key}
               href={it.href}
-              className={cn('fade-in group flex items-center gap-3 rounded-xl border p-3 transition-all hover:-translate-y-0.5 hover:shadow-md', t.card)}
+              title={it.sub}
+              className={cn('fade-in group flex h-11 items-center gap-2.5 rounded-lg border px-2.5 transition', t.card)}
             >
-              <span className={cn('grid size-10 shrink-0 place-items-center rounded-xl', t.icon)}>
-                <Icon className="size-5" strokeWidth={2.2} />
+              <span className={cn('grid size-7 shrink-0 place-items-center rounded-md', t.icon)}>
+                <Icon className="size-3.5" strokeWidth={2.2} />
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-baseline gap-1.5">
-                  <span className={cn('font-display text-xl font-extrabold leading-none tabular', t.count)}>{it.count}</span>
-                  <span className="truncate text-[13px] font-bold text-fg">{it.title}</span>
-                </span>
-                <span className="mt-0.5 block truncate text-[11.5px] text-fg-muted">{it.sub}</span>
-              </span>
-              <span className="hidden shrink-0 items-center gap-1 rounded-lg bg-surface px-2.5 py-1.5 text-[11.5px] font-bold text-fg shadow-2xs ring-1 ring-line transition group-hover:ring-line-strong sm:inline-flex">
+              <span className={cn('font-display text-[15px] font-extrabold tabular', t.count)}>{it.count}</span>
+              <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-fg">{it.title}</span>
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-[11.5px] font-bold text-fg-muted group-hover:text-fg">
                 {it.cta}
                 <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
               </span>

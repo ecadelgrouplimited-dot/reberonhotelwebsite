@@ -44,7 +44,10 @@ const LEGEND: { key: HkStatus[]; label: string; dot: string }[] = [
   { key: ['BLOCKED', 'OUT_OF_ORDER'], label: 'Out of service', dot: 'bg-fg-subtle' },
 ];
 
-/** The whole house at a glance: one tile per room, coloured by state, with today's movements. */
+/**
+ * The whole house in one strip: a chip per room, coloured by state. A dirty room
+ * is a button that marks it clean; every other chip opens the rack.
+ */
 export function RoomMap({
   rooms,
   canClean,
@@ -57,16 +60,9 @@ export function RoomMap({
   onMarkClean: (room: RackRoomDTO) => void;
 }) {
   const active = rooms.filter((r) => r.isActive).sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
-  const total = active.length || 1;
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex h-2 overflow-hidden rounded-full bg-surface-2">
-        {LEGEND.map((l) => {
-          const n = active.filter((r) => l.key.includes(r.hkStatus)).length;
-          return n ? <div key={l.label} className={cn('transition-all', l.dot)} style={{ width: `${(n / total) * 100}%` }} /> : null;
-        })}
-      </div>
+    <div className="space-y-2">
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold text-fg-muted">
         {LEGEND.map((l) => {
           const n = active.filter((r) => l.key.includes(r.hkStatus)).length;
@@ -79,60 +75,53 @@ export function RoomMap({
         })}
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(6.25rem,1fr))] gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {active.map((r) => {
           const look = LOOK[r.hkStatus];
           const arrivingNotReady = r.arriving && !['VACANT_CLEAN', 'INSPECTED', 'OCCUPIED'].includes(r.hkStatus);
           const who = r.occupant?.guestName ?? r.arriving?.guestName;
-          return (
-            <div
+          const tip = [
+            `Room ${r.number} · ${r.roomType.name}`,
+            arrivingNotReady ? 'Guest due — not ready' : look.label,
+            who,
+            r.occupant?.departsToday ? 'Departs today' : null,
+            r.arriving ? `Arriving: ${r.arriving.guestName}` : null,
+            r.block ? (r.block.note ?? r.block.reason) : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          const clean = canClean && r.hkStatus === 'VACANT_DIRTY';
+          const body = (
+            <>
+              <span className={cn('size-1.5 shrink-0 rounded-full', look.chip)} />
+              <span className="font-display text-[13px] font-extrabold tabular">{r.number}</span>
+              {r.occupant?.departsToday && <LogOut className="size-3 text-warning" />}
+              {r.arriving && <LogIn className="size-3 text-sky-600 dark:text-sky-400" />}
+              {r.block && <Wrench className="size-3 text-fg-muted" />}
+              {clean && <BrushCleaning className="size-3 text-warning" />}
+            </>
+          );
+          const cls = cn(
+            'inline-flex h-8 items-center gap-1 rounded-lg border px-2 transition hover:border-line-strong',
+            look.tile,
+            arrivingNotReady && 'ring-2 ring-rose-500/60',
+          );
+          return clean ? (
+            <button
               key={r.id}
-              className={cn(
-                'group relative flex min-h-[86px] flex-col justify-between rounded-xl border p-2.5 transition hover:shadow-md',
-                look.tile,
-                arrivingNotReady && 'ring-2 ring-rose-500/60',
-              )}
+              type="button"
+              disabled={busyId === r.id}
+              onClick={() => onMarkClean(r)}
+              title={`${tip} · tap to mark clean`}
+              aria-label={`Mark room ${r.number} clean`}
+              className={cn(cls, 'disabled:opacity-60')}
             >
-              <Link href="/rack" className="absolute inset-0 rounded-xl" aria-label={`Room ${r.number}: ${look.label}`} />
-              <div className="flex items-start justify-between gap-1">
-                <span className="font-display text-[17px] font-extrabold leading-none tabular">{r.number}</span>
-                <span className="flex gap-0.5">
-                  {r.occupant?.departsToday && (
-                    <span title="Departs today" className="grid size-5 place-items-center rounded-md bg-surface text-warning shadow-2xs">
-                      <LogOut className="size-3" />
-                    </span>
-                  )}
-                  {r.arriving && (
-                    <span title={`Arriving: ${r.arriving.guestName}`} className="grid size-5 place-items-center rounded-md bg-surface text-sky-600 shadow-2xs dark:text-sky-400">
-                      <LogIn className="size-3" />
-                    </span>
-                  )}
-                  {r.block && (
-                    <span title={r.block.note ?? r.block.reason} className="grid size-5 place-items-center rounded-md bg-surface text-fg-muted shadow-2xs">
-                      <Wrench className="size-3" />
-                    </span>
-                  )}
-                </span>
-              </div>
-              <div className={cn('min-w-0', canClean && r.hkStatus === 'VACANT_DIRTY' && 'pr-8')}>
-                <p className="truncate text-[10.5px] font-medium text-fg-muted">{who ? who.split(' ')[0] : r.roomType.name}</p>
-                <p className="flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-wide">
-                  <span className={cn('size-1.5 rounded-full', look.chip)} />
-                  {arrivingNotReady ? <span className="text-danger">Guest due</span> : look.label}
-                </p>
-              </div>
-              {canClean && r.hkStatus === 'VACANT_DIRTY' && (
-                <button
-                  type="button"
-                  disabled={busyId === r.id}
-                  onClick={() => onMarkClean(r)}
-                  title="Mark clean"
-                  className="absolute bottom-2 right-2 z-10 grid size-7 place-items-center rounded-lg bg-amber-500 text-white shadow-md transition hover:scale-110 hover:bg-amber-600 disabled:opacity-60"
-                >
-                  <BrushCleaning className="size-3.5" />
-                </button>
-              )}
-            </div>
+              {body}
+            </button>
+          ) : (
+            <Link key={r.id} href="/rack" title={tip} aria-label={tip} className={cls}>
+              {body}
+            </Link>
           );
         })}
       </div>

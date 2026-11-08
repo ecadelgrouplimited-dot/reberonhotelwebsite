@@ -52,7 +52,6 @@ import type {
   HkBoardDTO,
   HkStatus,
   HkTaskDTO,
-  HrDashboardDTO,
   PosOrderDTO,
   RackRoomDTO,
   RequisitionDTO,
@@ -105,11 +104,11 @@ const TONE_PILL_CLASSES: Record<BadgeTone, string> = {
   neutral: 'border-line bg-surface-2 text-fg-muted font-medium',
 };
 
-const KPI_ACCENT: Record<KpiAccent, { bar: string; icon: string }> = {
-  emerald: { bar: 'bg-emerald-500', icon: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400' },
-  amber: { bar: 'bg-amber-500', icon: 'bg-amber-500/12 text-amber-600 dark:text-amber-400' },
-  indigo: { bar: 'bg-indigo-500', icon: 'bg-indigo-500/12 text-indigo-600 dark:text-indigo-400' },
-  orange: { bar: 'bg-orange-500', icon: 'bg-orange-500/12 text-orange-600 dark:text-orange-400' },
+const KPI_ACCENT: Record<KpiAccent, { icon: string }> = {
+  emerald: { icon: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400' },
+  amber: { icon: 'bg-amber-500/12 text-amber-600 dark:text-amber-400' },
+  indigo: { icon: 'bg-indigo-500/12 text-indigo-600 dark:text-indigo-400' },
+  orange: { icon: 'bg-orange-500/12 text-orange-600 dark:text-orange-400' },
 };
 
 function KpiCard({
@@ -119,7 +118,6 @@ function KpiCard({
   href,
   icon: Icon,
   accent,
-  meter,
 }: {
   label: string;
   value: string;
@@ -127,32 +125,22 @@ function KpiCard({
   href: string;
   icon: LucideIcon;
   accent: KpiAccent;
-  /** 0–100: draws a progress bar under the value. */
-  meter?: number;
 }) {
   const a = KPI_ACCENT[accent];
   return (
     <Link
       href={href}
-      className="card group relative overflow-hidden px-4 py-3.5 transition-all hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md"
+      title={sub}
+      className="card group flex items-center gap-2.5 px-3 py-2 transition hover:border-line-strong"
     >
-      <span className={cn('absolute inset-x-0 top-0 h-1', a.bar)} />
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[10.5px] font-bold uppercase tracking-wider text-fg-muted">{label}</span>
-        <span className={cn('grid size-8 place-items-center rounded-lg transition-transform group-hover:scale-110', a.icon)}>
-          <Icon className="size-4" strokeWidth={2.2} />
-        </span>
-      </div>
-      <p className="mt-1 truncate font-display text-[1.45rem] font-extrabold leading-tight tabular">{value}</p>
-      {meter !== undefined && (
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
-          <div className={cn('h-full rounded-full transition-all duration-700', a.bar)} style={{ width: `${Math.min(100, meter)}%` }} />
-        </div>
-      )}
-      <p className="mt-1.5 flex items-center justify-between gap-2 text-[11.5px] text-fg-muted">
-        <span className="truncate">{sub}</span>
-        <ArrowRight className="size-3 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg" />
-      </p>
+      <span className={cn('grid size-7 shrink-0 place-items-center rounded-lg', a.icon)}>
+        <Icon className="size-3.5" strokeWidth={2.2} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[10.5px] font-semibold uppercase tracking-wider text-fg-subtle">{label}</span>
+        <span className="block truncate font-display text-[15px] font-extrabold leading-tight tabular">{value}</span>
+      </span>
+      <ArrowRight className="size-3 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg" />
     </Link>
   );
 }
@@ -243,13 +231,6 @@ export default function Today() {
     enabled: canRooms,
   });
 
-  const { data: hrOverview } = useQuery({
-    queryKey: ['hr-overview'],
-    queryFn: () => get<HrDashboardDTO>('/hr/overview'),
-    refetchInterval: 60_000,
-    enabled: canHr && (isOwner || me.role === 'HR'),
-  });
-
   const { data: requisitions } = useQuery({
     queryKey: ['requisitions-dash'],
     queryFn: () => get<RequisitionDTO[]>('/requisitions'),
@@ -307,26 +288,14 @@ export default function Today() {
   });
 
   const todayFormatted = new Intl.DateTimeFormat('en-GB', {
-    weekday: 'long',
+    weekday: 'short',
     day: 'numeric',
-    month: 'long',
+    month: 'short',
     timeZone: 'Africa/Kampala',
   }).format(now);
   const hour = kampalaHour();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = me.name.split(' ')[0];
-
-  const roleBadgeLabel: Record<string, string> = {
-    OWNER: 'Proprietor',
-    MANAGER: 'Operations & Management',
-    HR: 'HR & Staff',
-    ACCOUNTANT: 'Accounts & Billing',
-    DESK: 'Front Desk',
-    KITCHEN: 'Kitchen',
-    BAR: 'Bar & Beverage',
-    GYM: 'Health Club & Spa',
-    HOUSEKEEPING: 'Housekeeping',
-  };
 
   const occupancyPct =
     pulse && pulse.rooms.totalActive > 0 ? Math.round((pulse.rooms.occupied / pulse.rooms.totalActive) * 100) : 0;
@@ -438,36 +407,58 @@ export default function Today() {
       title: 'Draft payroll', sub: 'Ready to finalise', cta: 'Finalise', href: '/hr?tab=PAYROLL',
     });
   }
-  const urgentCount = attention.filter((a) => a.tone === 'red').length;
 
-  // ── Jump-to shortcuts ──
+  // ── Quick actions: verbs first, each with what is waiting ──
   const shortcuts: Shortcut[] = [];
-  if (canDesk) shortcuts.push({ key: 'desk', label: 'Front Desk', href: '/desk', icon: ConciergeBell, iconColor: 'text-sky-500' });
+  if (canDesk) {
+    const late = pulse?.desk.lateArrivals ?? 0;
+    const arr = pulse?.desk.arrivalsToday ?? 0;
+    const dep = pulse?.desk.departuresToday ?? 0;
+    shortcuts.push({
+      key: 'in',
+      label: 'Check in',
+      href: late ? '/desk?tab=late' : '/desk?tab=arrivals',
+      icon: LogIn,
+      iconColor: 'text-emerald-500',
+      badge: late ? { text: `${late} late`, tone: 'red' } : arr ? { text: arr, tone: 'neutral' } : undefined,
+    });
+    shortcuts.push({
+      key: 'out',
+      label: 'Check out',
+      href: '/desk?tab=departures',
+      icon: LogOut,
+      iconColor: 'text-sky-500',
+      badge: dep ? { text: dep, tone: 'neutral' } : undefined,
+    });
+  }
+  if (can('bookings:write')) {
+    shortcuts.push({ key: 'book', label: 'New booking', href: '/reservations/new', icon: CalendarDays, iconColor: 'text-indigo-500' });
+  }
+  if (canPos) {
+    shortcuts.push({
+      key: 'pos',
+      label: 'New sale',
+      href: '/pos',
+      icon: UtensilsCrossed,
+      iconColor: 'text-orange-500',
+      badge: openBills.length ? { text: `${openBills.length} open`, tone: 'amber' } : undefined,
+    });
+  }
   if (canRooms) {
     shortcuts.push({
       key: 'hk',
-      label: me.role === 'HOUSEKEEPING' ? 'My cleaning queue' : 'Housekeeping',
+      label: me.role === 'HOUSEKEEPING' ? 'My cleaning' : 'Clean rooms',
       href: '/housekeeping',
       icon: SprayCan,
       iconColor: 'text-amber-500',
       badge: pulse?.rooms.vacantDirty ? { text: pulse.rooms.vacantDirty, tone: 'amber' } : undefined,
     });
-    shortcuts.push({ key: 'rack', label: 'Room Rack', href: '/rack', icon: LayoutGrid, iconColor: 'text-emerald-500' });
-  }
-  if (canPos) {
-    shortcuts.push({
-      key: 'pos',
-      label: 'POS',
-      href: '/pos',
-      icon: UtensilsCrossed,
-      iconColor: 'text-orange-500',
-      badge: openBills.length ? { text: openBills.length, tone: 'amber' } : undefined,
-    });
+    shortcuts.push({ key: 'rack', label: 'Room rack', href: '/rack', icon: LayoutGrid, iconColor: 'text-emerald-500' });
   }
   if (canClub) {
     shortcuts.push({
       key: 'club',
-      label: 'Health Club',
+      label: 'Health club',
       href: '/health-club',
       icon: Dumbbell,
       iconColor: 'text-teal-500',
@@ -477,24 +468,32 @@ export default function Today() {
   if (canInbox) {
     shortcuts.push({
       key: 'inbox',
-      label: 'Inbox',
+      label: 'Reply to guests',
       href: '/inbox',
       icon: Inbox,
       iconColor: 'text-violet-500',
       badge: pulse?.inbox.newCount ? { text: pulse.inbox.newCount, tone: 'amber' } : undefined,
     });
   }
-  if (canReq) shortcuts.push({ key: 'reqs', label: 'Requisitions', href: '/requisitions', icon: ClipboardCheck, iconColor: 'text-teal-500' });
+  if (canReq) {
+    shortcuts.push({
+      key: 'reqs',
+      label: 'Request stock',
+      href: '/requisitions',
+      icon: ClipboardCheck,
+      iconColor: 'text-teal-500',
+      badge: pulse?.operations.pendingRequisitions ? { text: pulse.operations.pendingRequisitions, tone: 'amber' } : undefined,
+    });
+  }
   if (canHr) {
-    shortcuts.push({ key: 'hr-staff', label: 'Staff', href: '/hr?tab=STAFF', icon: Users, iconColor: 'text-rose-500' });
     shortcuts.push({ key: 'hr-roster', label: 'Rosters', href: '/hr?tab=ROSTER', icon: Clock, iconColor: 'text-sky-500' });
-    shortcuts.push({ key: 'hr-payroll', label: 'Payroll', href: '/hr?tab=PAYROLL', icon: CreditCard, iconColor: 'text-emerald-500' });
+    shortcuts.push({ key: 'hr-staff', label: 'Staff', href: '/hr?tab=STAFF', icon: Users, iconColor: 'text-rose-500' });
   }
   if (!isOwner && can('receipts:read')) {
     shortcuts.push({ key: 'receipts', label: 'Receipts', href: '/receipts', icon: Receipt, iconColor: 'text-indigo-500' });
   }
   if (isOwner) {
-    shortcuts.push({ key: 'brief', label: 'Owner Brief', href: '/brief', icon: Sunset, iconColor: 'text-amber-500' });
+    shortcuts.push({ key: 'brief', label: 'Owner brief', href: '/brief', icon: Sunset, iconColor: 'text-amber-500' });
     shortcuts.push({ key: 'reports', label: 'Reports', href: '/reports', icon: FileSpreadsheet, iconColor: 'text-emerald-500' });
   }
 
@@ -561,96 +560,81 @@ export default function Today() {
   const showOps = lens === 'ALL' || lens === 'OPERATIONS';
   const showComms = lens === 'ALL' || lens === 'HR_COMMS';
 
-  // Hero mini-stats: a few live numbers relevant to this person.
-  const heroStats: { label: string; value: string }[] = [];
+  // A few live numbers, each a link to where you act on it.
+  const heroStats: { label: string; value: string; href: string }[] = [];
   if (pulse) {
-    if (canRooms || canDesk) heroStats.push({ label: 'Occupancy', value: `${occupancyPct}%` });
+    if (canRooms || canDesk) heroStats.push({ label: 'occupied', value: `${occupancyPct}%`, href: '/rack' });
     if (canDesk) {
-      heroStats.push({ label: 'Guests in house', value: String(pulse.desk.guestsInHouse) });
-      heroStats.push({ label: 'Arriving', value: String(pulse.desk.arrivalsToday) });
-      heroStats.push({ label: 'Departing', value: String(pulse.desk.departuresToday) });
+      heroStats.push({ label: 'in house', value: String(pulse.desk.guestsInHouse), href: '/desk?tab=inHouse' });
     } else if (canRooms) {
-      heroStats.push({ label: 'Rooms ready', value: `${pulse.rooms.vacantClean}/${pulse.rooms.totalActive}` });
+      heroStats.push({ label: 'ready', value: `${pulse.rooms.vacantClean}/${pulse.rooms.totalActive}`, href: '/housekeeping' });
     }
-    if (canPos && !canDesk) {
-      heroStats.push({ label: 'Open bills', value: String(openBills.length) });
-      heroStats.push({ label: 'Ready to serve', value: String(readyOrders.length) });
-    }
-    if (canClub && !canDesk) heroStats.push({ label: 'In the club', value: String(pulse.operations.healthClubInsideNow) });
-    if (canHr && !canDesk) heroStats.push({ label: 'Shifts today', value: `${pulse.hr.checkedInShiftsToday}/${pulse.hr.shiftsToday}` });
+    if (canPos && !canDesk) heroStats.push({ label: 'to serve', value: String(readyOrders.length), href: '/pos' });
+    if (canHr && !canDesk) heroStats.push({ label: 'on shift', value: `${pulse.hr.checkedInShiftsToday}/${pulse.hr.shiftsToday}`, href: '/hr?tab=ROSTER' });
   }
 
   const syncedSecs = dataUpdatedAt ? Math.max(0, Math.round((now - dataUpdatedAt) / 1000)) : null;
 
   return (
     <>
-      <div className="fade-in space-y-5 pb-12">
-        {/* 1. Greeting hero */}
-        <section className="relative overflow-hidden rounded-2xl bg-[var(--sidebar)] px-5 py-5 text-[var(--sidebar-fg)] shadow-[var(--shadow-soft)] sm:px-6">
-          <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-[var(--accent)]/30 blur-3xl" />
-          <div aria-hidden className="pointer-events-none absolute -bottom-28 left-1/3 size-64 rounded-full bg-sky-500/15 blur-3xl" />
-          <div className="relative flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium text-[var(--sidebar-muted)]">
-                {todayFormatted} · {me.customRoleName || me.jobTitle || roleBadgeLabel[me.role] || me.role}
-              </p>
-              <h1 className="mt-1 font-display text-[1.65rem] font-extrabold leading-tight tracking-tight">
-                {greeting}, {firstName}
-              </h1>
-              <p className="mt-1 text-[13px] text-[var(--sidebar-muted)]">
-                {!pulse
-                  ? 'Gathering the latest from around the house…'
-                  : attention.length === 0
-                    ? 'Everything is on track. Enjoy a calm moment.'
-                    : `${attention.length} thing${attention.length === 1 ? '' : 's'} need${attention.length === 1 ? 's' : ''} you${urgentCount ? ` — ${urgentCount} urgent` : ''}.`}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="hidden items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--sidebar-muted)] sm:inline-flex">
-                <span className="relative flex size-1.5">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
-                </span>
-                Live{syncedSecs !== null && ` · ${syncedSecs < 10 ? 'just now' : `${syncedSecs}s ago`}`}
+      <div className="fade-in space-y-4 pb-12">
+        {/* 1. Slim header: who, when, live numbers, the main action */}
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="mr-auto min-w-0">
+            <h1 className="truncate font-display text-[1.15rem] font-extrabold leading-tight tracking-tight">
+              {greeting}, {firstName}
+            </h1>
+            <p className="flex items-center gap-1.5 text-[11.5px] text-fg-muted">
+              <span>{todayFormatted}</span>
+              <span aria-hidden>·</span>
+              <span className="inline-flex items-center gap-1" title="Updates on its own">
+                <span className="size-1.5 rounded-full bg-emerald-500" />
+                {syncedSecs === null ? 'Loading' : syncedSecs < 10 ? 'Live' : `${syncedSecs}s ago`}
               </span>
-              <button
-                type="button"
-                onClick={refreshWorkspace}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white/10 px-3 text-xs font-semibold transition hover:bg-white/20"
-                title="Refresh now"
-              >
-                <RefreshCw className={cn('size-3.5', pulseFetching && 'animate-spin')} />
-                <span className="hidden sm:inline">Sync</span>
-              </button>
-              {can('bookings:write') && (
-                <Button size="lg" variant="primary" href="/reservations/new?walkin=1" icon={<Plus className="size-4" />}>
-                  Walk-in / Booking
-                </Button>
-              )}
-            </div>
+            </p>
           </div>
           {heroStats.length > 0 && (
-            <div className="relative mt-4 flex flex-wrap gap-2">
+            <div className="flex items-center gap-1">
               {heroStats.map((s) => (
-                <span key={s.label} className="inline-flex items-baseline gap-1.5 rounded-xl bg-white/[0.08] px-3 py-1.5 ring-1 ring-white/10">
-                  <span className="font-display text-[15px] font-extrabold tabular">{s.value}</span>
-                  <span className="text-[11px] text-[var(--sidebar-muted)]">{s.label}</span>
-                </span>
+                <Link
+                  key={s.label}
+                  href={s.href}
+                  className="inline-flex items-baseline gap-1 rounded-lg px-2 py-1 text-[11.5px] text-fg-muted transition hover:bg-surface-2 hover:text-fg"
+                >
+                  <span className="font-display text-[14px] font-extrabold text-fg tabular">{s.value}</span>
+                  {s.label}
+                </Link>
               ))}
             </div>
           )}
-        </section>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={refreshWorkspace}
+              className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-fg-muted transition hover:border-line-strong hover:text-fg"
+              title="Refresh now"
+              aria-label="Refresh now"
+            >
+              <RefreshCw className={cn('size-3.5', pulseFetching && 'animate-spin')} />
+            </button>
+            {can('bookings:write') && (
+              <Button variant="primary" href="/reservations/new?walkin=1" icon={<Plus className="size-4" />}>
+                Walk-in
+              </Button>
+            )}
+          </div>
+        </header>
 
-        {/* 2. Jump to */}
+        {/* 2. Quick actions */}
         {shortcuts.length > 0 && (
-          <nav aria-label="Shortcuts" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <nav aria-label="Quick actions" className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 sm:flex-wrap">
             {shortcuts.map((s) => (
               <Link
                 key={s.key}
                 href={s.href}
-                className="group inline-flex shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[12.5px] font-semibold shadow-2xs transition hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[12.5px] font-semibold transition hover:border-line-strong hover:bg-surface-2"
               >
-                <s.icon className={cn('size-4 transition-transform group-hover:scale-110', s.iconColor)} strokeWidth={2.2} />
+                <s.icon className={cn('size-4', s.iconColor)} strokeWidth={2.2} />
                 {s.label}
                 {s.badge && (
                   <span className={cn('rounded-full border px-1.5 text-[10px] font-bold tabular', TONE_PILL_CLASSES[s.badge.tone])}>
@@ -666,13 +650,13 @@ export default function Today() {
         {showExecutive && (
           <section aria-label="Owner summary">
             {pulseLoading || !pulse ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {[0, 1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-28" />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <Skeleton key={i} className="h-[50px]" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <KpiCard
                   label="Cleared today"
                   icon={Wallet}
@@ -686,7 +670,7 @@ export default function Today() {
                   href="/brief"
                 />
                 <KpiCard
-                  label="Restaurant, bar & club"
+                  label="Restaurant & bar"
                   icon={UtensilsCrossed}
                   accent="orange"
                   value={money(pulse.operations.posRevenueTodayUgxMinor, 'UGX')}
@@ -694,20 +678,11 @@ export default function Today() {
                   href="/pos"
                 />
                 <KpiCard
-                  label="Occupancy"
-                  icon={BedDouble}
-                  accent="emerald"
-                  value={`${occupancyPct}%`}
-                  meter={occupancyPct}
-                  sub={`${pulse.rooms.occupied} of ${pulse.rooms.totalActive} rooms · ${pulse.desk.guestsInHouse} guests in house`}
-                  href="/rack"
-                />
-                <KpiCard
                   label="Bookings"
                   icon={BookOpenText}
                   accent="indigo"
-                  value={`${pulse.reservations.confirmedCount} confirmed`}
-                  sub={`${pulse.reservations.upcoming7d} in next 7 days · ${pulse.hr.activeStaff} staff (${money(hrOverview?.totalMonthlyPayrollMinor || '0', 'UGX')}/mo)`}
+                  value={`${pulse.reservations.upcoming7d} in next 7 days`}
+                  sub={`${pulse.reservations.confirmedCount} confirmed in total`}
                   href="/reservations"
                 />
               </div>
@@ -759,7 +734,6 @@ export default function Today() {
             {showDesk && canDesk && (
               <Section
                 title="Front Desk"
-                description="Check guests in, assign rooms, settle folios and check out"
                 actions={
                   <Link
                     href="/desk"
@@ -828,7 +802,7 @@ export default function Today() {
                     }
 
                     return (
-                      <div className="grid gap-2">
+                      <div className="grid gap-1.5">
                         {list.slice(0, 6).map((stay) => {
                           const assignedRooms = stay.rooms.flatMap((r) => r.assigned.map((a) => a.number)).join(', ');
                           const balance = BigInt(stay.balanceMinor || '0');
@@ -839,10 +813,10 @@ export default function Today() {
                           return (
                             <div
                               key={stay.id}
-                              className="flex flex-col justify-between gap-3 rounded-xl border border-line bg-surface-2/35 p-3 transition hover:border-line-strong sm:flex-row sm:items-center"
+                              className="flex flex-col justify-between gap-2 rounded-lg border border-line bg-surface-2/35 px-3 py-2 transition hover:border-line-strong sm:flex-row sm:items-center"
                             >
                               <div className="flex min-w-0 flex-1 items-center gap-3">
-                                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--sidebar)] text-[12px] font-bold text-[var(--sidebar-fg)]">
+                                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--sidebar)] text-[11px] font-bold text-[var(--sidebar-fg)]">
                                   {initials}
                                 </span>
                                 <div className="min-w-0">
@@ -881,7 +855,7 @@ export default function Today() {
                                 </div>
                               </div>
 
-                              <div className="flex flex-wrap items-center gap-1.5 border-t border-line/60 pt-2 sm:border-t-0 sm:pt-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
                                 {!assignedRooms && stay.status !== 'CHECKED_OUT' && (
                                   <Button size="sm" variant="secondary" icon={<DoorOpen className="size-3.5" />} onClick={() => setDeskDialog({ kind: 'assign', stay: toStayRef(stay) })}>
                                     Assign room
@@ -926,7 +900,6 @@ export default function Today() {
             {showHk && canRooms && (
               <Section
                 title="Rooms"
-                description="Live state of every room — tap the brush to mark a room clean"
                 actions={
                   <Link
                     href="/housekeeping"
@@ -936,9 +909,9 @@ export default function Today() {
                   </Link>
                 }
               >
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {!hkBoard ? (
-                    <Skeleton className="h-44" />
+                    <Skeleton className="h-16" />
                   ) : (
                     <RoomMap
                       rooms={rooms}
@@ -956,8 +929,8 @@ export default function Today() {
                     if (!hkBoard) return null;
                     if (actionable.length === 0) {
                       return (
-                        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/8 px-3.5 py-2.5 text-xs font-medium text-success">
-                          <Sparkles className="size-4 shrink-0" />
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-success">
+                          <Sparkles className="size-3.5 shrink-0" />
                           No housekeeping tasks waiting.
                         </div>
                       );
@@ -1044,7 +1017,6 @@ export default function Today() {
             {(canReq || pinnedComms.length > 0) && (
               <Section
                 title="Requisitions & Handover Notes"
-                description="Stock requests waiting on a decision, and pinned team notices"
                 actions={
                   canReq ? (
                     <Link
@@ -1116,7 +1088,6 @@ export default function Today() {
         {(showComms || showDesk) && canInbox && dashboardData && (
           <Section
             title="Guest Enquiries"
-            description="Latest conversations across WhatsApp, website & email"
             actions={
               <Link
                 href="/inbox"
@@ -1163,7 +1134,7 @@ export default function Today() {
         )}
 
         {/* 9. Owner analytics */}
-        {showExecutive && canDashboard && (canInbox || canWaitlist) && (
+        {isOwner && lens === 'EXECUTIVE' && canDashboard && (canInbox || canWaitlist) && (
           dashLoading || !dashboardData ? (
             <div className="grid gap-4 xl:grid-cols-2">
               <Skeleton className="h-60" />
@@ -1172,12 +1143,12 @@ export default function Today() {
           ) : (
             <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
               {canInbox && (
-                <Section title="Enquiries · last 30 days" description="Daily incoming guest demand">
+                <Section title="Enquiries · last 30 days">
                   <ColumnChart data={dashboardData.enquiriesByDay} label="Enquiries" />
                 </Section>
               )}
               {canWaitlist && (
-                <Section title="Waitlist by room type" description="Which rooms future guests want most">
+                <Section title="Waitlist by room type">
                   {dashboardData.waitlistByRoomType.length ? (
                     <BarList data={dashboardData.waitlistByRoomType.map((r) => ({ label: t(r.name), value: r.count }))} />
                   ) : (
