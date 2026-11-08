@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Copy, ExternalLink, FilePlus2, Search } from 'lucide-react';
+import { Copy, ExternalLink, FilePlus2, Search, Type } from 'lucide-react';
 import type { AdminPageSummaryDTO, PageKind } from '@reberon/contracts';
 import { t } from '@reberon/contracts/text';
 import { slugify } from '@reberon/utils';
@@ -55,7 +55,12 @@ function PagesInner() {
       <PageHeader
         title="Pages"
         description="Every page on the website is built from blocks. Edit, preview, publish — the site updates within seconds."
-        actions={can('content:write') && <Button variant="primary" icon={<FilePlus2 className="size-4" />} onClick={() => setCreating(true)}>New page</Button>}
+        actions={
+          <span className="flex items-center gap-2">
+            {can('settings:write') && <Button href="/settings?tab=typography" icon={<Type className="size-4" />}>Fonts</Button>}
+            {can('content:write') && <Button variant="primary" icon={<FilePlus2 className="size-4" />} onClick={() => setCreating(true)}>New page</Button>}
+          </span>
+        }
       />
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 pt-1">

@@ -1,24 +1,8 @@
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from 'next/font/google';
 import { Providers } from '@/lib/providers';
+import { FONT_CLASSES } from '@/lib/fonts';
+import { typographyBootScript } from '@/lib/typography-boot';
 import './globals.css';
-
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  variable: '--font-jakarta',
-  display: 'swap',
-});
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-const mono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono-face',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: { default: 'The House · Reberon Hotel PMS', template: '%s · The House' },
@@ -44,9 +28,9 @@ const themeScript = `try{var t=localStorage.getItem('rb-admin-theme');document.d
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="light" className={`${jakarta.variable} ${inter.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="light" className={FONT_CLASSES} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: themeScript + typographyBootScript }} />
       </head>
       <body>
         <Providers>{children}</Providers>

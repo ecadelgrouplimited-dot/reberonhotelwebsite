@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { NavItemDTO, NavMenuKey, SiteDTO } from '@reberon/contracts';
-import { NAV_MENUS } from '@reberon/contracts';
+import { NAV_MENUS, readTypography } from '@reberon/contracts';
 import type { NavigationItem } from '@reberon/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { ResolverService } from './resolver.service.js';
@@ -75,6 +75,7 @@ export class SettingsService {
         shareImage: media.get(get('seo.shareImageId', '')) ?? null,
       },
       footerNote: lt(s['hotel.footerNote']),
+      typography: readTypography(s['appearance.typography']),
       nav: await this.navigation(),
     };
   }

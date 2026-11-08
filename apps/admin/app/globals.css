@@ -7,8 +7,8 @@
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
-  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-inter), var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--ff-plus-jakarta-sans), var(--ff-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--ff-inter), var(--ff-plus-jakarta-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 10px;
@@ -90,7 +90,9 @@
   ::selection { background: var(--surface-2); color: var(--fg); }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
   h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
-  .display { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.02em; }
+  .display { font-family: var(--font-display); font-weight: var(--heading-weight, 600); letter-spacing: -0.02em; }
+  /* Settings → Typography: interface size for the work area (staff accessibility). */
+  main { zoom: var(--text-scale, 1); }
 }
 
 @utility tabular { font-variant-numeric: tabular-nums; }

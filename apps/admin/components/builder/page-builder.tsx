@@ -194,6 +194,7 @@ export function PageBuilder({ id }: { id: string }) {
         setTab('blocks');
       }
       if (msg.type === 'rb:ready') {
+        toPreview({ type: 'rb:editor' });
         const id = latest.current.draft?.blocks.find((b) => b.id === selectedRef.current)?.id;
         if (id && latest.current.draft?.blocks[0]?.id !== id) toPreview({ type: 'rb:focus', id });
       }

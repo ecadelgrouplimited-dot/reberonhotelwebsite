@@ -23,6 +23,8 @@ export const SETTING_DEFAULTS: { key: string; group: SettingGroup; value: unknow
   { key: 'contact.responsePromise', group: 'CONTACT', value: en('We reply within four hours, 7:00–21:00.') },
   { key: 'social', group: 'CONTACT', value: { tiktok: 'https://tiktok.com/@reberonhotel', instagram: 'https://instagram.com/reberonhotel', facebook: 'https://facebook.com/reberonhotel', x: 'https://x.com/reberonhotel' } },
   { key: 'seo.titleTemplate', group: 'SEO', value: '%s · Reberon Hotel, Kapchorwa' },
+  // Fonts and text size for the website and the House (Settings → Typography).
+  { key: 'appearance.typography', group: 'GENERAL', value: {} },
   { key: 'seo.defaultTitle', group: 'SEO', value: 'Reberon Hotel — Kapchorwa, Mount Elgon' },
   {
     key: 'seo.defaultDescription',

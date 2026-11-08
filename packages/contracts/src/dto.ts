@@ -1,3 +1,4 @@
+import type { Typography } from './typography.js';
 import type { TourDTO } from './tours.js';
 import type { LText, LRich } from './localized.js';
 import type { Block } from './blocks.js';
@@ -51,6 +52,8 @@ export interface SiteDTO {
   openingLabel: LText;
   features: { bookingEnabled: boolean; waitlistEnabled: boolean; progressEnabled: boolean; toursEnabled: boolean; maintenanceMode?: boolean };
   seo: { titleTemplate: string; defaultTitle: string; defaultDescription: LText; shareImage: MediaRef | null };
+  /** Fonts and text size chosen in the House (Settings → Typography). */
+  typography: Typography;
   footerNote: LText;
   nav: Record<NavMenuKey, NavItemDTO[]>;
 }

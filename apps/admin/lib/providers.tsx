@@ -4,6 +4,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 import { toast, Toaster } from 'sonner';
 import { QUEUED_MESSAGE } from './offline/outbox';
 import type { MeDTO, Permission } from '@reberon/contracts';
+import { TypographyApplier } from './typography';
 import { ApiError, get, OfflineQueuedError } from './api';
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -25,6 +26,7 @@ export function Providers({ children }: { children: ReactNode }) {
   );
   return (
     <QueryClientProvider client={client}>
+      <TypographyApplier />
       {children}
       <Toaster position="bottom-right" richColors closeButton toastOptions={{ className: 'font-sans' }} />
     </QueryClientProvider>

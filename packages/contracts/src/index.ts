@@ -13,3 +13,4 @@ export * from './documents.js';
 export * from './operations.js';
 export * from './hr.js';
 export * from './concierge.js';
+export * from './typography.js';

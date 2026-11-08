@@ -15,6 +15,7 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Pill, Section, Skeleton, Tabs } from '@/components/ui/bits';
 import { FieldRenderer, type AdminFieldDef } from '@/components/forms/field-renderer';
+import { TypographySettings } from '@/components/settings/typography-settings';
 import { FieldShell, Switch, TextInput } from '@/components/ui/field';
 
 type Settings = Record<string, { value: unknown; group: string }>;
@@ -83,7 +84,11 @@ const SOCIAL_KEYS: [string, string, string][] = [
 export default function SettingsPage() {
   const qc = useQueryClient();
   const can = useCan();
-  const [tab, setTab] = useState<'general' | 'email' | 'receipts'>('general');
+  const [tab, setTab] = useState<'general' | 'typography' | 'email' | 'receipts'>('general');
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'typography' || t === 'email' || t === 'receipts') setTab(t);
+  }, []);
   const { data } = useQuery({ queryKey: ['settings'], queryFn: () => get<Settings>('/settings') });
   const { data: integrations } = useQuery({
     queryKey: ['integrations'],
@@ -103,6 +108,7 @@ export default function SettingsPage() {
     mutationFn: () => patch<Settings>('/settings', changed),
     onSuccess: (d) => {
       qc.setQueryData(['settings'], d);
+      qc.invalidateQueries({ queryKey: ['site-typography'] });
       toast.success('Settings saved & live on reberonhotel.com');
     },
     onError: (e) => toast.error(e instanceof ApiError ? (e.errors[0]?.message ?? e.message) : 'Could not save settings'),
@@ -169,6 +175,7 @@ export default function SettingsPage() {
           onChange={setTab}
           items={[
             { value: 'general', label: 'General, Contact & Social' },
+            { value: 'typography', label: 'Typography & fonts' },
             { value: 'email', label: 'Email, SMTP & Notifications' },
             { value: 'receipts', label: 'Receipts, SEO & Feature Flags' },
           ]}
@@ -284,6 +291,10 @@ export default function SettingsPage() {
             </Section>
           </fieldset>
         </div>
+      )}
+
+      {tab === 'typography' && (
+        <TypographySettings value={v['appearance.typography']} onChange={(t) => setV((x) => ({ ...x, 'appearance.typography': t }))} editable={editable} />
       )}
 
       {tab === 'receipts' && (

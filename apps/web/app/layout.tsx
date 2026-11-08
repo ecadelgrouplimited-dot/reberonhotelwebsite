@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import { Fraunces, Inter, JetBrains_Mono } from 'next/font/google';
 import { draftMode } from 'next/headers';
 import { api, getStaffSession } from '@/lib/api';
 import { hotelJsonLd, JsonLd, WEB_URL } from '@/lib/seo';
@@ -15,12 +14,10 @@ import { PreviewBanner } from '@/components/site/preview-banner';
 import { PreviewBridge } from '@/components/site/preview-bridge';
 import { ComingSoonGate, StaffPreviewBar } from '@/components/site/coming-soon-gate';
 import { SipiConciergeWidget } from '@/components/concierge/sipi-concierge-widget';
-import { t } from '@reberon/contracts';
+import { t, typographyVars, readTypography } from '@reberon/contracts';
+import { FONT_CLASSES } from '@/lib/fonts';
 import './globals.css';
 
-const fraunces = Fraunces({ subsets: ['latin'], axes: ['opsz', 'SOFT'], variable: '--font-fraunces', display: 'swap' });
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
-const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono-face', display: 'swap', preload: false });
 
 export const viewport: Viewport = {
   themeColor: [
@@ -63,7 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const canViewSite = !isMaintenance || draft.isEnabled || !!staffSession;
 
   return (
-    <html lang="en-UG" className={`${fraunces.variable} ${inter.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en-UG" className={FONT_CLASSES} style={typographyVars(readTypography(site.typography), 'website') as React.CSSProperties} suppressHydrationWarning>
       <head>
         <BootScript />
         <JsonLd data={hotelJsonLd(site)} />

@@ -179,7 +179,7 @@ export async function printDocument(o: PrintOptions) {
   document.body.appendChild(frame);
   const doc = frame.contentDocument!;
   doc.open();
-  doc.write(`<!doctype html><html lang="en" data-theme="light" class="${escapeHtml(document.documentElement.className)}"><head>
+  doc.write(`<!doctype html><html lang="en" data-theme="light" class="${escapeHtml(document.documentElement.className)}" style="${escapeHtml(document.documentElement.getAttribute('style') ?? '')}"><head>
     <meta charset="utf-8"><base href="${escapeHtml(location.origin)}/"><title>${escapeHtml(name)}</title>
     ${styles}
     <style>${DOC_CSS}${pageCss(brand, o)}</style>

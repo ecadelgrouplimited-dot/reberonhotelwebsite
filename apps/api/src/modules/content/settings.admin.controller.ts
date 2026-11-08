@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Patch, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { zSettingsPatch } from '@reberon/contracts';
+import { readTypography, zSettingsPatch } from '@reberon/contracts';
 import type { z } from 'zod';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
@@ -45,6 +45,8 @@ export class SettingsAdminController {
       if (!n) throw badRequest('WhatsApp number is not valid', [{ path: 'contact.whatsapp', message: 'Not a valid phone number' }]);
       body['contact.whatsapp'] = n;
     }
+    // Typography is stored complete and valid, whatever a client sends.
+    if ('appearance.typography' in body) body['appearance.typography'] = readTypography(body['appearance.typography']);
     await this.prisma.$transaction(async (tx) => {
       for (const [key, value] of Object.entries(body)) {
         await tx.setting.update({ where: { key }, data: { value: value as object, updatedById: user.id } });

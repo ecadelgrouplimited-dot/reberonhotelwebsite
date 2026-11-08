@@ -31,6 +31,8 @@ export function PreviewBridge({ adminOrigin }: { adminOrigin: string }) {
     box.current = outline;
 
     let hovered: HTMLElement | null = null;
+    // Click-to-edit only when the page builder asks for it (Settings previews just look).
+    let editing = false;
     const place = (el: HTMLElement | null, label?: string) => {
       if (!el) {
         outline.style.opacity = '0';
@@ -46,6 +48,7 @@ export function PreviewBridge({ adminOrigin }: { adminOrigin: string }) {
     const label = (el: HTMLElement) => `${el.dataset.blockLabel ?? 'Block'} · click to edit`;
 
     const onOver = (e: MouseEvent) => {
+      if (!editing) return;
       const el = blockOf(e.target);
       if (el === hovered) return;
       hovered = el;
@@ -57,6 +60,7 @@ export function PreviewBridge({ adminOrigin }: { adminOrigin: string }) {
     };
     const onScroll = () => hovered && place(hovered, label(hovered));
     const onClick = (e: MouseEvent) => {
+      if (!editing) return;
       const el = blockOf(e.target);
       if (!el) return;
       // In the editor a click picks the block; links and buttons don't navigate away.
@@ -67,8 +71,13 @@ export function PreviewBridge({ adminOrigin }: { adminOrigin: string }) {
     };
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== origin || !e.data || typeof e.data !== 'object') return;
-      const msg = e.data as { type?: string; id?: string };
+      const msg = e.data as { type?: string; id?: string; vars?: Record<string, string> };
+      if (msg.type === 'rb:editor') editing = true;
       if (msg.type === 'rb:refresh') router.refresh();
+      // Settings → Typography previews unsaved fonts on the real page.
+      if (msg.type === 'rb:typography' && msg.vars && typeof msg.vars === 'object') {
+        for (const [k, v] of Object.entries(msg.vars)) if (k.startsWith('--') && typeof v === 'string') document.documentElement.style.setProperty(k, v);
+      }
       if (msg.type === 'rb:focus' && msg.id) {
         selectedId.current = msg.id;
         const el = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(msg.id)}"]`);
