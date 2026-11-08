@@ -68,7 +68,19 @@ export const facilityConfig: EntityConfig = {
   title: (v) => en(v.name),
   viewUrl: (v) => `${WEB_URL}/facilities/${v.slug}`,
   empty: { name: {}, slug: '', summary: {}, icon: 'building', mediaIds: [], status: 'AVAILABLE' },
-  toInput: ({ media: _m, ...v }) => v,
+  // The page details live in one JSON field; the form edits them as d_* fields.
+  toForm: ({ details, ...r }) => ({ ...r, ...Object.fromEntries(Object.entries((details as V | null) ?? {}).map(([k, v]) => [`d_${k}`, v])) }),
+  toInput: ({ media: _m, ...v }) => {
+    const details: V = {};
+    const rest: V = {};
+    for (const [k, val] of Object.entries(v)) {
+      if (k.startsWith('d_')) {
+        const empty = val === undefined || val === null || val === '' || (Array.isArray(val) && !val.length) || (typeof val === 'object' && !Array.isArray(val) && !Object.values(val as V).some(Boolean));
+        if (!empty) details[k.slice(2)] = val;
+      } else rest[k] = val;
+    }
+    return { ...rest, details: Object.keys(details).length ? details : null };
+  },
   sections: [
     {
       title: 'Facility',
@@ -80,10 +92,51 @@ export const facilityConfig: EntityConfig = {
         { kind: 'mediaList', name: 'mediaIds', label: 'Pictures' },
       ],
     },
+    {
+      title: 'Facility page details',
+      description: 'Chips, facts and highlights on the facility card and page. Only say what is true today — anything left empty is simply not shown.',
+      fields: [
+        { kind: 'list', name: 'd_tags', label: 'Chips (on the card)', itemLabel: 'Chip', max: 8, fields: [{ kind: 'ltext', name: 'text', label: 'Text', required: true }] },
+        {
+          kind: 'list',
+          name: 'd_specs',
+          label: 'Good to know (facts)',
+          itemLabel: 'Fact',
+          max: 12,
+          fields: [
+            { kind: 'text', name: 'icon', label: 'Icon' },
+            { kind: 'ltext', name: 'label', label: 'Label', required: true },
+            { kind: 'ltext', name: 'value', label: 'Value', required: true },
+          ],
+        },
+        { kind: 'list', name: 'd_highlights', label: 'What to expect (highlights)', itemLabel: 'Highlight', max: 12, fields: [{ kind: 'ltext', name: 'text', label: 'Text', required: true, multiline: true }] },
+        {
+          kind: 'group',
+          label: 'Enquiries',
+          fields: [
+            { kind: 'ltext', name: 'd_badge', label: 'Badge', help: 'e.g. “Open daily”. Empty shows the status.' },
+            { kind: 'ltext', name: 'd_enquireLabel', label: 'Enquire button text' },
+            {
+              kind: 'select',
+              name: 'd_enquireIntent',
+              label: 'Enquiry subject',
+              options: [
+                { value: 'GENERAL', label: 'Something else' },
+                { value: 'STAY', label: 'A stay' },
+                { value: 'EVENT', label: 'An event / the hall' },
+                { value: 'GROUP', label: 'A group' },
+              ],
+            },
+          ],
+        },
+        { kind: 'ltext', name: 'd_note', label: 'Note beside the buttons', multiline: true },
+        { kind: 'text', name: 'd_whatsappText', label: 'Pre-filled WhatsApp message' },
+      ],
+    },
   ],
   side: [
     { kind: 'select', name: 'status', label: 'Status', required: true, options: [{ value: 'AVAILABLE', label: 'Available' }, { value: 'COMING_SOON', label: 'Being built' }, { value: 'HIDDEN', label: 'Hidden' }] },
-    { kind: 'select', name: 'icon', label: 'Icon', required: true, options: ['utensils', 'presentation', 'car', 'zap', 'droplets', 'flame', 'wifi', 'coffee', 'trees', 'building', 'users', 'shield-check'].map((i) => ({ value: i, label: i })) },
+    { kind: 'text', name: 'icon', label: 'Icon', required: true },
   ],
 };
 

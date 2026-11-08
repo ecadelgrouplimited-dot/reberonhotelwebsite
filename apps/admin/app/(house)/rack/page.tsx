@@ -31,7 +31,8 @@ import type { DeskBoardDTO, HkStatus, HkTaskKind, RackRoomDTO } from '@reberon/c
 import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
 import { dateRange, dateShort } from '@/lib/format';
-import { exportToCsv } from '@/lib/export-csv';
+import { m, type ExportSpec } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
@@ -237,16 +238,8 @@ function Rack() {
               </Button>
             )}
 
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!filteredRooms.length}
-              icon={<Download className="size-3.5" />}
-              onClick={() =>
-                exportToCsv(
-                  `reberon-room-rack-${selectedDate}.csv`,
-                  ['Room #', 'Floor', 'Room Type', 'Status', 'Active', 'Occupant', 'Arriving Guest', 'Active Task', 'Room Notes'],
-                  filteredRooms.map((r) => [
+            <ExportMenu spec={() =>
+                ({ title: 'Room rack', subtitle: dateShort(selectedDate), filename: `reberon-room-rack-${selectedDate}`, columns: ['Room #', 'Floor', 'Room Type', 'Status', 'Active', 'Occupant', 'Arriving Guest', 'Active Task', 'Room Notes'], rows: filteredRooms.map((r) => [
                     r.number,
                     r.floor,
                     r.roomType.name,
@@ -256,12 +249,8 @@ function Rack() {
                     r.arriving ? `${r.arriving.guestName} (${r.arriving.code})` : '',
                     r.task ? `${r.task.kind} (${r.task.status})` : '',
                     r.notes ?? '',
-                  ]),
-                )
-              }
-            >
-              Export CSV
-            </Button>
+                  ]) })
+              } disabled={!filteredRooms.length} />
 
             <div className="flex rounded-lg border border-line bg-surface p-0.5">
               <button

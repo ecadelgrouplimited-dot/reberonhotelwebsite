@@ -1,7 +1,8 @@
 'use client';
 import { useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, GripVertical, ImagePlus, Plus, Trash2, Upload, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, GripVertical, ImagePlus, Plus, Trash2, Upload, X } from 'lucide-react';
+import { SITE_ICONS } from './site-icons';
 import { BLOCKS, BLOCK_MAP, CTA_ACTIONS, type Block, type FieldDef, type RefEntity, type Cta } from '@reberon/contracts';
 import { t, type LText, type LRich } from '@reberon/contracts/text';
 import { get, thumb } from '@/lib/api';
@@ -67,9 +68,18 @@ function Field({ def, value, onChange, error, errors, path }: { def: Exclude<Adm
   const required = 'required' in def ? def.required : false;
   switch (def.kind) {
     case 'text':
+      if (def.name === 'icon') return <IconPicker label={def.label} value={(value as string) ?? ''} onChange={(v) => onChange(v || undefined)} />;
       return (
         <FieldShell label={def.label} hint={help} error={error} required={required}>
-          <input className="input" value={(value as string) ?? ''} placeholder={def.placeholder} onChange={(e) => onChange(e.target.value || undefined)} aria-invalid={!!error} />
+          <input
+            className="input"
+            value={(value as string) ?? ''}
+            placeholder={def.placeholder}
+            list={def.name === 'href' ? SITE_PATHS_ID : undefined}
+            onChange={(e) => onChange(e.target.value || undefined)}
+            aria-invalid={!!error}
+          />
+          {def.name === 'href' && <SitePaths />}
         </FieldShell>
       );
     case 'ltext': {
@@ -309,7 +319,12 @@ function CtaEditor({ label, value, onChange, max }: { label: string; value: Cta[
             <button type="button" onClick={() => onChange(value.filter((_, k) => k !== i))} className="grid size-10 place-items-center rounded-lg text-fg-subtle hover:bg-danger/10 hover:text-danger" aria-label="Remove button">
               <Trash2 className="size-4" />
             </button>
-            {c.action === 'link' && <input className="input sm:col-span-4" placeholder="/about or https://…" value={c.href ?? ''} onChange={(e) => set(i, { href: e.target.value })} />}
+            {c.action === 'link' && (
+              <>
+                <input className="input sm:col-span-4" list={SITE_PATHS_ID} placeholder="/about or https://… — start typing to pick a page" value={c.href ?? ''} onChange={(e) => set(i, { href: e.target.value })} />
+                <SitePaths />
+              </>
+            )}
             {c.action === 'whatsapp' && <input className="input sm:col-span-4" placeholder="Pre-filled message (optional)" value={c.prefill ?? ''} onChange={(e) => set(i, { prefill: e.target.value || undefined })} />}
           </div>
         ))}
@@ -333,6 +348,8 @@ function ListEditor({ def, value, onChange, errors, path }: { def: Extract<Field
   };
   const summary = (item: Values): ReactNode => {
     for (const f of def.fields) {
+      // Image ids, links and icon names are not a readable summary.
+      if (f.kind === 'media' || f.kind === 'mediaList' || f.kind === 'ref' || f.kind === 'refs' || f.name === 'href' || f.name === 'icon') continue;
       const v = item[f.name];
       if (typeof v === 'string' && v) return v;
       if (v && typeof v === 'object' && 'en' in (v as object)) return (v as LText).en;
@@ -352,6 +369,9 @@ function ListEditor({ def, value, onChange, errors, path }: { def: Extract<Field
               </button>
               <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="grid size-7 place-items-center rounded text-fg-subtle hover:bg-surface-2 disabled:opacity-30" aria-label="Move up"><ArrowUp className="size-3.5" /></button>
               <button type="button" disabled={i === value.length - 1} onClick={() => move(i, 1)} className="grid size-7 place-items-center rounded text-fg-subtle hover:bg-surface-2 disabled:opacity-30" aria-label="Move down"><ArrowDown className="size-3.5" /></button>
+              {value.length < (def.max ?? 50) && (
+                <button type="button" onClick={() => { const n = [...value]; n.splice(i + 1, 0, structuredClone(item)); onChange(n); setOpen(i + 1); }} className="grid size-7 place-items-center rounded text-fg-subtle hover:bg-surface-2" aria-label="Duplicate" title="Duplicate"><Copy className="size-3.5" /></button>
+              )}
               <button type="button" onClick={() => onChange(value.filter((_, k) => k !== i))} className="grid size-7 place-items-center rounded text-fg-subtle hover:bg-danger/10 hover:text-danger" aria-label="Remove"><Trash2 className="size-3.5" /></button>
             </div>
             {open === i && (
@@ -418,6 +438,66 @@ function InlineBlocks({ label, help, value, onChange }: { label: string; help?: 
           setOpen(b.id);
           setAdding('');
         }}>Add</Button>
+      </div>
+    </FieldShell>
+  );
+}
+
+/* ───────── Pickers that keep content valid ───────── */
+
+const SITE_PATHS_ID = 'rb-site-paths';
+
+/** Every published address on the website, offered as suggestions in link fields. */
+function SitePaths() {
+  const { data } = useQuery({
+    queryKey: ['site-paths'],
+    queryFn: async () => {
+      const r = await fetch('/v1/public/pages');
+      return r.ok ? ((await r.json()) as { path: string }[]) : [];
+    },
+    staleTime: 5 * 60_000,
+  });
+  return (
+    <datalist id={SITE_PATHS_ID}>
+      {(data ?? []).map((p) => (
+        <option key={p.path} value={p.path} />
+      ))}
+    </datalist>
+  );
+}
+
+function IconPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const Current = value ? SITE_ICONS[value] : undefined;
+  const names = Object.keys(SITE_ICONS).filter((n) => !q || n.includes(q.toLowerCase()));
+  return (
+    <FieldShell label={label}>
+      <div className="grid gap-2">
+        <button type="button" onClick={() => setOpen((v) => !v)} className="input flex items-center gap-2 text-left">
+          {Current ? <Current className="size-4 text-brand" strokeWidth={1.6} /> : <span className="size-4 rounded border border-dashed border-line-strong" />}
+          <span className={cn('flex-1', !value && 'text-fg-subtle')}>{value || 'Choose an icon'}</span>
+          {value && (
+            <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onChange(''); }} className="text-fg-subtle hover:text-fg" aria-label="Clear icon">
+              <X className="size-3.5" />
+            </span>
+          )}
+        </button>
+        {open && (
+          <div className="rounded-[10px] border border-line bg-surface p-2">
+            <input className="input mb-2 !h-8 text-[12.5px]" placeholder="Search icons" value={q} onChange={(e) => setQ(e.target.value)} />
+            <div className="grid max-h-48 grid-cols-8 gap-1 overflow-y-auto">
+              {names.map((n) => {
+                const I = SITE_ICONS[n]!;
+                return (
+                  <button key={n} type="button" title={n} onClick={() => { onChange(n); setOpen(false); }} className={cn('grid aspect-square place-items-center rounded-lg hover:bg-surface-2', n === value && 'bg-brand/10 text-brand ring-1 ring-brand/40')}>
+                    <I className="size-4.5" strokeWidth={1.6} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </FieldShell>
   );

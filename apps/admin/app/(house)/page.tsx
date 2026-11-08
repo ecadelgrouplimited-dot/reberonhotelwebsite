@@ -579,7 +579,7 @@ export default function Today() {
     <>
       <div className="fade-in space-y-4 pb-12">
         {/* 1. Slim header: who, when, live numbers, the main action */}
-        <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <header data-page-header className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="mr-auto min-w-0">
             <h1 className="truncate font-display text-[1.15rem] font-extrabold leading-tight tracking-tight">
               {greeting}, {firstName}

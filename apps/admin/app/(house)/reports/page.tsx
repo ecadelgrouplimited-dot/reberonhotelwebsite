@@ -4,13 +4,15 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, Download, Info, Plus, Printer, TrendingDown, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, Plus, TrendingDown, XCircle } from 'lucide-react';
 import type { FinanceReportDTO, MoneyByCurrency } from '@reberon/contracts';
 import { get } from '@/lib/api';
 import { useCan } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { cn } from '@/lib/cn';
-import { exportToCsv } from '@/lib/export-csv';
+import { m, type Cell, type ExportSpec } from '@/lib/export';
+import { fileSlug } from '@/lib/print';
+import { ExportMenu, PrintButton } from '@/components/ui/export-menu';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Pill, Section, Skeleton } from '@/components/ui/bits';
 import { TextInput } from '@/components/ui/field';
@@ -78,15 +80,18 @@ function Reports() {
     placeholderData: (prev) => prev,
   });
 
-  const csv = () => {
-    if (!r) return;
+  const periodLabel = r ? `${fmtDay(r.from)} – ${fmtDay(r.to)} ${r.from.slice(0, 4)}` : `${from} – ${to}`;
+  const compareLabel = r ? `${fmtDay(r.compareFrom)} – ${fmtDay(r.compareTo)} ${r.compareFrom.slice(0, 4)}` : '';
+  const tabLabel = TABS.find((t) => t.id === tab)?.label ?? '';
+
+  const exportSpec = (): ExportSpec | null => {
+    if (!r) return null;
     const k = r.kpis;
     const c = r.compare;
-    const u = (m?: MoneyByCurrency) => (m ? money(m.UGX, 'UGX') : '');
-    const d = (m?: MoneyByCurrency) => (m && big(m.USD) ? money(m.USD, 'USD') : '');
-    const rows: (string | number | undefined)[][] = [
-      ['Section', 'Item', 'UGX', 'USD', `Comparison (${r.compareFrom} – ${r.compareTo}) UGX`, 'Notes'],
-      ['Summary', 'Period', `${r.from} to ${r.to}`, '', '', ''],
+    const u = (x?: MoneyByCurrency) => (x ? m(x.UGX, 'UGX') : '');
+    const d = (x?: MoneyByCurrency) => (x && big(x.USD) ? m(x.USD, 'USD') : '');
+    const cur = (minor: string, currency: string, want: string) => (currency === want ? m(minor, currency) : '');
+    const rows: Cell[][] = [
       ...([
         ['Gross revenue', k.grossRevenue, c.grossRevenue],
         ['Net revenue', k.netRevenue, c.netRevenue],
@@ -102,15 +107,23 @@ function Reports() {
       ] as const).map(([l, a, b]) => ['Summary', l, u(a), d(a), u(b), '']),
       ['Summary', 'Occupancy', `${k.occupancy}%`, '', `${c.occupancy}%`, `${k.roomNightsSold}/${k.roomNightsAvailable} room nights`],
       ...(r.house.departments ?? []).map((x) => ['Department', x.label, u(x.revenue), d(x.revenue), '', x.secondaryMetric]),
-      ...r.roomTypes.map((x) => ['Room type', x.name, u(x.revenue), d(x.revenue), '', `${x.roomNightsSold} nights · ${x.occupancy}% · ADR ${u(x.adr)}`]),
+      ...r.roomTypes.map((x) => ['Room type', x.name, u(x.revenue), d(x.revenue), '', `${x.roomNightsSold} nights · ${x.occupancy}% · ADR ${money(x.adr.UGX, 'UGX')}`]),
       ...r.ratePlans.map((x) => ['Rate plan', x.name, u(x.revenue), d(x.revenue), '', `${x.roomNights} nights · ${x.bookings} bookings`]),
       ...r.channels.map((x) => ['Channel', SOURCE[x.source] ?? x.source, u(x.revenue), d(x.revenue), '', `${x.roomNights} nights · ${x.share}%`]),
-      ...r.cash.rails.map((x) => ['Cash rail', x.label, u(x.net), d(x.net), '', `in ${u(x.inflow)} · refunds ${u(x.refunds)} · out ${u(x.outflow)} · ${x.inCount} payments`]),
-      ...r.receivables.debtors.map((x) => ['Owed', `${x.code} ${x.name}`, x.currency === 'UGX' ? money(x.balanceMinor, 'UGX') : '', x.currency === 'USD' ? money(x.balanceMinor, 'USD') : '', '', `${x.status} · ${x.daysPastDeparture} days after departure`]),
-      ...r.adjustments.lines.map((x) => ['Adjustment', `${x.date} ${x.code} ${x.guest}`, x.currency === 'UGX' ? money(x.amountMinor, 'UGX') : '', x.currency === 'USD' ? money(x.amountMinor, 'USD') : '', '', x.description]),
-      ...r.daily.map((x) => ['Daily', x.date, money(big(x.roomUGX) + big(x.fnbUGX) + big(x.otherUGX), 'UGX'), '', '', `collected ${money(x.collectedUGX, 'UGX')} · spent ${money(x.expensesUGX, 'UGX')} · ${x.occupancy}%`]),
+      ...r.cash.rails.map((x) => ['Cash rail', x.label, u(x.net), d(x.net), '', `in ${money(x.inflow.UGX, 'UGX')} · refunds ${money(x.refunds.UGX, 'UGX')} · out ${money(x.outflow.UGX, 'UGX')} · ${x.inCount} payments`]),
+      ...r.receivables.debtors.map((x) => ['Owed', `${x.code} ${x.name}`, cur(x.balanceMinor, x.currency, 'UGX'), cur(x.balanceMinor, x.currency, 'USD'), '', `${x.status} · ${x.daysPastDeparture} days after departure`]),
+      ...r.adjustments.lines.map((x) => ['Adjustment', `${x.date} ${x.code} ${x.guest}`, cur(x.amountMinor, x.currency, 'UGX'), cur(x.amountMinor, x.currency, 'USD'), '', x.description]),
+      ...r.daily.map((x) => ['Daily', x.date, m((big(x.roomUGX) + big(x.fnbUGX) + big(x.otherUGX)).toString(), 'UGX'), '', '', `collected ${money(x.collectedUGX, 'UGX')} · spent ${money(x.expensesUGX, 'UGX')} · ${x.occupancy}%`]),
     ];
-    exportToCsv(`reberon-finance-${r.from}-to-${r.to}.csv`, rows[0] as string[], rows.slice(1).map((row) => row.map((v) => v ?? '')));
+    return {
+      title: 'Financial report',
+      subtitle: periodLabel,
+      meta: [['Compared with', compareLabel]],
+      filename: `reberon-financial-report-${r.from}-to-${r.to}`,
+      columns: ['Section', 'Item', { label: 'UGX', kind: 'money' }, { label: 'USD', kind: 'money' }, { label: `Comparison UGX`, kind: 'money' }, { label: 'Notes', width: 46 }],
+      rows,
+      orientation: 'landscape',
+    };
   };
 
   const vs = compare === 'prev' ? 'vs previous period' : 'vs last year';
@@ -123,8 +136,8 @@ function Reports() {
         actions={
           <div className="no-print flex flex-wrap items-center gap-2">
             {canManageExpenses && <Button variant="primary" size="sm" icon={<Plus className="size-3.5" />} onClick={() => { setTab('EXPENSES'); setExpenseOpen(true); }}>Record expense</Button>}
-            <Button size="sm" icon={<Printer className="size-3.5" />} onClick={() => window.print()}>Print</Button>
-            <Button size="sm" icon={<Download className="size-3.5" />} disabled={!r} onClick={csv}>Export CSV</Button>
+            <PrintButton options={() => ({ title: `Financial report · ${tabLabel}`, subtitle: periodLabel, meta: compareLabel ? [['Compared with', compareLabel]] : [], filename: `reberon-${fileSlug(tabLabel)}-${from}-to-${to}` })} />
+            <ExportMenu spec={exportSpec} disabled={!r} />
           </div>
         }
       />

@@ -11,6 +11,7 @@ import {
 import type { CurrencyCode, PosItemDTO, PosPaymentMethod, PosStaffDTO } from '@reberon/contracts';
 import { money, toMinorStr } from '@/lib/money';
 import { useState } from 'react';
+import { brandNow } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 
 export { useNow } from '@/lib/use-now';
@@ -384,7 +385,7 @@ export function printOfflineSlip(s: OfflineSlip) {
   h1{font-size:14px;text-align:center;margin:0}p{margin:2px 0;text-align:center}table{width:100%;border-collapse:collapse;margin:6px 0}
   td{padding:2px 0;vertical-align:top}.r{text-align:right;white-space:nowrap}.n{font-size:10px;color:#444}.t td{border-top:1px dashed #000;font-weight:bold;padding-top:4px}
   .box{border:1px dashed #000;padding:4px;margin-top:6px;text-align:center;font-size:11px}</style></head><body>
-  <h1>Reberon Hotel</h1><p>${esc(s.outlet)} · ${esc(s.where)}</p><p>${when} · ${esc(s.servedBy)}</p><p><b>${esc(s.ref)}</b></p>
+  <h1>${esc(brandNow().name)}</h1><p>${esc(s.outlet)} · ${esc(s.where)}</p><p>${when} · ${esc(s.servedBy)}</p><p><b>${esc(s.ref)}</b></p>
   <table>${rows}${BigInt(s.discount) > 0n ? `<tr><td>Discount</td><td class="r">−${fmt(s.discount)}</td></tr>` : ''}<tr class="t"><td>Total</td><td class="r">${fmt(s.total)}</td></tr></table>
   ${s.paid ? `<p>Paid · ${esc(s.paid.replace('_', ' ').toLowerCase())}</p>` : '<p>Not yet paid</p>'}
   <div class="box">PROVISIONAL — recorded offline.<br>The numbered receipt is issued when the till reconnects.</div>

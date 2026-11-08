@@ -6,7 +6,8 @@ import type { AuditLogDTO } from '@reberon/contracts';
 import { get } from '@/lib/api';
 import { useMe } from '@/lib/providers';
 import { dateTime } from '@/lib/format';
-import { exportToCsv } from '@/lib/export-csv';
+import { m, type ExportSpec } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
 
@@ -51,10 +52,7 @@ export default function AuditPage() {
 
   const handleExportCsv = () => {
     if (!rows.length) return;
-    exportToCsv(
-      `reberon-audit-log-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Timestamp', 'Actor', 'Actor Role', 'Action', 'Entity Type', 'Entity ID', 'Summary', 'IP Address', 'Before Snapshot', 'After Snapshot'],
-      rows.map((a) => [
+    return { title: 'Audit log', orientation: 'landscape' as const, filename: `reberon-audit-log-${new Date().toISOString().slice(0, 10)}`, columns: ['Timestamp', 'Actor', 'Actor Role', 'Action', 'Entity Type', 'Entity ID', 'Summary', 'IP Address', 'Before Snapshot', 'After Snapshot'], rows: rows.map((a) => [
         a.createdAt,
         a.actor?.name ?? a.actorType.toLowerCase(),
         a.actor?.role ?? a.actorType,
@@ -65,8 +63,7 @@ export default function AuditPage() {
         a.ip ?? '',
         a.before ? JSON.stringify(a.before) : '',
         a.after ? JSON.stringify(a.after) : '',
-      ]),
-    );
+      ]) };
   };
 
   return (
@@ -76,15 +73,7 @@ export default function AuditPage() {
         title="Super Admin System & Deletion Audit Log"
         description={`${data?.total ?? 0} immutable entries · Strictly visible only to the Hotel Owner (Super Admin)`}
         actions={
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!rows.length}
-            onClick={handleExportCsv}
-            icon={<Download className="size-3.5" />}
-          >
-            Export Audit CSV
-          </Button>
+          <ExportMenu spec={handleExportCsv} disabled={!rows.length} />
         }
       />
 

@@ -13,6 +13,7 @@ import { WaitlistForm } from '@/components/forms/waitlist-form';
 import { resolveCta } from '@/lib/cta';
 import { cn } from '@/lib/cn';
 import { MapEmbed } from './map-embed';
+import { formatPhone } from '@/lib/format';
 import type { BlockProps } from './types';
 
 type H = { eyebrow?: LText; heading?: LText; intro?: LText };
@@ -77,11 +78,11 @@ export function Faq({ block }: BlockProps<H, { group: FaqGroupDTO }>) {
 export function ContactCard({ block, site }: BlockProps<H>) {
   const phone = site.contact.phones[0];
   const tiles = [
-    site.contact.whatsapp && { href: whatsappLink(site.contact.whatsapp, 'Hello Reberon Hotel,'), icon: <WhatsAppGlyph className="size-6" />, label: 'WhatsApp', value: site.contact.whatsapp.replace(/^\+256/, '+256 '), note: 'Fastest. Voice notes welcome.', external: true },
-    phone && { href: `tel:${phone.replace(/\s/g, '')}`, icon: <Phone className="size-6" strokeWidth={1.5} />, label: 'Call', value: phone, note: t(site.contact.hours) },
-    site.contact.email && { href: `mailto:${site.contact.email}`, icon: <Mail className="size-6" strokeWidth={1.5} />, label: 'Email', value: site.contact.email, note: 'For quotes and anything long.' },
-    { href: '#map', icon: <MapPin className="size-6" strokeWidth={1.5} />, label: 'Visit', value: t(site.contact.address), note: `Check-in from ${site.checkInTime}` },
-  ].filter(Boolean) as { href: string; icon: React.ReactNode; label: string; value: string; note: string; external?: boolean }[];
+    site.contact.whatsapp && { href: whatsappLink(site.contact.whatsapp, 'Hello Reberon Hotel,'), icon: <WhatsAppGlyph className="size-6" />, label: 'WhatsApp', value: formatPhone(site.contact.whatsapp), note: 'Fastest. Voice notes welcome.', external: true },
+    phone && { href: `tel:${phone.replace(/\s/g, '')}`, icon: <Phone className="size-6" strokeWidth={1.5} />, label: 'Call', value: formatPhone(phone), note: t(site.contact.hours) },
+    site.contact.email && { href: `mailto:${site.contact.email}`, icon: <Mail className="size-6" strokeWidth={1.5} />, label: 'Email', value: site.contact.email, long: true, note: 'For quotes and anything long.' },
+    { href: '#map', icon: <MapPin className="size-6" strokeWidth={1.5} />, label: 'Visit', value: t(site.contact.address), long: true, note: `Check-in from ${site.checkInTime}` },
+  ].filter(Boolean) as { href: string; icon: React.ReactNode; label: string; value: string; note: string; external?: boolean; long?: boolean }[];
   return (
     <div className="container-x">
       <SectionHeading eyebrow={block.data.eyebrow} heading={block.data.heading} intro={block.data.intro} className="mb-12" />
@@ -91,7 +92,7 @@ export function ContactCard({ block, site }: BlockProps<H>) {
             <a href={x.href} {...(x.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})} className="group flex h-full flex-col rounded-[var(--r-lg)] border border-line bg-surface p-6 transition-all duration-500 hover:-translate-y-1 hover:border-line-strong hover:shadow-[var(--shadow-soft)]">
               <span className="grid size-12 place-items-center rounded-full bg-surface-2 text-brand transition-colors group-hover:bg-accent group-hover:text-accent-fg">{x.icon}</span>
               <span className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-fg-subtle">{x.label}</span>
-              <span className="mt-1 break-words text-step-1 font-medium">{x.value}</span>
+              <span className={cn('mt-1 font-medium [overflow-wrap:anywhere]', x.long ? 'text-base leading-snug' : 'text-step-1')}>{x.value}</span>
               <span className="mt-2 text-sm text-fg-muted">{x.note}</span>
             </a>
           </li>

@@ -32,7 +32,8 @@ import { useCan } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { dateShort } from '@/lib/format';
 import { cn } from '@/lib/cn';
-import { exportToCsv } from '@/lib/export-csv';
+import { m, type ExportSpec } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Status } from '@/components/ui/bits';
 import { useConfirm } from '@/components/ui/confirm';
@@ -203,16 +204,8 @@ export default function DeskPage() {
               )}
             </div>
 
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!shown.length}
-              icon={<Download className="size-3.5" />}
-              onClick={() =>
-                exportToCsv(
-                  `reberon-desk-${tab}-${date}.csv`,
-                  ['Code', 'Guest', 'Phone', 'VIP', 'Arrival', 'Departure', 'Nights', 'Adults', 'Children', 'Rooms', 'Assigned Rooms', 'Status', 'Total', 'Balance'],
-                  shown.map((s) => [
+            <ExportMenu spec={() =>
+                ({ title: 'Front desk', subtitle: `${({ arrivals: 'Arrivals', inHouse: 'In house', departures: 'Departures', late: 'Overdue arrivals' } as Record<string, string>)[tab] ?? tab} · ${dateShort(date)}`, orientation: 'landscape' as const, filename: `reberon-desk-${tab}-${date}`, columns: ['Code', 'Guest', 'Phone', 'VIP', 'Arrival', 'Departure', 'Nights', 'Adults', 'Children', 'Rooms', 'Assigned Rooms', 'Status', 'Total', 'Balance'], rows: shown.map((s) => [
                     s.code,
                     s.guest.name,
                     s.guest.phone ?? '',
@@ -225,14 +218,10 @@ export default function DeskPage() {
                     s.rooms.map((r) => `${r.quantity}x ${r.roomTypeName}`).join('; '),
                     s.rooms.flatMap((r) => r.assigned.map((a) => a.number)).join(', '),
                     s.status,
-                    money(s.totalMinor, s.currency),
-                    money(s.balanceMinor, s.currency),
-                  ]),
-                )
-              }
-            >
-              Export CSV
-            </Button>
+                    m(s.totalMinor, s.currency),
+                    m(s.balanceMinor, s.currency),
+                  ]) })
+              } disabled={!shown.length} />
             {can('bookings:write') && (
               <>
                 <Button size="sm" href="/reservations/new" icon={<Plus className="size-3.5" />}>

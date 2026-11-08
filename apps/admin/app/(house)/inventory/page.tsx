@@ -48,6 +48,8 @@ import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
 import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
+import { m } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import { SelectInput, TextInput } from '@/components/ui/field';
 
 const CATEGORY_SHORT: Record<InventoryCategory, string> = {
@@ -162,33 +164,32 @@ export default function InventoryPage() {
     setSearch('');
   };
 
-  const exportCsv = () => {
-    if (!filteredItems.length) return;
-    const rows = [
-      ['SKU', 'Name', 'Category', 'Department', 'Location', 'OnHand', 'InLaundry', 'ParLevel', 'Unit', 'UnitCostUGX', 'TotalValueUGX', 'Condition'],
-      ...filteredItems.map((i) => [
-        i.sku,
-        `"${i.name.replace(/"/g, '""')}"`,
-        CATEGORY_SHORT[i.category] ?? i.category,
-        i.department,
-        `"${(i.location ?? '').replace(/"/g, '""')}"`,
-        i.onHand,
-        i.inUseOrLaundry,
-        i.parLevel,
-        i.unit,
-        Number(BigInt(i.unitCostMinor) / 100n),
-        Number((BigInt(i.onHand) * BigInt(i.unitCostMinor)) / 100n),
-        i.condition,
-      ]),
-    ];
-    const blob = new Blob([rows.map((r) => r.join(',')).join('\n')], { type: 'text/csv' });
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(blob),
-      download: `reberon-inventory-${new Date().toISOString().slice(0, 10)}.csv`,
-    });
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  const exportCsv = () =>
+    filteredItems.length
+      ? {
+          title: 'Inventory & assets',
+          subtitle: `${filteredItems.length} items`,
+          orientation: 'landscape' as const,
+          filename: `reberon-inventory-${new Date().toISOString().slice(0, 10)}`,
+          columns: ['SKU', { label: 'Name', width: 28 }, 'Category', 'Department', 'Location', { label: 'On hand', kind: 'number' as const }, { label: 'In use / laundry', kind: 'number' as const }, { label: 'Par level', kind: 'number' as const }, 'Unit', 'Unit cost', 'Stock value', 'Condition'],
+          rows: filteredItems.map((i) => [
+            i.sku,
+            i.name,
+            CATEGORY_SHORT[i.category] ?? i.category,
+            i.department,
+            i.location ?? '',
+            i.onHand,
+            i.inUseOrLaundry,
+            i.parLevel,
+            i.unit,
+            m(i.unitCostMinor, 'UGX'),
+            m((BigInt(i.onHand) * BigInt(i.unitCostMinor)).toString(), 'UGX'),
+            i.condition,
+          ]),
+          totals: ['Total', '', '', '', '', '', '', '', '', '', m(filteredItems.reduce((a, i) => a + BigInt(i.onHand) * BigInt(i.unitCostMinor), 0n).toString(), 'UGX'), ''],
+        }
+      : null;
+
 
   return (
     <div className="fade-in">
@@ -211,9 +212,7 @@ export default function InventoryPage() {
               <Building2 className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
               Departments
             </Link>
-            <Button size="sm" variant="ghost" icon={<Download className="size-3.5" />} onClick={exportCsv}>
-              CSV Export
-            </Button>
+            <ExportMenu spec={exportCsv} />
             {can('inventory:manage') && (
               <>
                 <Button

@@ -31,7 +31,8 @@ import { useCan } from '@/lib/providers';
 import { dateShort } from '@/lib/format';
 import { money } from '@/lib/money';
 import { cn } from '@/lib/cn';
-import { exportToCsv } from '@/lib/export-csv';
+import { m, type ExportSpec } from '@/lib/export';
+import { ExportMenu, PrintButton } from '@/components/ui/export-menu';
 import { Button } from '@/components/ui/button';
 import type { BriefInsightsDTO } from '@reberon/contracts';
 import { AttentionList, BriefKpis, Forecast30, MtdCompare, TodayRails } from '@/components/reports/brief-insights';
@@ -235,24 +236,25 @@ export default function BriefPage() {
     .filter((p) => (p.currency ?? 'UGX') === 'UGX' && p.balanceMinor)
     .reduce((acc, p) => acc + BigInt(p.balanceMinor!), 0n);
 
-  const exportBriefCsv = () => {
-    exportToCsv(
-      `reberon-owner-brief-${b.date}.csv`,
-      ['Section', 'Reference / Code', 'Name / Metric', 'Status / Category', 'Details', 'Amount / Balance'],
-      [
+  const exportBrief = (): ExportSpec => ({
+    title: 'Owner brief',
+    subtitle: dateShort(b.date),
+    filename: `reberon-owner-brief-${b.date}`,
+    orientation: 'landscape',
+    columns: ['Section', 'Reference', 'Name / metric', 'Status', { label: 'Details', width: 44 }, { label: 'Amount / balance', kind: 'money' }],
+    rows: [
         ['Executive Summary', 'OCCUPANCY', `${b.occupancy.tonight}/${b.occupancy.total} rooms`, `${b.occupancy.percent}%`, `${b.occupancy.guestsInHouse ?? 0} guests in-house`, ''],
-        ['Executive Summary', 'TODAY INFLOW (TOTAL)', 'Rooms + POS + Health Club', 'COLLECTED', b.date, fp ? money(fp.today.totalUGX, 'UGX') : money(b.clearedToday.UGX, 'UGX')],
-        ['Executive Summary', 'TODAY ROOMS', `${fp?.today.roomPaymentsCount ?? b.clearedToday.count} payments`, 'ROOMS', b.date, fp ? money(fp.today.roomsUGX, 'UGX') : money(b.clearedToday.UGX, 'UGX')],
-        ['Executive Summary', 'TODAY POS', `${fp?.today.posOrdersCount ?? 0} settled orders`, 'F&B / BAR', b.date, fp ? money(fp.today.posUGX, 'UGX') : 'UGX 0'],
-        ['Executive Summary', 'TODAY HEALTH CLUB', `${fp?.today.healthClubPassesCount ?? 0} passes`, 'SPA / GYM', b.date, fp ? money(fp.today.healthClubUGX, 'UGX') : 'UGX 0'],
-        ['Executive Summary', 'MTD GROSS COLLECTED', 'Month-to-Date Total', 'MTD', b.date.slice(0, 7), fp ? money(fp.mtd.totalUGX, 'UGX') : ''],
+        ['Executive Summary', 'TODAY INFLOW (TOTAL)', 'Rooms + POS + Health Club', 'COLLECTED', b.date, fp ? m(fp.today.totalUGX, 'UGX') : m(b.clearedToday.UGX, 'UGX')],
+        ['Executive Summary', 'TODAY ROOMS', `${fp?.today.roomPaymentsCount ?? b.clearedToday.count} payments`, 'ROOMS', b.date, fp ? m(fp.today.roomsUGX, 'UGX') : m(b.clearedToday.UGX, 'UGX')],
+        ['Executive Summary', 'TODAY POS', `${fp?.today.posOrdersCount ?? 0} settled orders`, 'F&B / BAR', b.date, fp ? m(fp.today.posUGX, 'UGX') : m('0', 'UGX')],
+        ['Executive Summary', 'TODAY HEALTH CLUB', `${fp?.today.healthClubPassesCount ?? 0} passes`, 'SPA / GYM', b.date, fp ? m(fp.today.healthClubUGX, 'UGX') : m('0', 'UGX')],
+        ['Executive Summary', 'MTD GROSS COLLECTED', 'Month-to-Date Total', 'MTD', b.date.slice(0, 7), fp ? m(fp.mtd.totalUGX, 'UGX') : ''],
         ...inHouseList.map((g) => ['In-House Tonight', g.code, g.name, 'IN_HOUSE', `${g.rooms} (Rm ${(g.assignedRooms ?? []).join(', ') || 'TBD'}) · Departs ${g.departure}`, g.balance]),
         ...todayArrivals.map((a) => ['Today Arrival', a.code, a.name, a.status, `${a.rooms} (Rm ${(a.assignedRooms ?? []).join(', ') || 'Unassigned'})${a.eta ? ` · ETA ${a.eta}` : ''}`, a.balance]),
         ...(b.arrivals ?? []).map((a) => ['Tomorrow Arrival', a.code, a.name, a.status, `${a.rooms} (Rm ${(a.assignedRooms ?? []).join(', ') || 'Unassigned'})${a.eta ? ` · ETA ${a.eta}` : ''}`, a.balance]),
         ...(b.promised ?? []).map((p) => ['Receivable (7d)', p.code, p.name, p.status, `Arrives ${p.arrival}`, p.balance]),
-      ],
-    );
-  };
+    ],
+  });
 
   const pendingApprovalsTotal =
     (aa?.pendingRequisitions.length ?? 0) +
@@ -302,12 +304,8 @@ export default function BriefPage() {
               )}
             </div>
 
-            <Button size="sm" variant="secondary" icon={<Printer className="size-3.5" />} onClick={() => window.print()}>
-              Print Brief
-            </Button>
-            <Button size="sm" variant="secondary" icon={<Download className="size-3.5" />} onClick={exportBriefCsv}>
-              Export CSV
-            </Button>
+            <PrintButton label="Print brief" options={() => ({ title: 'Owner brief', subtitle: dateShort(b.date), filename: `reberon-owner-brief-${b.date}` })} />
+            <ExportMenu spec={exportBrief} />
             {can('settings:features') && (
               <Button size="sm" variant="primary" icon={<Send className="size-3.5" />} loading={send.isPending} onClick={() => send.mutate()}>
                 Dispatch Email Now

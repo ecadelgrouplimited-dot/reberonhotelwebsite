@@ -85,6 +85,8 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-fg);
   --color-brand: var(--brand);
+  /* Text on a brand-filled surface (navy in light, copper in dark). */
+  --color-brand-fg: var(--brand-fg, #FFFFFF);
   --color-focus: var(--focus);
   --color-success: var(--success);
   --color-warning: var(--warning);

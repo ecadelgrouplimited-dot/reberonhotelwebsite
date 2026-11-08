@@ -190,6 +190,17 @@ export const zAmenityInput = z.object({
   category: z.enum(AMENITY_CATEGORIES),
 });
 
+export const zFacilityDetails = z.object({
+  tags: z.array(z.object({ text: zLText })).max(8).default([]),
+  specs: z.array(z.object({ icon: z.string().max(60).optional(), label: zLText, value: zLText })).max(12).default([]),
+  highlights: z.array(z.object({ text: zLText })).max(12).default([]),
+  badge: zLText.optional(),
+  note: zLText.optional(),
+  enquireLabel: zLText.optional(),
+  enquireIntent: z.enum(['STAY', 'EVENT', 'GROUP', 'GENERAL']).optional(),
+  whatsappText: z.string().max(500).optional(),
+});
+
 export const zFacilityInput = z.object({
   slug,
   name: zLText,
@@ -198,6 +209,7 @@ export const zFacilityInput = z.object({
   icon: z.string().min(1).max(60),
   mediaIds: z.array(z.string()).default([]),
   status: z.enum(FACILITY_STATUSES).default('AVAILABLE'),
+  details: zFacilityDetails.nullable().optional(),
 });
 
 export const zRouteStopInput = z.object({

@@ -164,10 +164,15 @@ dialog.drawer { margin: 0 0 0 auto; height: 100dvh; max-height: none; }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
-/* Print: reports and the owner brief print as clean A4 pages. */
+/* Print fallback (browser menu). Buttons in the House use lib/print.ts, which builds a
+   branded document; this keeps a menu print clean too. */
 @media print {
-  aside, header, nav, .no-print { display: none !important; }
+  @page { margin: 12mm; }
+  [data-shell-chrome], .no-print, [data-no-print], button, input, select, [role="tablist"], dialog:not([open]) { display: none !important; }
   main { padding: 0 !important; margin: 0 !important; }
-  .card { break-inside: avoid; box-shadow: none !important; }
+  main * { overflow: visible !important; max-height: none !important; box-shadow: none !important; }
+  .card { box-shadow: none !important; }
+  tr, li { break-inside: avoid; }
+  thead { display: table-header-group; }
   body { background: #fff !important; }
 }

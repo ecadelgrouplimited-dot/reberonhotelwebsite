@@ -6,7 +6,8 @@ import { Plus, Receipt, Search, Trash2 } from 'lucide-react';
 import type { Department, ExpenseCategory, ExpenseDTO, ExpensePaymentMethod, HouseReportDTO } from '@reberon/contracts';
 import { ApiError, del, get, post } from '@/lib/api';
 import { money, toMinorStr } from '@/lib/money';
-import { exportToCsv } from '@/lib/export-csv';
+import { m, type ExportSpec } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import { Button } from '@/components/ui/button';
 import { Empty, Section, Skeleton } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
@@ -144,12 +145,17 @@ export function ExpensesPanel({ from, to, r, canManageExpenses, modalOpen, setMo
     return list;
   }, [expensesList, expenseDeptFilter, expenseSearch]);
 
-  const exportLedger = () =>
-    exportToCsv(
-      `reberon-expenses-${from}-to-${to}.csv`,
-      ['Number', 'Date', 'Department', 'Category', 'Title', 'Vendor', 'Payment Method', 'Reference', 'Currency', 'Amount', 'Recorded By'],
-      filteredExpenses.map((e) => [e.number, e.date, DEPT_LABELS[e.department] ?? e.department, CATEGORY_LABELS[e.category] ?? e.category, e.title, e.vendor ?? '', PAYMENT_METHOD_LABELS[e.paymentMethod] ?? e.paymentMethod, e.referenceNumber ?? '', e.currency, money(e.amountMinor, e.currency), e.recordedByName ?? '']),
-    );
+  const exportLedger = (): ExportSpec => ({
+    title: 'Expense ledger',
+    subtitle: `${from} to ${to}`,
+    meta: expenseDeptFilter && expenseDeptFilter !== 'ALL' ? [['Department', DEPT_LABELS[expenseDeptFilter as Department] ?? expenseDeptFilter]] : [],
+    filename: `reberon-expenses-${from}-to-${to}`,
+    columns: ['Number', 'Date', 'Department', 'Category', { label: 'Title', width: 30 }, 'Vendor', 'Paid by', 'Reference', { label: 'Amount', kind: 'money' }, 'Recorded by'],
+    rows: filteredExpenses.map((e) => [e.number, e.date, DEPT_LABELS[e.department] ?? e.department, CATEGORY_LABELS[e.category] ?? e.category, e.title, e.vendor ?? '', PAYMENT_METHOD_LABELS[e.paymentMethod] ?? e.paymentMethod, e.referenceNumber ?? '', m(e.amountMinor, e.currency), e.recordedByName ?? '']),
+    totals: (['UGX', 'USD'] as const).some((c) => filteredExpenses.some((e) => e.currency === c))
+      ? ['Total', '', '', '', '', '', '', '', m(filteredExpenses.filter((e) => e.currency === 'UGX').reduce((a, e) => a + BigInt(e.amountMinor), 0n).toString(), 'UGX'), filteredExpenses.some((e) => e.currency === 'USD') ? `+ ${money(filteredExpenses.filter((e) => e.currency === 'USD').reduce((a, e) => a + BigInt(e.amountMinor), 0n).toString(), 'USD')}` : '']
+      : undefined,
+  });
 
   return (
     <>
@@ -351,7 +357,7 @@ export function ExpensesPanel({ from, to, r, canManageExpenses, modalOpen, setMo
                 )}
               </div>
             </div>
-      <div className="no-print flex justify-end"><Button size="sm" variant="secondary" disabled={!filteredExpenses.length} onClick={exportLedger}>Export ledger CSV</Button></div>
+      <div className="no-print flex justify-end"><ExportMenu label="Export ledger" spec={exportLedger} disabled={!filteredExpenses.length} /></div>
       {/* ───────────────────────── Record Expense Modal ───────────────────────── */}
       <Dialog
         open={expenseModalOpen}

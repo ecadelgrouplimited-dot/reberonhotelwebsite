@@ -84,7 +84,22 @@ export interface BlockDefinition {
   resolves?: boolean;
   /** Reserved for a later Movement; hidden from the palette. */
   later?: boolean;
+  /** Where the block sits in the House's block picker. */
+  group?: BlockGroup;
 }
+
+export type BlockGroup = 'Openers' | 'Story & text' | 'Rooms & the house' | 'The place' | 'Media' | 'Trust' | 'Contact & forms' | 'Layout';
+export const BLOCK_GROUPS: BlockGroup[] = ['Openers', 'Story & text', 'Rooms & the house', 'The place', 'Media', 'Trust', 'Contact & forms', 'Layout'];
+const GROUP_OF: Record<string, BlockGroup> = {
+  hero: 'Openers', ctaBand: 'Openers', quote: 'Story & text',
+  story: 'Story & text', richText: 'Story & text', features: 'Story & text', stats: 'Story & text', cards: 'Story & text',
+  roomGrid: 'Rooms & the house', roomSpotlight: 'Rooms & the house', facilities: 'Rooms & the house', progressTimeline: 'Rooms & the house', packageCards: 'Rooms & the house',
+  destinationCards: 'The place', journey: 'The place', seasonStrip: 'The place', nowStrip: 'The place', map: 'The place',
+  gallery: 'Media', video: 'Media', tourEmbed: 'Media',
+  voices: 'Trust', faq: 'Trust',
+  contactCard: 'Contact & forms', enquiryForm: 'Contact & forms', waitlistForm: 'Contact & forms',
+  spacer: 'Layout',
+};
 
 const heading = (label = 'Heading', required = false): FieldDef => ({ kind: 'ltext', name: 'heading', label, required });
 const eyebrow: FieldDef = { kind: 'ltext', name: 'eyebrow', label: 'Eyebrow (small line above heading)' };
@@ -388,6 +403,55 @@ export const BLOCKS: BlockDefinition[] = [
     fields: [{ kind: 'select', name: 'size', label: 'Size', options: [{ value: 'sm', label: 'Small' }, { value: 'md', label: 'Medium' }, { value: 'lg', label: 'Large' }] }],
   },
   {
+    type: 'cards',
+    label: 'Cards',
+    description: 'Image cards that link anywhere: experiences, offers, things to plan.',
+    icon: 'layout-grid',
+    variants: [
+      { value: 'grid', label: 'Grid' },
+      { value: 'carousel', label: 'Carousel (swipe)' },
+      { value: 'overlay', label: 'Text over image' },
+    ],
+    fields: [
+      eyebrow,
+      heading(),
+      intro,
+      {
+        kind: 'list',
+        name: 'items',
+        label: 'Cards',
+        itemLabel: 'Card',
+        max: 12,
+        fields: [
+          { kind: 'media', name: 'media', label: 'Image' },
+          { kind: 'ltext', name: 'kicker', label: 'Small label', help: 'e.g. “2 hours · easy walk”' },
+          { kind: 'ltext', name: 'title', label: 'Title', required: true },
+          { kind: 'ltext', name: 'text', label: 'Text', multiline: true },
+          { kind: 'ltext', name: 'linkLabel', label: 'Link text' },
+          { kind: 'text', name: 'href', label: 'Link', placeholder: '/kapchorwa/sipi-falls or https://…' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'video',
+    label: 'Video',
+    description: 'A film from YouTube, Vimeo or a video link, with a poster image.',
+    icon: 'play',
+    variants: [
+      { value: 'contained', label: 'Within the page' },
+      { value: 'wide', label: 'Wide (edge to edge)' },
+    ],
+    fields: [
+      eyebrow,
+      heading(),
+      intro,
+      { kind: 'text', name: 'url', label: 'Video link', required: true, placeholder: 'https://youtu.be/… · https://vimeo.com/… · https://…/film.mp4', help: 'Plays only when the visitor presses play — nothing loads before that.' },
+      { kind: 'media', name: 'poster', label: 'Poster image', help: 'Shown before play. YouTube’s own thumbnail is used if empty.' },
+      { kind: 'ltext', name: 'caption', label: 'Caption' },
+    ],
+  },
+  {
     type: 'packageCards',
     label: 'Packages',
     description: 'Named days sold with the room (Movement II).',
@@ -396,16 +460,9 @@ export const BLOCKS: BlockDefinition[] = [
     resolves: true,
     fields: [eyebrow, heading()],
   },
-  {
-    type: 'tourEmbed',
-    label: 'Virtual tour',
-    description: 'Walk the room before paying (Movement III).',
-    icon: 'rotate-3d',
-    later: true,
-    fields: [heading(), { kind: 'text', name: 'tourId', label: 'Tour', required: true }],
-  },
 ];
 
+for (const b of BLOCKS) b.group ??= GROUP_OF[b.type] ?? 'Layout';
 export const BLOCK_MAP: Record<string, BlockDefinition> = Object.fromEntries(BLOCKS.map((b) => [b.type, b]));
 export const BLOCK_TYPES = BLOCKS.map((b) => b.type);
 

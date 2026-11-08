@@ -25,7 +25,8 @@ import { useCan, useMe } from '@/lib/providers';
 import { dateRange, ago } from '@/lib/format';
 import { money } from '@/lib/money';
 import { cn } from '@/lib/cn';
-import { exportToCsv } from '@/lib/export-csv';
+import { m, type ExportSpec } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Section, Skeleton, Status } from '@/components/ui/bits';
@@ -133,9 +134,7 @@ export default function ReservationsPage() {
 
   const handleExportCsv = () => {
     if (!rows.length) return;
-    exportToCsv(
-      `reberon-reservations-${new Date().toISOString().slice(0, 10)}.csv`,
-      [
+    return { title: 'Reservations', subtitle: `${rows.length} bookings`, filename: `reberon-reservations-${new Date().toISOString().slice(0, 10)}`, columns: [
         'Code',
         'Guest Name',
         'Phone',
@@ -153,8 +152,7 @@ export default function ReservationsPage() {
         'Paid',
         'Balance',
         'Created At',
-      ],
-      rows.map((r) => [
+      ], rows: rows.map((r) => [
         r.code,
         r.guest.name,
         r.guest.phone ?? '',
@@ -168,12 +166,11 @@ export default function ReservationsPage() {
         SOURCE[r.source] ?? r.source,
         r.status,
         r.currency,
-        money(r.totalMinor, r.currency),
-        money(r.paidMinor, r.currency),
-        money(r.balanceMinor, r.currency),
+        m(r.totalMinor, r.currency),
+        m(r.paidMinor, r.currency),
+        m(r.balanceMinor, r.currency),
         r.createdAt,
-      ]),
-    );
+      ]) };
   };
 
   return (
@@ -193,15 +190,7 @@ export default function ReservationsPage() {
                 Owner Audit Log
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!rows.length}
-              onClick={handleExportCsv}
-              icon={<Download className="size-3.5" />}
-            >
-              Export CSV
-            </Button>
+            <ExportMenu spec={handleExportCsv} disabled={!rows.length} />
             {can('bookings:write') && (
               <>
                 <Button size="sm" href="/reservations/new?walkin=1" icon={<UserRoundPlus className="size-3.5" />}>

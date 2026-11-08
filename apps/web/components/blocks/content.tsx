@@ -271,7 +271,7 @@ export function Facilities({ block }: BlockProps<H, { facilities: FacilityDTO[] 
                     <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                   </span>
                   <span className="font-mono text-[11px] text-fg-subtle">
-                    {features.ctaIntent === 'EVENT' ? 'Event Space' : 'Sanctuary'}
+                    {features.ctaIntent === 'EVENT' ? 'Events' : f.status === 'COMING_SOON' ? 'Being built' : 'Available'}
                   </span>
                 </div>
               </div>

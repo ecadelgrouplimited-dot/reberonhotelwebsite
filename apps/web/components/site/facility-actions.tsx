@@ -34,7 +34,7 @@ export function FacilityActions({
       <div className="flex items-center justify-between border-b border-line pb-4">
         <div>
           <span className="eyebrow block text-[0.7rem] uppercase tracking-widest">
-            {features.badge || (isComingSoon ? 'Being Built' : 'Guest Amenity')}
+            {features.badge || (isComingSoon ? 'Being built' : 'Available')}
           </span>
           <h3 className="mt-1 font-display text-xl">{facilityName}</h3>
         </div>
@@ -101,7 +101,7 @@ export function FacilityActions({
           href="/rooms"
           className="mt-3 inline-flex items-center gap-1.5 font-semibold text-brand hover:underline"
         >
-          <span>Explore Sanctuary Rooms</span>
+          <span>See the rooms</span>
           <ArrowRight className="size-3" />
         </Link>
       </div>

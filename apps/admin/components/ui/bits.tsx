@@ -53,7 +53,7 @@ export function Status({ value }: { value: string }) {
 
 export function PageHeader({ title, description, actions, crumbs, children }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; crumbs?: { label: string; href?: string }[]; children?: ReactNode }) {
   return (
-    <header className="mb-4">
+    <header data-page-header className="mb-4">
       {crumbs && (
         <nav aria-label="Breadcrumb" className="mb-1 flex items-center gap-1 text-[11.5px] text-fg-subtle">
           {crumbs.map((c, i) => (

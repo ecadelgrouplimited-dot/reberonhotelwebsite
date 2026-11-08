@@ -35,6 +35,7 @@ import { money } from '@/lib/money';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { SelectInput, TextInput } from '@/components/ui/field';
+import { fileSlug, printScreen } from '@/lib/print';
 import { Empty, Skeleton, Tabs } from '@/components/ui/bits';
 
 function calculatePreviewPaye(gross: number): number {
@@ -1832,7 +1833,20 @@ export function PayslipModal({
         )}
 
         <div className="mt-4 flex justify-between items-center">
-          <Button variant="secondary" size="sm" onClick={() => window.print()} className="gap-1.5">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
+            onClick={(e) =>
+              printScreen({
+                node: e.currentTarget.closest<HTMLElement>('.panel'),
+                title: 'Payslip',
+                subtitle: [record.staffName, record.periodMonth].filter(Boolean).join(" · "),
+                filename: `reberon-payslip-${record.periodMonth}-${fileSlug(record.staffName ?? "staff")}`,
+                note: 'Confidential — for the named employee',
+              })
+            }
+          >
             <Printer className="h-4 w-4" /> Print Official Payslip
           </Button>
           <Button variant="ghost" size="sm" onClick={onClose}>

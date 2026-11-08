@@ -12,6 +12,7 @@ import { EnquirySheet } from '@/components/site/enquiry-sheet';
 import { SmoothScroll } from '@/components/site/smooth-scroll';
 import { RevealFallback } from '@/components/site/reveal-fallback';
 import { PreviewBanner } from '@/components/site/preview-banner';
+import { PreviewBridge } from '@/components/site/preview-bridge';
 import { ComingSoonGate, StaffPreviewBar } from '@/components/site/coming-soon-gate';
 import { SipiConciergeWidget } from '@/components/concierge/sipi-concierge-widget';
 import { t } from '@reberon/contracts';
@@ -72,6 +73,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {canViewSite ? (
             <>
               {draft.isEnabled && <PreviewBanner />}
+              {draft.isEnabled && <PreviewBridge adminOrigin={process.env.ADMIN_URL ?? 'http://localhost:3001'} />}
               {isMaintenance && staffSession && <StaffPreviewBar userName={staffSession.name} userEmail={staffSession.email} />}
               <Header />
               <main id="main">{children}</main>

@@ -1,5 +1,5 @@
 import type {
-  MediaRef, LText, LRich, RoomTypeCardDTO, FacilityDTO, ProgressDTO, DestinationCardDTO, FaqGroupDTO, AmenityDTO, SeoDTO,
+  MediaRef, LText, LRich, RoomTypeCardDTO, FacilityDTO, FacilityDetails, ProgressDTO, DestinationCardDTO, FaqGroupDTO, AmenityDTO, SeoDTO,
 } from '@reberon/contracts';
 import type { MediaAsset, RoomType, Facility, ProgressUpdate, Destination, FaqGroup, FaqItem, Amenity } from '@reberon/db';
 import { env } from '../../config.js';
@@ -57,7 +57,7 @@ export function toAmenity(a: Amenity): AmenityDTO {
 }
 
 export function toFacility(f: Facility, media: Map<string, MediaRef>): FacilityDTO {
-  return { id: f.id, slug: f.slug, name: lt(f.name), summary: lt(f.summary), body: lr(f.body), icon: f.icon, status: f.status, media: pick(media, f.mediaIds) };
+  return { id: f.id, slug: f.slug, name: lt(f.name), summary: lt(f.summary), body: lr(f.body), icon: f.icon, status: f.status, media: pick(media, f.mediaIds), details: (f.details as FacilityDetails | null) ?? null };
 }
 
 export function toProgress(p: ProgressUpdate, media: Map<string, MediaRef>): ProgressDTO {

@@ -9,6 +9,7 @@ import { money } from '@/lib/money';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { printScreen } from '@/lib/print';
 import { PAYMENT_LABELS, StaffPicker } from './pos-kit';
 
 interface WaiterStat {
@@ -236,6 +237,7 @@ export function ShiftDialog({
         </div>
 
         <form
+          data-no-print
           className="rounded-xl border border-line bg-surface-2/50 p-3.5"
           onSubmit={(e) => {
             e.preventDefault();
@@ -311,7 +313,11 @@ export function ShiftDialog({
         </form>
 
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => window.print()} icon={<Printer className="size-3.5" />}>
+          <Button
+            variant="secondary"
+            icon={<Printer className="size-3.5" />}
+            onClick={(e) => printScreen({ node: e.currentTarget.closest<HTMLElement>('.panel'), title: 'Shift report' })}
+          >
             Print
           </Button>
           <Button variant="primary" onClick={onClose}>

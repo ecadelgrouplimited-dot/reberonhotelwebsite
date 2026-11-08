@@ -154,11 +154,12 @@ export default async function FacilityPage({ params }: Props) {
             </section>
           ) : null}
 
-          {/* Actionable Specifications & Operational Features */}
+          {/* Facts from the facility's details in the House */}
+          {features.specs.length > 0 && (
           <section className="mt-16 border-t border-line pt-12" aria-labelledby="facility-specs">
-            <p className="eyebrow">Specifications</p>
+            <p className="eyebrow">At a glance</p>
             <h2 id="facility-specs" className="mt-2 text-step-3 font-display">
-              Key Features &amp; Provisions
+              Good to know
             </h2>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -180,11 +181,11 @@ export default async function FacilityPage({ params }: Props) {
               ))}
             </div>
           </section>
+          )}
 
-          {/* Signature Highlights */}
+          {/* Highlights */}
           {features.highlights && features.highlights.length > 0 && (
             <section className="mt-16 border-t border-line pt-12" aria-labelledby="facility-highlights">
-              <p className="eyebrow">Highland Sanctuary Standard</p>
               <h2 id="facility-highlights" className="mt-2 text-step-3 font-display">
                 What to Expect
               </h2>

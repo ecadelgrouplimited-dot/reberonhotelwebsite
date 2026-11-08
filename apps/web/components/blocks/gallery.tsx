@@ -22,93 +22,18 @@ import { cn } from '@/lib/cn';
 import { cleanMediaCaption } from '@/lib/media-clean';
 import { Lightbox } from './lightbox';
 
-/* ── Editorial metadata for sanctuary plates ── */
-interface PlateEditorial {
+/* ── Each page of the book tells only what is stored with the photo (Media library). ── */
+interface PlateText {
   title: string;
-  category: 'suites' | 'gym' | 'dining' | 'architecture';
-  categoryLabel: string;
-  desc: string;
-  specs: { elevation: string; aspect: string; craft: string };
-  tags: string[];
+  desc: string | null;
+  credit: string | null;
 }
 
-const EDITORIAL_STORIES: PlateEditorial[] = [
-  {
-    title: 'Elgon Ridge Sunrise Suites',
-    category: 'suites',
-    categoryLabel: 'Highland Suites',
-    desc: 'Each suite is arranged with the bed facing the escarpment. Mornings begin with violet light washing through deep cedar-framed windows as mist rises from the river below.',
-    specs: { elevation: '1,900 m', aspect: 'North-West Ridge', craft: 'Elgon Cypress & Linen' },
-    tags: ['PanoramicView', 'FirstLight', 'MountElgon'],
-  },
-  {
-    title: 'High-Altitude Athletic Training & Recovery',
-    category: 'gym',
-    categoryLabel: 'Athletic Health',
-    desc: 'Designed for distance runners and highland guests. Dedicated rowers, lifting racks, and endurance equipment framed by panoramic mountain horizons and thin, clean air.',
-    specs: { elevation: '1,900 m', aspect: 'Valley Facing', craft: 'Rubberised Basalt & Steel' },
-    tags: ['AthleticHeritage', 'ThinAir', 'Recovery'],
-  },
-  {
-    title: 'The Mountain Table & Single-Origin Arabica',
-    category: 'dining',
-    categoryLabel: 'Slow Highland Dining',
-    desc: 'Wholesome highland fare prepared for hungry trail walkers. Wood-fired baked sourdough, fresh mountain trout, organic greens, and Arabica harvested from slopes within twenty kilometres.',
-    specs: { elevation: '1,900 m', aspect: 'Garden Terrace', craft: 'Handmade Clay & Pine' },
-    tags: ['SlowFood', 'ArabicaCoffee', 'FarmToTable'],
-  },
-  {
-    title: 'Volcanic Basalt Masonry & Deep Eaves',
-    category: 'architecture',
-    categoryLabel: 'Architecture & Craft',
-    desc: 'Built by stone masons and carpenters from Kapchorwa and Mbale. Basalt quarried from Elgon’s ancient volcanic flows anchors the foundation against mountain storms.',
-    specs: { elevation: '1,900 m', aspect: 'Northern Shoulder', craft: 'Hand-Cut Volcanic Basalt' },
-    tags: ['LocalArtisans', 'SustainableDesign', 'VolcanicStone'],
-  },
-  {
-    title: 'Solitude Verandas & Escarpment Vistas',
-    category: 'suites',
-    categoryLabel: 'Highland Suites',
-    desc: 'Generous private balconies shielded from wind, equipped for morning coffee or evening reading wrapped in heavy highland wool blankets as the night settles.',
-    specs: { elevation: '1,900 m', aspect: 'Valley Vista', craft: 'Local Hardwood Decking' },
-    tags: ['QuietSanctuary', 'HighlandNight', 'HeavyBlankets'],
-  },
-  {
-    title: 'The Community Hall & Gathering Veranda',
-    category: 'architecture',
-    categoryLabel: 'Architecture & Craft',
-    desc: 'A forty-seat cedar-vaulted hall designed for athletic team briefings, highland workshops, and community celebrations, connected seamlessly to the garden grounds.',
-    specs: { elevation: '1,900 m', aspect: 'Garden Courtyard', craft: 'Timber Trusses & Stone' },
-    tags: ['TheHall', 'CommunityGathering', 'ElgonPine'],
-  },
-  {
-    title: 'Post-Run Hydrothermal Recovery',
-    category: 'gym',
-    categoryLabel: 'Athletic Health',
-    desc: 'Deep thermal soaking baths and high-pressure rain showers fed continuously by gravity lines from mountain springs and powered by solar thermal backup.',
-    specs: { elevation: '1,900 m', aspect: 'East Courtyard', craft: 'Honed Slate & Brass' },
-    tags: ['HotSpringWater', 'SolarThermal', 'PostTrailRest'],
-  },
-  {
-    title: 'Organic Elgon Slopes & Sipi Trailhead',
-    category: 'dining',
-    categoryLabel: 'Slow Highland Dining',
-    desc: 'Perched directly above the mist of Sipi Falls. Walking trails depart from the gate, weaving through smallholder Arabica farms and indigenous bamboo forests.',
-    specs: { elevation: '1,900 m', aspect: 'Sipi Escarpment', craft: 'Living Terraced Gardens' },
-    tags: ['SipiFalls', 'BespokeTrails', 'HighlandNature'],
-  },
-];
-
-function getPlateEditorial(index: number, caption?: string | null, alt?: string | null): PlateEditorial {
-  const clean = cleanMediaCaption(caption, alt);
-  const fallback = EDITORIAL_STORIES[index % EDITORIAL_STORIES.length]!;
-  if (clean && clean.length > 3) {
-    return {
-      ...fallback,
-      title: clean,
-    };
-  }
-  return fallback;
+function plateText(m: MediaRef, index: number): PlateText {
+  const caption = cleanMediaCaption(t(m.caption), null);
+  const alt = cleanMediaCaption(t(m.alt), null);
+  const title = caption || alt || `Photo ${index + 1}`;
+  return { title, desc: alt && alt !== title ? alt : null, credit: m.credit };
 }
 
 /* ── Tile Component with Clean Alt & Hover ── */
@@ -118,21 +43,24 @@ function Tile({
   className,
   sizes,
   plateIndex,
+  natural,
 }: {
   m: MediaRef;
   onClick: () => void;
   className?: string;
   sizes: string;
   plateIndex?: number;
+  /** Keep the photo's own proportions (masonry). */
+  natural?: boolean;
 }) {
-  const label = cleanMediaCaption(t(m.caption), t(m.alt)) ?? `Plate ${plateIndex ? plateIndex + 1 : 'photo'} · Reberon Hotel`;
+  const label = cleanMediaCaption(t(m.caption), t(m.alt)) ?? `Photo ${plateIndex !== undefined ? plateIndex + 1 : ''}`.trim();
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn('zoom-on-hover group relative block w-full overflow-hidden rounded-[var(--r-md)] focus-visible:outline-offset-4', className)}
-      style={{ backgroundColor: m.dominantColor ?? undefined }}
-      aria-label={`Open plate: ${label}`}
+      style={{ backgroundColor: m.dominantColor ?? undefined, aspectRatio: natural ? `${m.width ?? 4} / ${m.height ?? 3}` : undefined }}
+      aria-label={`Open photo: ${label}`}
     >
       <Image
         src={m.url}
@@ -163,27 +91,13 @@ function BookGallery({
   const [currentPage, setCurrentPage] = useState(0);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDir, setFlipDir] = useState<'next' | 'prev'>('next');
-  const [activeCategory, setActiveCategory] = useState<string>('all');
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStart = useRef<number | null>(null);
 
   const total = items.length;
 
-  const plates = useMemo(() => {
-    return items.map((m, idx) => {
-      const editorial = getPlateEditorial(idx, t(m.caption), t(m.alt));
-      return {
-        media: m,
-        index: idx,
-        editorial,
-      };
-    });
-  }, [items]);
-
-  const filteredPlates = useMemo(() => {
-    if (activeCategory === 'all') return plates;
-    return plates.filter((p) => p.editorial.category === activeCategory);
-  }, [plates, activeCategory]);
+  const plates = useMemo(() => items.map((m, idx) => ({ media: m, index: idx, editorial: plateText(m, idx) })), [items]);
+  const filteredPlates = plates;
 
   const activeIndex = Math.min(currentPage, filteredPlates.length - 1 >= 0 ? filteredPlates.length - 1 : 0);
   const activePlate = filteredPlates[activeIndex] || plates[0];
@@ -215,48 +129,11 @@ function BookGallery({
 
   return (
     <div className="relative mx-auto max-w-6xl">
-      {/* Category Navigation Bar */}
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { id: 'all', label: 'All Sanctuary Plates', count: plates.length },
-            { id: 'suites', label: 'Suites & Solitude' },
-            { id: 'gym', label: 'Athletic Health & Gym' },
-            { id: 'dining', label: 'Highland Dining & Arabica' },
-            { id: 'architecture', label: 'Basalt & Craft' },
-          ].map((cat) => {
-            const isSelected = activeCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => {
-                  setActiveCategory(cat.id);
-                  setCurrentPage(0);
-                }}
-                className={cn(
-                  'rounded-full px-4 py-1.5 text-xs font-medium tracking-wide transition-all duration-300',
-                  isSelected
-                    ? 'bg-brand text-brand-fg shadow-sm'
-                    : 'border border-line bg-surface/60 text-fg-muted hover:border-brand/40 hover:bg-surface-2 hover:text-fg',
-                )}
-              >
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-3 text-xs text-fg-muted font-mono">
-          <span className="flex items-center gap-1.5">
-            <BookOpen className="size-3.5 text-brand" />
-            <span>Highland Lookbook</span>
-          </span>
-          <span>·</span>
-          <span>
-            {String(activeIndex + 1).padStart(2, '0')} / {String(filteredPlates.length).padStart(2, '0')}
-          </span>
-        </div>
+      <div className="mb-6 flex items-center justify-end gap-3 font-mono text-xs text-fg-muted">
+        <BookOpen className="size-3.5 text-brand" />
+        <span>
+          {String(activeIndex + 1).padStart(2, '0')} / {String(filteredPlates.length).padStart(2, '0')}
+        </span>
       </div>
 
       {/* 3D Editorial Lookbook / Flip Spread Container */}
@@ -294,9 +171,9 @@ function BookGallery({
               <div className="mb-4 flex items-center justify-between font-mono text-[11px] uppercase tracking-wider text-fg-muted">
                 <span className="flex items-center gap-1.5 text-brand">
                   <Mountain className="size-3.5" />
-                  <span>Plate {String(activeIndex + 1).padStart(2, '0')}</span>
+                  <span>Photo {String(activeIndex + 1).padStart(2, '0')}</span>
                 </span>
-                <span>{activePlate.editorial.specs.elevation}</span>
+                <span>of {String(total).padStart(2, '0')}</span>
               </div>
 
               {/* Photo Canvas */}
@@ -319,13 +196,13 @@ function BookGallery({
                 <div className="absolute inset-0 bg-gradient-to-t from-basalt-950/60 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/photo:opacity-100" />
                 <div className="absolute bottom-4 right-4 flex items-center gap-2 rounded-full bg-basalt-950/85 px-4 py-2 font-mono text-xs text-mist-50 shadow-md backdrop-blur-md">
                   <Maximize2 className="size-3.5" />
-                  <span>Inspect in Lightbox</span>
+                  <span>View larger</span>
                 </div>
               </div>
 
               {/* Plate Location & Drawing Tag */}
               <div className="mt-4 flex items-center justify-between text-xs text-fg-muted">
-                <span className="font-sans font-medium">{activePlate.editorial.categoryLabel}</span>
+                <span className="font-sans font-medium">{activePlate.editorial.credit ? `Photo · ${activePlate.editorial.credit}` : ''}</span>
                 {activePlate.media.isRendering && (
                   <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand">
                     Drawing · As imagined
@@ -337,58 +214,15 @@ function BookGallery({
             {/* ── Right Page: Sanctuary Narrative & Editorial ── */}
             <div className="relative flex flex-col justify-between bg-surface-2/30 p-6 sm:p-10 lg:p-12">
               <div>
-                {/* Book header */}
-                <div className="flex items-center justify-between border-b border-line pb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-muted">
-                  <span>Reberon Highland Folio</span>
-                  <span>Mount Elgon · 2027</span>
+                <div className="mt-2">
+                  <h3 className="font-display text-step-2 font-normal leading-tight text-fg">{activePlate.editorial.title}</h3>
                 </div>
-
-                {/* Chapter & Title */}
-                <div className="mt-8">
-                  <p className="eyebrow text-brand mb-2">{activePlate.editorial.categoryLabel}</p>
-                  <h3 className="font-display text-step-2 font-normal text-fg leading-tight">
-                    {activePlate.editorial.title}
-                  </h3>
-                </div>
-
-                {/* Editorial Body */}
-                <p className="mt-5 text-sm sm:text-base leading-relaxed text-fg-muted">
-                  {activePlate.editorial.desc}
-                </p>
-
-                {/* Highland Specifications Grid */}
-                <div className="mt-8 grid grid-cols-3 gap-3 rounded-2xl border border-line bg-surface/70 p-4 backdrop-blur-xs">
-                  <div>
-                    <span className="block font-mono text-[9px] uppercase tracking-wider text-fg-subtle">Altitude</span>
-                    <span className="mt-1 block font-mono text-xs font-semibold text-fg">
-                      {activePlate.editorial.specs.elevation}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block font-mono text-[9px] uppercase tracking-wider text-fg-subtle">Aspect</span>
-                    <span className="mt-1 block font-mono text-xs font-semibold text-fg">
-                      {activePlate.editorial.specs.aspect}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block font-mono text-[9px] uppercase tracking-wider text-fg-subtle">Materials</span>
-                    <span className="mt-1 block font-mono text-xs font-semibold text-fg">
-                      {activePlate.editorial.specs.craft}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Tags */}
-                <div className="mt-6 flex flex-wrap gap-2">
-                  {activePlate.editorial.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-md border border-line/60 bg-surface-2/60 px-2.5 py-1 text-[11px] font-mono text-fg-subtle"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
+                {activePlate.editorial.desc && <p className="mt-5 text-sm leading-relaxed text-fg-muted sm:text-base">{activePlate.editorial.desc}</p>}
+                {activePlate.media.isRendering && (
+                  <p className="mt-6 rounded-2xl border border-line bg-surface/70 p-4 text-sm text-fg-muted">
+                    This is a drawing of how the house will look. Photographs replace it when the house is finished.
+                  </p>
+                )}
               </div>
 
               {/* Bottom Spread Flip Navigation Bar */}
@@ -399,7 +233,7 @@ function BookGallery({
                   className="group/btn flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-xs font-medium text-fg transition-all hover:border-brand/50 hover:bg-surface-2"
                 >
                   <ArrowLeft className="size-4 text-brand transition-transform group-hover/btn:-translate-x-1" />
-                  <span>Previous Page</span>
+                  <span>Previous</span>
                 </button>
 
                 <button
@@ -416,7 +250,7 @@ function BookGallery({
                   onClick={() => turnPage(1)}
                   className="group/btn flex items-center gap-2 rounded-full border border-brand/40 bg-brand px-4 py-2 text-xs font-medium text-brand-fg shadow-sm transition-all hover:shadow-md"
                 >
-                  <span>Next Page</span>
+                  <span>Next</span>
                   <ArrowRight className="size-4 transition-transform group-hover/btn:translate-x-1" />
                 </button>
               </div>
@@ -426,7 +260,7 @@ function BookGallery({
           {/* Corner Page Fold Click Hint */}
           <div
             onClick={() => turnPage(1)}
-            title="Click to turn to next page"
+            title="Next photo"
             className="absolute bottom-0 right-0 z-30 hidden h-16 w-16 cursor-pointer lg:block"
           >
             <div className="absolute bottom-0 right-0 h-0 w-0 border-b-[24px] border-r-[24px] border-b-line-strong/60 border-r-surface-2 transition-all duration-300 hover:border-b-[36px] hover:border-r-[36px]" />
@@ -437,7 +271,7 @@ function BookGallery({
       {/* Scrubbable Thumbnail Plate Strip */}
       <div className="mt-8">
         <p className="mb-3 font-mono text-[11px] uppercase tracking-wider text-fg-muted">
-          Explore All Folio Plates ({filteredPlates.length})
+          All photos ({filteredPlates.length})
         </p>
         <div className="flex gap-3 overflow-x-auto pb-4 pt-1 snap-x-strip outline-none">
           {filteredPlates.map((p, idx) => {
@@ -484,8 +318,9 @@ export function GalleryGrid({
   variant?: string;
 }) {
   // If explicitly requested or by default, provide the book lookbook experience!
-  const [viewMode, setViewMode] = useState<'book' | 'filmstrip' | 'mosaic'>(
-    variant === 'filmstrip' ? 'filmstrip' : variant === 'mosaic' ? 'mosaic' : 'book',
+  const grid = variant === 'masonry' ? 'masonry' : 'mosaic';
+  const [viewMode, setViewMode] = useState<'book' | 'filmstrip' | 'mosaic' | 'masonry'>(
+    variant === 'filmstrip' ? 'filmstrip' : variant === 'mosaic' || variant === 'masonry' ? grid : 'book',
   );
 
   return (
@@ -506,7 +341,7 @@ export function GalleryGrid({
                 )}
               >
                 <BookOpen className="size-3.5" />
-                <span>Folio Book</span>
+                <span>Book</span>
               </button>
               <button
                 type="button"
@@ -523,16 +358,16 @@ export function GalleryGrid({
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode('mosaic')}
+                onClick={() => setViewMode(grid)}
                 className={cn(
                   'flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors',
-                  viewMode === 'mosaic'
+                  viewMode === grid
                     ? 'bg-brand text-brand-fg shadow-xs'
                     : 'text-fg-muted hover:text-fg',
                 )}
               >
                 <Grid2X2 className="size-3.5" />
-                <span>Mosaic</span>
+                <span>Grid</span>
               </button>
             </div>
           </div>
@@ -542,6 +377,20 @@ export function GalleryGrid({
             <BookGallery items={items} openLightbox={open} />
           ) : viewMode === 'filmstrip' ? (
             <Filmstrip items={items} open={open} />
+          ) : viewMode === 'masonry' ? (
+            <div className="columns-2 gap-3 md:columns-3 [&>*]:mb-3">
+              {items.map((m, i) => (
+                <Tile
+                  key={m.id}
+                  m={m}
+                  onClick={() => open(i)}
+                  className="break-inside-avoid"
+                  sizes="(min-width:768px) 33vw, 50vw"
+                  plateIndex={i}
+                  natural
+                />
+              ))}
+            </div>
           ) : (
             <div className="grid auto-rows-[14rem] grid-cols-2 gap-3 md:auto-rows-[18rem] md:grid-cols-4">
               {items.map((m, i) => (

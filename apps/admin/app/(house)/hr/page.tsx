@@ -51,6 +51,8 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Skeleton, Tabs } from '@/components/ui/bits';
 import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
+import { m } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import {
   AdjustPayrollModal,
   AssignSystemRoleModal,
@@ -67,17 +69,6 @@ import {
 
 type HrTab = 'STAFF' | 'ROSTER' | 'LEAVE' | 'PAYROLL' | 'ANALYTICS';
 
-function exportCsv(filename: string, headers: string[], rows: (string | number | null | undefined)[][]) {
-  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const csv = [headers.map(esc).join(','), ...rows.map((r) => r.map(esc).join(','))].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function HrPage() {
   const qc = useQueryClient();
@@ -470,14 +461,9 @@ export default function HrPage() {
             </Button>
             {activeTab === 'STAFF' && canHrManage && (
               <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
+                <ExportMenu spec={() => {
                     if (!filteredStaff.length) return;
-                    exportCsv(
-                      `reberon-staff-directory-${new Date().toISOString().slice(0, 10)}.csv`,
-                      [
+                    return { title: 'Staff directory', orientation: 'landscape' as const, filename: `reberon-staff-directory-${new Date().toISOString().slice(0, 10)}`, columns: [
                         'Employee Number',
                         'Full Name',
                         'Department',
@@ -490,12 +476,11 @@ export default function HrPage() {
                         'TIN',
                         'Employment Type',
                         'Date Joined',
-                        'Base Salary (UGX)',
+                        'Base salary',
                         'Payment Method',
                         'Account / MoMo',
                         'Status',
-                      ],
-                      filteredStaff.map((s) => [
+                      ], rows: filteredStaff.map((s) => [
                         s.employeeNumber,
                         s.fullName,
                         s.departmentName || s.departmentCode,
@@ -508,17 +493,12 @@ export default function HrPage() {
                         s.tinNumber || '',
                         s.employmentType,
                         s.dateJoined,
-                        s.baseSalaryMinor,
+                        m(s.baseSalaryMinor, 'UGX'),
                         s.paymentMethod,
                         s.bankAccountNumber || s.mobileMoneyNumber || '',
                         s.status,
-                      ]),
-                    );
-                  }}
-                  className="gap-1.5"
-                >
-                  <Download className="h-3.5 w-3.5" /> Export CSV
-                </Button>
+                      ]) };
+                  }} />
                 <Button variant="primary" size="sm" onClick={() => setCreateStaffOpen(true)} className="gap-1.5">
                   <UserPlus className="h-4 w-4" /> Add Employee
                 </Button>
@@ -1475,13 +1455,8 @@ export default function HrPage() {
               />
               {payrollRecords && payrollRecords.length > 0 && (
                 <>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      exportCsv(
-                        `reberon-payroll-${payrollMonth}.csv`,
-                        [
+                  <ExportMenu spec={() =>
+                      ({ title: 'Payroll', subtitle: payrollMonth, orientation: 'landscape' as const, filename: `reberon-payroll-${payrollMonth}`, columns: [
                           'Employee Number',
                           'Employee Name',
                           'Department',
@@ -1497,30 +1472,24 @@ export default function HrPage() {
                           'Net Take-Home Pay',
                           'Status',
                           'Payment Reference',
-                        ],
-                        payrollRecords.map((p) => [
+                        ], rows: payrollRecords.map((p) => [
                           p.employeeNumber,
                           p.staffName,
                           p.departmentCode,
                           p.jobTitle,
-                          p.baseSalaryMinor,
-                          p.overtimeMinor,
-                          p.allowancesMinor,
-                          p.grossSalaryMinor,
-                          p.nssfEmployeeMinor,
-                          p.nssfEmployerMinor,
-                          p.payeTaxMinor,
-                          (BigInt(p.advancesDeductionMinor || '0') + BigInt(p.otherDeductionsMinor || '0')).toString(),
-                          p.netSalaryMinor,
+                          m(p.baseSalaryMinor, 'UGX'),
+                          m(p.overtimeMinor, 'UGX'),
+                          m(p.allowancesMinor, 'UGX'),
+                          m(p.grossSalaryMinor, 'UGX'),
+                          m(p.nssfEmployeeMinor, 'UGX'),
+                          m(p.nssfEmployerMinor, 'UGX'),
+                          m(p.payeTaxMinor, 'UGX'),
+                          m((BigInt(p.advancesDeductionMinor || '0') + BigInt(p.otherDeductionsMinor || '0')).toString(), 'UGX'),
+                          m(p.netSalaryMinor, 'UGX'),
                           p.paymentStatus,
                           p.paymentReference || '',
-                        ]),
-                      )
-                    }
-                    className="gap-1.5"
-                  >
-                    <Download className="size-3.5" /> Export URA / Bank CSV
-                  </Button>
+                        ]) })
+                    } />
                   {payrollSummary.pendingCount > 0 && canHrManage && (
                     <Button
                       variant="primary"

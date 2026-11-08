@@ -11,6 +11,8 @@ import { cn } from '@/lib/cn';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Empty, PageHeader, Skeleton } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { ExportMenu } from '@/components/ui/export-menu';
+import { m } from '@/lib/export';
 import { SelectInput, TextInput } from '@/components/ui/field';
 import { DocumentRow, printDocument } from '@/components/documents/documents-panel';
 
@@ -48,9 +50,30 @@ export default function ReceiptsPage() {
         description="Sequential financial document register with scannable QR verification codes"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <a className={buttonClass('secondary', 'sm')} href={`/v1/admin/documents.csv?${qs}`}>
-              <Download className="size-3.5" /> Export CSV
-            </a>
+            <ExportMenu
+              disabled={!data?.data.length}
+              spec={() =>
+                data && {
+                  title: kind ? `${DOCUMENT_LABEL[kind]} register` : 'Document register',
+                  subtitle: `${from} to ${to}`,
+                  meta: term ? [['Search', term]] : [],
+                  filename: `reberon-documents-${from}-to-${to}`,
+                  orientation: 'landscape',
+                  columns: ['Number', 'Type', 'Issued', { label: 'Issued to', width: 26 }, 'Booking', { label: 'Amount', kind: 'money' }, 'Issued by', 'Status', 'Check code'],
+                  rows: data.data.map((d) => [
+                    d.number,
+                    DOCUMENT_LABEL[d.kind],
+                    d.issuedAt.slice(0, 16).replace('T', ' '),
+                    d.issuedTo.name,
+                    d.reservation?.code ?? '',
+                    m(d.amountMinor, d.currency),
+                    d.issuedBy ?? '',
+                    d.voided ? `Void — ${d.voided.reason}` : d.replacesNumber ? `Replaces ${d.replacesNumber}` : 'Valid',
+                    d.checkCode,
+                  ]),
+                }
+              }
+            />
             {can('receipts:issue') && (
               <Button size="sm" variant="primary" icon={<Plus className="size-3.5" />} onClick={() => setIssueOpen(true)}>
                 Issue Receipt / Invoice

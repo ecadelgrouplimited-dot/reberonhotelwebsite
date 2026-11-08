@@ -42,6 +42,8 @@ import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
 import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
+import { m } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import { SelectInput, Switch, TextArea, TextInput } from '@/components/ui/field';
 
 const STATUS_TONE: Record<RequisitionStatus, 'amber' | 'blue' | 'green' | 'neutral' | 'red'> = {
@@ -204,6 +206,31 @@ export default function RequisitionsPage() {
         description="Departmental supplies, procurement vouchers, store restock, and device terminals"
         actions={
           <div className="flex items-center gap-2">
+            {tab === 'REQUISITIONS' && (
+              <ExportMenu
+                disabled={!filteredReqs.length}
+                spec={() => ({
+                  title: 'Requisitions',
+                  subtitle: `${filteredReqs.length} requests`,
+                  filename: `reberon-requisitions-${new Date().toISOString().slice(0, 10)}`,
+                  orientation: 'landscape',
+                  columns: ['Number', 'Raised', 'Department', { label: 'Title', width: 30 }, 'Priority', 'Items', 'Status', 'Requested by', 'Approved by', 'Disbursed', { label: 'Estimate', kind: 'money' }],
+                  rows: filteredReqs.map((r) => [
+                    r.number,
+                    r.createdAt.slice(0, 10),
+                    r.department,
+                    r.title,
+                    r.priority,
+                    r.items.length,
+                    r.status.replace(/_/g, ' ').toLowerCase(),
+                    r.requestedByName,
+                    [r.managerApprovedBy, r.directorApprovedBy].filter(Boolean).join(' · '),
+                    r.disbursedAt ? r.disbursedAt.slice(0, 10) : '',
+                    m(r.totalEstimatedMinor, r.currency),
+                  ]),
+                })}
+              />
+            )}
             {tab === 'REQUISITIONS' && can('requisitions:request') && (
               <Button
                 variant="primary"

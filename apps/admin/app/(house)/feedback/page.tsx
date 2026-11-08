@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
 import { useConfirm } from '@/components/ui/confirm';
+import { ExportMenu } from '@/components/ui/export-menu';
 
 const FACE = {
   GOOD: { icon: Smile, label: 'Good', tone: 'green' as const, cls: 'text-success bg-success/10' },
@@ -60,6 +61,30 @@ export default function FeedbackPage() {
       <PageHeader
         title="Guest Feedback"
         description="Post-stay satisfaction scores, issue resolution, and website testimonials"
+        actions={
+          <ExportMenu
+            disabled={!data?.length}
+            spec={() =>
+              data && {
+                title: 'Guest feedback',
+                subtitle: filter === 'all' ? 'All feedback' : `Filter: ${filter}`,
+                filename: `reberon-guest-feedback-${new Date().toISOString().slice(0, 10)}`,
+                columns: ['Received', 'Guest', 'Country', 'Booking', 'Stay', 'Score', { label: 'Comment', width: 48 }, 'Handled', 'On website'],
+                rows: data.map((f) => [
+                  f.createdAt.slice(0, 10),
+                  f.guest.name,
+                  f.guest.country ?? '',
+                  f.reservation.code,
+                  dateRange(f.reservation.arrival, f.reservation.departure),
+                  f.score,
+                  f.comment ?? '',
+                  f.handledAt ? f.handledAt.slice(0, 10) : 'Open',
+                  f.published ? 'Published' : f.allowPublic ? 'Allowed' : 'No',
+                ]),
+              }
+            }
+          />
+        }
       />
 
       {/* Compact 5-KPI Strip */}

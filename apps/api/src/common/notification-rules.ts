@@ -142,7 +142,7 @@ export async function loadNotificationRules(prisma: Pick<PrismaClient, 'setting'
 }
 
 /** Which rule an audited action belongs to. */
-export function ruleIdForAction(action: string): string {
+export function ruleIdForAction(action: string): string | null {
   if (action.includes('check_out')) return 'GUEST_CHECK_OUT';
   if (action.includes('check_in')) return 'GUEST_CHECK_IN';
   if (action.includes('reservation') || action.includes('booking')) return 'NEW_BOOKING';
@@ -150,7 +150,9 @@ export function ruleIdForAction(action: string): string {
   if (action.includes('pos.settle') || action.includes('payment')) return 'POS_PAYMENT_CONFIRMED';
   if (action.includes('pos')) return 'POS_WAITING_BILL';
   if (action.includes('requisition') || action.includes('inventory')) return 'URGENT_REQUISITION_STOCK';
-  return 'GUEST_INQUIRY_FEEDBACK';
+  if (/^(enquiry\.|waitlist\.create|conversation\.create|desk\.guest_request|feedback\.|whatsapp\.intent)/.test(action)) return 'GUEST_INQUIRY_FEEDBACK';
+  // Everything else (website edits, settings, staff admin…) is not an alert.
+  return null;
 }
 
 /** Where tapping an alert should land. */

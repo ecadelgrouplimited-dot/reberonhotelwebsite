@@ -28,7 +28,7 @@ export function Dialog({
       {open && (
         <div className={cn('panel flex flex-col bg-surface text-fg shadow-[var(--shadow-lift)]', drawer ? 'h-dvh w-[min(34rem,100vw)] border-l border-line' : cn(width, 'max-h-[90dvh] rounded-[20px] border border-line'))}>
           {(title || description) && (
-            <header className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
+            <header data-page-header className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
               <div>
                 {title && <h2 className="text-[15px] font-semibold">{title}</h2>}
                 {description && <p className="mt-0.5 text-[13px] text-fg-muted">{description}</p>}

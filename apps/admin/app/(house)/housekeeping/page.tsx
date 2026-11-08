@@ -23,7 +23,8 @@ import type { HkBoardDTO, HkStatus, HkTaskDTO, HkTaskKind, HkTaskStatus, RackRoo
 import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
 import { cn } from '@/lib/cn';
-import { exportToCsv } from '@/lib/export-csv';
+import { m, type ExportSpec } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
@@ -203,17 +204,9 @@ export default function HousekeepingPage() {
                 Linen Store
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={filter === 'rooms' ? !filteredRooms.length : !shown.length}
-              icon={<Download className="size-3.5" />}
-              onClick={() => {
+            <ExportMenu spec={() => {
                 if (filter === 'rooms') {
-                  exportToCsv(
-                    `reberon-housekeeping-rooms-${data?.date ?? 'today'}.csv`,
-                    ['Room #', 'Floor', 'Room Type', 'Status', 'Occupant', 'Arriving Today', 'Active Task', 'Notes'],
-                    filteredRooms.map((r) => [
+                  return { title: 'Housekeeping · rooms', subtitle: data?.date ?? '', filename: `reberon-housekeeping-rooms-${data?.date ?? 'today'}`, columns: ['Room #', 'Floor', 'Room Type', 'Status', 'Occupant', 'Arriving Today', 'Active Task', 'Notes'], rows: filteredRooms.map((r) => [
                       r.number,
                       r.floor,
                       r.roomType.name,
@@ -222,13 +215,9 @@ export default function HousekeepingPage() {
                       r.arriving?.guestName ?? '',
                       r.task ? `${r.task.kind} (${r.task.status})` : '',
                       r.notes ?? '',
-                    ]),
-                  );
+                    ]) };
                 } else {
-                  exportToCsv(
-                    `reberon-housekeeping-${data?.date ?? 'today'}.csv`,
-                    ['Room Number', 'Floor', 'Room Type', 'Room Status', 'Task Kind', 'Task Status', 'Assignee', 'Arrival Today', 'Notes'],
-                    shown.map((t) => [
+                  return { title: 'Housekeeping · tasks', subtitle: data?.date ?? '', filename: `reberon-housekeeping-${data?.date ?? 'today'}`, columns: ['Room Number', 'Floor', 'Room Type', 'Room Status', 'Task Kind', 'Task Status', 'Assignee', 'Arrival Today', 'Notes'], rows: shown.map((t) => [
                       t.room.number,
                       t.room.floor,
                       t.room.roomTypeName,
@@ -238,13 +227,9 @@ export default function HousekeepingPage() {
                       t.assignee?.name ?? 'Unassigned',
                       t.arrivalToday ? 'Yes' : 'No',
                       t.notes ?? '',
-                    ]),
-                  );
+                    ]) };
                 }
-              }}
-            >
-              Export CSV
-            </Button>
+              }} disabled={filter === 'rooms' ? !filteredRooms.length : !shown.length} />
           </>
         }
       />

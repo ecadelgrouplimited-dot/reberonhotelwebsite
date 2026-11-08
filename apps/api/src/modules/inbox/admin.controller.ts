@@ -558,6 +558,9 @@ export class DashboardController {
           action: {
             notIn: ['auth.login', 'auth.login_failed', 'auth.logout'],
           },
+          // Website editing, settings and session noise are never alerts; nor is your own work.
+          NOT: ['page.', 'settings.', 'media.', 'auth.', 'push.', 'template.', 'tour.', 'user.'].map((p) => ({ action: { startsWith: p } })),
+          OR: [{ actorId: null }, { actorId: { not: user.id } }],
         },
         include: { actor: { select: { id: true, name: true, role: true } } },
         orderBy: { createdAt: 'desc' },
@@ -629,8 +632,9 @@ export class DashboardController {
     const ruleMap = new Map(rules.map((r) => [r.id, r]));
 
     const liveAlertStream = recentAudit
+      .filter((a) => mapActionToRuleId(a.action) !== null)
       .map((a) => {
-        const ruleId = mapActionToRuleId(a.action);
+        const ruleId = mapActionToRuleId(a.action)!;
         const rule = ruleMap.get(ruleId) ?? rules[0]!;
         const targetedToMe =
           rule.roles.includes(user.role) ||

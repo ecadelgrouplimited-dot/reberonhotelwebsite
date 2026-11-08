@@ -362,6 +362,8 @@ model Facility {
   body      Json?
   icon      String
   mediaIds  String[]       @default([])
+  /// Facility page details (chips, fact rows, highlights, enquiry wording) — FacilityDetails in contracts.
+  details   Json?
   status    FacilityStatus @default(AVAILABLE)
   order     Int            @default(0)
   isSeed    Boolean        @default(false)

@@ -115,6 +115,24 @@ export interface RoomTypeDetailDTO extends RoomTypeCardDTO {
   tour: TourDTO | null;
 }
 
+/** What the facility page shows beyond the summary — all edited in the House. */
+export interface FacilityDetails {
+  /** Short chips on the card and page header. */
+  tags?: { text: LText }[];
+  /** Fact rows: icon, label, value. */
+  specs?: { icon?: string; label: LText; value: LText }[];
+  /** Bulleted highlights. */
+  highlights?: { text: LText }[];
+  /** Small badge, e.g. “Open daily”. */
+  badge?: LText;
+  /** A note beside the enquiry buttons. */
+  note?: LText;
+  enquireLabel?: LText;
+  enquireIntent?: 'STAY' | 'EVENT' | 'GROUP' | 'GENERAL';
+  /** Pre-filled WhatsApp message. */
+  whatsappText?: string;
+}
+
 export interface FacilityDTO {
   id: string;
   slug: string;
@@ -124,6 +142,7 @@ export interface FacilityDTO {
   icon: string;
   status: FacilityStatus;
   media: MediaRef[];
+  details: FacilityDetails | null;
 }
 
 export interface FacilityDetailDTO extends FacilityDTO {

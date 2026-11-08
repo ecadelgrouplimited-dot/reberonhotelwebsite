@@ -1,4 +1,4 @@
-import type { LText, MediaRef, PageDTO, SiteDTO } from '@reberon/contracts';
+import { BLOCK_MAP, type LText, type MediaRef, type PageDTO, type SiteDTO } from '@reberon/contracts';
 import type { CtaContext } from '@/lib/cta';
 import { SectionHeading } from '@/components/ui/section-heading';
 import { cn } from '@/lib/cn';
@@ -10,6 +10,8 @@ import { GalleryGrid } from './gallery';
 import { NowStrip } from './now-strip';
 import { Voices } from './voices';
 import { TourEmbed } from './tour-embed';
+import { Cards } from './cards';
+import { Video } from './video';
 import type { BlockProps } from './types';
 
 function Gallery({ block, media }: BlockProps<{ eyebrow?: LText; heading?: LText; media?: string[] }>) {
@@ -47,6 +49,8 @@ const REGISTRY: Record<string, (p: BlockProps<never, never>) => React.ReactNode>
   nowStrip: NowStrip as never,
   voices: Voices as never,
   tourEmbed: TourEmbed as never,
+  cards: Cards as never,
+  video: Video as never,
 };
 
 /** Blocks that manage their own vertical rhythm (full-bleed or spacing). */
@@ -62,7 +66,7 @@ export function Blocks({ page, site, ctx = {} }: { page: Pick<PageDTO, 'blocks' 
         const el = <C block={block as never} media={page.media} site={site} ctx={ctx} index={index} />;
         if (BLEED.has(block.type)) {
           return (
-            <div key={block.id} id={block.anchor ?? `b-${block.id}`} className={tone}>
+            <div key={block.id} id={block.anchor ?? `b-${block.id}`} className={tone} data-block-id={block.id} data-block-label={BLOCK_MAP[block.type]?.label}>
               {el}
             </div>
           );
@@ -70,7 +74,7 @@ export function Blocks({ page, site, ctx = {} }: { page: Pick<PageDTO, 'blocks' 
         const prevTone = page.blocks[index - 1]?.tone ?? 'default';
         const tight = index > 0 && prevTone === (block.tone ?? 'default') && !BLEED.has(page.blocks[index - 1]!.type);
         return (
-          <section key={block.id} id={block.anchor ?? `b-${block.id}`} className={cn(tone, 'section-y', tight && '!pt-0')}>
+          <section key={block.id} id={block.anchor ?? `b-${block.id}`} className={cn(tone, 'section-y', tight && '!pt-0')} data-block-id={block.id} data-block-label={BLOCK_MAP[block.type]?.label}>
             {el}
           </section>
         );

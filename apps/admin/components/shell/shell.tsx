@@ -32,6 +32,7 @@ import { CommandPalette } from './command-palette';
 import { WebsiteHealth } from './website-health';
 import { LiveAlertCenterButton } from './live-alerts';
 import { ApiError } from '@/lib/api';
+import { printScreen, setDocumentAuthor } from '@/lib/print';
 import { PwaProvider, usePwa } from '@/components/pwa/pwa-provider';
 import { ConnectionPill, InstallNudge, OfflineBanner, SyncCenter, UpdateBar } from '@/components/pwa/pwa-ui';
 import { CloudOff } from 'lucide-react';
@@ -728,6 +729,13 @@ export function Shell({ children }: { children: ReactNode }) {
         e.preventDefault();
         setPaletteOpen((v) => !v);
       }
+      // Ctrl/Cmd+P prints a clean branded document: the open dialog if there is one, else the screen.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        const dlg = [...document.querySelectorAll<HTMLDialogElement>('dialog[open]')].pop();
+        const panel = dlg?.querySelector<HTMLElement>('.panel') ?? dlg;
+        void printScreen(panel ? { node: panel } : {});
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         toggleSidebar();
@@ -736,6 +744,8 @@ export function Shell({ children }: { children: ReactNode }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  useEffect(() => setDocumentAuthor(me?.name ?? null), [me?.name]);
 
   return (
     <PwaProvider me={me}>
@@ -746,6 +756,7 @@ export function Shell({ children }: { children: ReactNode }) {
       )}
     >
       <aside
+        data-shell-chrome
         className={cn(
           'sticky top-0 hidden h-dvh overflow-hidden transition-all duration-200 ease-in-out lg:block',
           sidebarCollapsed ? 'w-0 border-none' : 'w-[15.25rem]',
@@ -767,7 +778,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       )}
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-30 flex h-13 items-center gap-2.5 border-b border-line bg-[color-mix(in_oklab,var(--bg)_88%,transparent)] px-4 backdrop-blur-lg sm:px-6">
+        <header data-shell-chrome className="sticky top-0 z-30 flex h-13 items-center gap-2.5 border-b border-line bg-[color-mix(in_oklab,var(--bg)_88%,transparent)] px-4 backdrop-blur-lg sm:px-6">
           <button type="button" onClick={() => setMobileOpen(true)} className="grid size-8 place-items-center rounded-lg hover:bg-surface-2 lg:hidden" aria-label="Open menu">
             <Menu className="size-4" />
           </button>

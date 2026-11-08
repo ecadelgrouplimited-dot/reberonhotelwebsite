@@ -26,7 +26,8 @@ import { ApiError, del, get, patch, post } from '@/lib/api';
 import { useMe } from '@/lib/providers';
 import { money, toMinorStr } from '@/lib/money';
 import { cn } from '@/lib/cn';
-import { exportToCsv } from '@/lib/export-csv';
+import { m, type ExportSpec } from '@/lib/export';
+import { ExportMenu } from '@/components/ui/export-menu';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
@@ -118,16 +119,8 @@ export default function QuotationsPage() {
         description="Official event proposals, pro-forma quotations, QR verification, and 1-click conversion to Invoice & Receipt"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!filtered.length}
-              icon={<Download className="size-3.5" />}
-              onClick={() =>
-                exportToCsv(
-                  'reberon-quotations.csv',
-                  ['Number', 'Check Code', 'Event Title', 'Event Type', 'Client', 'Organization', 'Phone', 'Event Date', 'Pax', 'Status', 'Total'],
-                  filtered.map((q) => [
+            <ExportMenu spec={() =>
+                ({ title: 'Quotations & events', filename: 'reberon-quotations', columns: ['Number', 'Check Code', 'Event Title', 'Event Type', 'Client', 'Organization', 'Phone', 'Event Date', 'Pax', 'Status', 'Total'], rows: filtered.map((q) => [
                     q.number,
                     q.checkCode,
                     q.eventTitle,
@@ -138,13 +131,9 @@ export default function QuotationsPage() {
                     q.eventDate ?? 'TBD',
                     q.attendees ?? '',
                     q.status,
-                    money(q.totalMinor, q.currency),
-                  ]),
-                )
-              }
-            >
-              Export CSV
-            </Button>
+                    m(q.totalMinor, q.currency),
+                  ]) })
+              } disabled={!filtered.length} />
             <Button
               size="sm"
               variant="primary"

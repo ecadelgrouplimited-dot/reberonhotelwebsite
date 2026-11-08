@@ -7,7 +7,7 @@ import {
   zRedirectInput, zNavigationInput, zReorderInput, type NavItemInput, NAV_MENUS, type NavMenuKey,
 } from '@reberon/contracts';
 import { slugify } from '@reberon/utils';
-import type { Prisma } from '@reberon/db';
+import { Prisma } from '@reberon/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
 import { CurrentUser, Requires, type AuthUser } from '../../common/auth.js';
@@ -195,7 +195,8 @@ export class FacilitiesAdminController {
   @Post()
   @Requires('content:write')
   async create(@Body(new ZodPipe(zFacilityInput)) body: z.infer<typeof zFacilityInput>, @CurrentUser() user: AuthUser, @Req() req: Request) {
-    const f = await this.prisma.facility.create({ data: { ...(body as Prisma.FacilityCreateInput), order: await this.prisma.facility.count() } });
+    const { details, ...rest } = body;
+    const f = await this.prisma.facility.create({ data: { ...(rest as Prisma.FacilityCreateInput), details: details ?? Prisma.DbNull, order: await this.prisma.facility.count() } });
     await this.ops.done(user, req, 'facility.create', 'Facility', f.id, `Created ${f.slug}`, ['facilities']);
     return this.get(f.id);
   }
@@ -203,7 +204,8 @@ export class FacilitiesAdminController {
   @Patch(':id')
   @Requires('content:write')
   async update(@Param('id') id: string, @Body(new ZodPipe(partial(zFacilityInput))) body: Partial<z.infer<typeof zFacilityInput>>, @CurrentUser() user: AuthUser, @Req() req: Request) {
-    const f = await this.prisma.facility.update({ where: { id }, data: body as Prisma.FacilityUpdateInput });
+    const { details, ...rest } = body;
+    const f = await this.prisma.facility.update({ where: { id }, data: { ...(rest as Prisma.FacilityUpdateInput), ...(details !== undefined ? { details: details ?? Prisma.DbNull } : {}) } });
     await this.ops.done(user, req, 'facility.update', 'Facility', id, `Updated ${f.slug}`, ['facilities'], body);
     return this.get(id);
   }
