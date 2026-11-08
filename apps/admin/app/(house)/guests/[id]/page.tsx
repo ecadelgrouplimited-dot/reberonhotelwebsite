@@ -29,7 +29,7 @@ export default function GuestPage({ params }: { params: Promise<{ id: string }> 
   const isOwner = me.role === 'OWNER';
   const canDelete = me.role === 'OWNER' || me.role === 'MANAGER';
   const confirm = useConfirm();
-  const { data: g, isLoading } = useQuery({ queryKey: ['guest', id], queryFn: () => get<GuestProfileDTO>(`/guests/${id}`) });
+  const { data: g, isLoading, error } = useQuery({ queryKey: ['guest', id], queryFn: () => get<GuestProfileDTO>(`/guests/${id}`) });
   const { data: guestAudit } = useQuery({
     queryKey: ['guest-audit', id],
     queryFn: () => get<{ data: { id: string; action: string; summary: string | null; actor: { name: string; role?: string } | null; createdAt: string }[] }>(`/audit?entityType=Contact&entityId=${id}`),
@@ -66,6 +66,7 @@ export default function GuestPage({ params }: { params: Promise<{ id: string }> 
     if (g && g.id !== id) router.replace(`/guests/${g.id}`); // a merged record points at the one it joined
   }, [g, id, router]);
 
+  if (!g && error) return <div className="mx-auto mt-10 max-w-md rounded-2xl border border-line bg-surface p-6 text-center text-[13px]"><p className="text-base font-semibold">This guest isn’t on this device yet</p><p className="mt-1 text-fg-muted">{(error as Error).message}</p></div>;
   if (isLoading || !g) return <Skeleton className="h-96" />;
   const edit = can('guests:write');
   const dirty = JSON.stringify(form) !== JSON.stringify({ name: g.name, phone: g.phone ?? '', email: g.email ?? '', country: g.country ?? '', nationality: g.nationality ?? '', guestNotes: g.guestNotes ?? '', tags: g.tags, isVip: g.isVip, idDocType: g.idDocType ?? '', idDocNumber: '' });

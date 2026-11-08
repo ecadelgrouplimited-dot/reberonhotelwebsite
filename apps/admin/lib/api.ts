@@ -1,5 +1,6 @@
 'use client';
-import { enqueue, queueable, QUEUED_MESSAGE } from './offline/outbox';
+import { enqueue, pendingSnapshot, queueable, QUEUED_MESSAGE } from './offline/outbox';
+import { applyOps } from './offline/optimistic';
 import type { OutboxItem } from './offline/idb';
 
 export class ApiError extends Error {
@@ -98,7 +99,10 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
   }
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
+  if (res.status === 503 && data.code === 'OFFLINE_NO_DATA' && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rb:offline-missing', { detail: path }));
   if (!res.ok) throw new ApiError(res.status, data.code ?? 'ERROR', data.detail ?? 'Something went wrong', data.errors ?? []);
+  // Changes made offline and not yet synced are shown on top of whatever the server (or saved copy) says.
+  if (method === 'GET' && pendingSnapshot.length) return applyOps(data as T, pendingSnapshot);
   return data as T;
 }
 

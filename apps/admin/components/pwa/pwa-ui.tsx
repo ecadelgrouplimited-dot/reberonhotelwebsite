@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   AlertTriangle,
   Bell,
@@ -68,11 +69,20 @@ export function ConnectionPill() {
 /** A calm strip under the header while offline or showing saved data. */
 export function OfflineBanner() {
   const pwa = usePwa();
+  const pathname = usePathname();
   const [, tick] = useState(0);
+  const [missing, setMissing] = useState(0);
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
     return () => clearInterval(t);
   }, []);
+  // Count reads on this screen that were never saved on the device.
+  useEffect(() => {
+    setMissing(0);
+    const h = () => setMissing((n) => n + 1);
+    window.addEventListener('rb:offline-missing', h);
+    return () => window.removeEventListener('rb:offline-missing', h);
+  }, [pathname]);
   if (!pwa) return null;
   const { online, pending, savedCopyAt, setCenterOpen } = pwa;
   if (online && !savedCopyAt) return null;
@@ -85,6 +95,7 @@ export function OfflineBanner() {
         <span>
           <b>You’re offline.</b> Keep working — screens show what was saved{savedCopyAt ? ` (${since(savedCopyAt)})` : ''}, and every change is kept on this device and synced automatically.
           {pending > 0 && <> <b>{pending}</b> change{pending === 1 ? '' : 's'} waiting.</>}
+          {missing > 0 && <> <b className="text-danger">Part of this screen was never opened on this device</b>, so it can’t show here until the connection is back.</>}
         </span>
       )}
       <button type="button" className="ml-auto font-semibold underline-offset-2 hover:underline" onClick={() => setCenterOpen(true)}>Details</button>
@@ -221,7 +232,7 @@ export function SyncCenter() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="font-semibold">Offline copy</p>
-              <p className="text-[12px] text-fg-muted">Last saved {since(p.warm.lastAt)} · every screen you can use, plus upcoming and in-house bookings.</p>
+              <p className="text-[12px] text-fg-muted">Every screen in the app is saved automatically — including any booking or guest page. Full download {since(p.warm.lastAt)} · data refreshed {since(p.dataAt)} (every 15 min while online).</p>
             </div>
             <Button size="sm" variant="primary" icon={p.warm.running ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />} disabled={!p.online || p.warm.running || !p.swReady} onClick={() => void p.downloadForOffline({ includeBookings })}>
               {p.warm.running ? `Saving ${pct}%` : 'Download for offline'}
@@ -235,10 +246,10 @@ export function SyncCenter() {
           )}
           {!p.swReady && <p className="mt-2 text-[12px] text-warning">Offline mode starts after the first full load — reload once.</p>}
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <Switch label="Include bookings" hint="In-house guests and the next 40 arrivals" checked={includeBookings} onChange={setIncludeBookings} />
+             <Switch label="Include bookings" hint="In-house guests and the next 60 arrivals" checked={includeBookings} onChange={setIncludeBookings} />
             <Switch
               label="Keep it fresh automatically"
-              hint="Quietly re-saves twice a day while online"
+              hint="Saves every new version and re-downloads twice a day"
               checked={auto}
               onChange={(v) => {
                 setAuto(v);

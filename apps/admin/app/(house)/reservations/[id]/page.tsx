@@ -44,7 +44,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
   const me = useMe();
   const isOwner = me.role === 'OWNER';
   const autoCheckIn = useSearchParams().get('checkin') === '1';
-  const { data: r, isLoading } = useQuery({ queryKey: ['reservation', id], queryFn: () => get<Detail>(`/reservations/${id}`) });
+  const { data: r, isLoading, error } = useQuery({ queryKey: ['reservation', id], queryFn: () => get<Detail>(`/reservations/${id}`) });
   const [dialog, setDialog] = useState<null | 'pay' | 'refund' | 'cancel' | 'delete' | 'amend' | 'extend'>(null);
   const confirm = useConfirm();
   const [notes, setNotes] = useState('');
@@ -66,6 +66,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
   const confirmHeld = useMutation({ mutationFn: (reason: string) => post<Detail>(`/reservations/${id}/confirm`, { reason: reason || undefined }), onSuccess: (d) => { refresh(d); toast.success('Confirmed — rooms are sold'); }, onError: failed });
   const extendHold = useMutation({ mutationFn: (hours: number) => post<Detail>(`/reservations/${id}/extend-hold`, { hours }), onSuccess: (d) => { refresh(d); toast.success('Hold extended'); }, onError: failed });
 
+  if (!r && error) return <div className="mx-auto mt-10 max-w-md rounded-2xl border border-line bg-surface p-6 text-center text-[13px]"><p className="text-base font-semibold">This booking isn’t on this device yet</p><p className="mt-1 text-fg-muted">{error instanceof ApiError && error.code === 'OFFLINE_NO_DATA' ? 'It was not opened or downloaded while online. It will load as soon as the connection is back.' : (error as Error).message}</p></div>;
   if (isLoading || !r) return <Skeleton className="h-96" />;
   const balance = BigInt(r.balanceMinor);
   const open = ['HELD', 'CONFIRMED'].includes(r.status);

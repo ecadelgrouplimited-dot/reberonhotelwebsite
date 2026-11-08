@@ -58,8 +58,19 @@ export function labelFor(method: string, path: string) {
 /** Writes that must happen live (signing in, devices) are never queued. */
 export const queueable = (method: string, path: string) => method !== 'GET' && !/^\/(auth|push)\//.test(path);
 
+/** In-memory copy of what is still waiting, so every read can show it applied. */
+export let pendingSnapshot: OutboxItem[] = [];
+
 export async function listOutbox() {
-  return (await idbAll<OutboxItem>('outbox')).sort((a, b) => a.createdAt - b.createdAt);
+  const list = (await idbAll<OutboxItem>('outbox')).sort((a, b) => a.createdAt - b.createdAt);
+  pendingSnapshot = list.filter((i) => i.status !== 'failed');
+  return list;
+}
+
+if (typeof window !== 'undefined') {
+  void listOutbox().catch(() => undefined);
+  onOutbox(() => void listOutbox().catch(() => undefined));
+  window.addEventListener('rb:outbox', () => void listOutbox().catch(() => undefined));
 }
 
 export async function enqueue(input: { id: string; method: OutboxItem['method']; path: string; body?: unknown }) {
@@ -89,6 +100,7 @@ export async function enqueue(input: { id: string; method: OutboxItem['method'];
     route: typeof location !== 'undefined' ? location.pathname : undefined,
   };
   await idbPut('outbox', item);
+  pendingSnapshot = [...pendingSnapshot, item];
   notify({ type: 'queued', id: item.id, label: item.label });
   void requestSync();
   return item;

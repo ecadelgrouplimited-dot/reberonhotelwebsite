@@ -351,3 +351,46 @@ export function StaffPicker({
     </select>
   );
 }
+
+export interface OfflineSlip {
+  ref: string;
+  outlet: string;
+  where: string;
+  servedBy: string;
+  currency: string;
+  lines: { name: string; qty: number; unit: string; notes?: string }[];
+  discount: string;
+  total: string;
+  paid: string | null;
+  at: string;
+}
+
+/**
+ * A provisional 80 mm slip printed straight from the device while offline. It says
+ * so on its face; the numbered receipt is issued when the bill syncs.
+ */
+export function printOfflineSlip(s: OfflineSlip) {
+  const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+  const fmt = (m: string | bigint) => {
+    const n = Number(m);
+    return s.currency === 'USD' ? `$${(n / 100).toFixed(2)}` : `UGX ${Math.round(n).toLocaleString('en')}`;
+  };
+  const rows = s.lines
+    .map((l) => `<tr><td>${l.qty} × ${esc(l.name)}${l.notes ? `<div class="n">${esc(l.notes)}</div>` : ''}</td><td class="r">${fmt(BigInt(l.unit) * BigInt(l.qty))}</td></tr>`)
+    .join('');
+  const when = new Date(s.at).toLocaleString('en-GB', { timeZone: 'Africa/Kampala', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(s.ref)}</title><style>
+  @page{size:80mm auto;margin:4mm}body{font:12px/1.35 ui-monospace,Menlo,monospace;width:72mm;margin:0 auto;color:#000}
+  h1{font-size:14px;text-align:center;margin:0}p{margin:2px 0;text-align:center}table{width:100%;border-collapse:collapse;margin:6px 0}
+  td{padding:2px 0;vertical-align:top}.r{text-align:right;white-space:nowrap}.n{font-size:10px;color:#444}.t td{border-top:1px dashed #000;font-weight:bold;padding-top:4px}
+  .box{border:1px dashed #000;padding:4px;margin-top:6px;text-align:center;font-size:11px}</style></head><body>
+  <h1>Reberon Hotel</h1><p>${esc(s.outlet)} · ${esc(s.where)}</p><p>${when} · ${esc(s.servedBy)}</p><p><b>${esc(s.ref)}</b></p>
+  <table>${rows}${BigInt(s.discount) > 0n ? `<tr><td>Discount</td><td class="r">−${fmt(s.discount)}</td></tr>` : ''}<tr class="t"><td>Total</td><td class="r">${fmt(s.total)}</td></tr></table>
+  ${s.paid ? `<p>Paid · ${esc(s.paid.replace('_', ' ').toLowerCase())}</p>` : '<p>Not yet paid</p>'}
+  <div class="box">PROVISIONAL — recorded offline.<br>The numbered receipt is issued when the till reconnects.</div>
+  <script>onload=()=>{print();setTimeout(()=>close(),400)}</script></body></html>`;
+  const w = window.open('', '_blank', 'width=420,height=720');
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
+}

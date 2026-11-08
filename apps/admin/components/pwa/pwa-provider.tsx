@@ -7,6 +7,7 @@ import type { MeDTO } from '@reberon/contracts';
 import { get, post } from '@/lib/api';
 import { metaGet, metaSet, idbClear, type OutboxItem } from '@/lib/offline/idb';
 import { discard as discardItem, listOutbox, onOutbox, retry as retryItem, syncNow } from '@/lib/offline/outbox';
+import { applyOps } from '@/lib/offline/optimistic';
 import { NAV } from '@/components/shell/nav';
 
 type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
@@ -28,6 +29,8 @@ interface PwaState {
   push: { supported: boolean; permission: NotificationPermission | 'unsupported'; subscribed: boolean };
   storage: { usage: number; quota: number; persisted: boolean } | null;
   warm: WarmState;
+  /** When the worker last refreshed every screen's data in the background. */
+  dataAt: number | null;
   centerOpen: boolean;
   setCenterOpen: (v: boolean) => void;
   sync: () => void;
@@ -47,6 +50,8 @@ const Ctx = createContext<PwaState | null>(null);
 export const usePwa = () => useContext(Ctx);
 
 const VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? 'dev';
+const APP_ROUTES: string[] = JSON.parse(process.env.NEXT_PUBLIC_APP_ROUTES ?? '["/"]');
+const TEMPLATE_ID = '00000000-0000-4000-8000-000000000000';
 const inFrame = () => typeof window !== 'undefined' && window.self !== window.top;
 const b64ToBytes = (s: string) => {
   const pad = '='.repeat((4 - (s.length % 4)) % 4);
@@ -70,6 +75,7 @@ export function PwaProvider({ me, children }: { me: MeDTO | undefined; children:
   const [storage, setStorage] = useState<PwaState['storage']>(null);
   const [warm, setWarm] = useState<WarmState>({ running: false, done: 0, total: 0, step: '', lastAt: null });
   const [centerOpen, setCenterOpen] = useState(false);
+  const [dataAt, setDataAt] = useState<number | null>(null);
   const warmRun = useRef(false);
   const embedded = inFrame();
 
@@ -181,11 +187,18 @@ export function PwaProvider({ me, children }: { me: MeDTO | undefined; children:
     const local = (e: Event) => handle((e as CustomEvent).detail);
     window.addEventListener('rb:outbox', local);
     const saved = (e: Event) => setSavedCopyAt((e as CustomEvent<string | null>).detail);
+    // Show an offline edit everywhere on screen at once.
+    const queuedHere = (e: Event) => {
+      const item = (e as CustomEvent<OutboxItem>).detail;
+      qc.setQueriesData({}, (old: unknown) => (old === undefined ? old : applyOps(old, [item])));
+    };
+    window.addEventListener('rb:offline-queued', queuedHere);
     window.addEventListener('rb:saved-copy', saved);
     return () => {
       off();
       window.removeEventListener('rb:outbox', local);
       window.removeEventListener('rb:saved-copy', saved);
+      window.removeEventListener('rb:offline-queued', queuedHere);
     };
   }, [embedded, qc, refreshItems]);
 
@@ -211,6 +224,7 @@ export function PwaProvider({ me, children }: { me: MeDTO | undefined; children:
       setWarm((w) => ({ ...w, lastAt: w.lastAt }));
       const lastAt = await metaGet<number>(`warm:${me.id}`).catch(() => null);
       setWarm((w) => ({ ...w, lastAt }));
+      setDataAt(await metaGet<number>('dataRefreshedAt').catch(() => null));
     })();
   }, [embedded, me]);
 
@@ -331,93 +345,173 @@ export function PwaProvider({ me, children }: { me: MeDTO | undefined; children:
     if (choice.outcome === 'accepted') setBip(null);
   }, [bip]);
 
+  /** Ask the worker to save every screen's page and code (fast, no rendering). */
+  const precacheScreens = useCallback((withData: boolean) => {
+    const ctl = navigator.serviceWorker?.controller;
+    if (!ctl) return false;
+    ctl.postMessage({ type: 'PRECACHE_ALL', routes: APP_ROUTES, withData });
+    return true;
+  }, []);
+
   /**
-   * Open every screen this person can use once (hidden), so its code, page and
-   * data are saved; then the next bookings and in-house stays.
+   * Load every screen this person can use once in hidden frames (two at a time,
+   * each until its network goes quiet) so the data behind it is saved too.
    */
+  const warmData = useCallback(async (onStep: (done: number, total: number, step: string) => void) => {
+    if (!me) return 0;
+    const routes = APP_ROUTES.filter((r) => !r.includes(TEMPLATE_ID)).filter((r) => {
+      const item = NAV.flatMap((g) => g.items).find((i) => i.href.split('?')[0] === r);
+      return !item?.perm || me.permissions.includes(item.perm);
+    });
+    let done = 0;
+    const one = (frame: HTMLIFrameElement, href: string) =>
+      new Promise<void>((resolve) => {
+        const hard = setTimeout(resolve, 20_000);
+        frame.onload = () => {
+          // Wait until the screen has stopped asking for data for ~1.2 s.
+          let last = -1;
+          let still = 0;
+          const tick = setInterval(() => {
+            let n = 0;
+            try {
+              n = frame.contentWindow?.performance.getEntriesByType('resource').length ?? 0;
+            } catch {
+              n = last;
+            }
+            still = n === last ? still + 1 : 0;
+            last = n;
+            if (still >= 3) {
+              clearInterval(tick);
+              clearTimeout(hard);
+              resolve();
+            }
+          }, 400);
+        };
+        frame.src = href;
+      });
+    const frames = [0, 1].map(() => {
+      const f = document.createElement('iframe');
+      f.setAttribute('aria-hidden', 'true');
+      f.tabIndex = -1;
+      f.style.cssText = 'position:fixed;width:1280px;height:800px;left:-99999px;top:0;opacity:0;pointer-events:none;border:0';
+      document.body.appendChild(f);
+      return f;
+    });
+    const queue = [...routes];
+    try {
+      await Promise.all(
+        frames.map(async (f) => {
+          while (queue.length) {
+            const href = queue.shift()!;
+            onStep(done, routes.length, href === '/' ? 'Today' : href);
+            await one(f, href);
+            done += 1;
+            onStep(done, routes.length, href);
+          }
+        }),
+      );
+    } finally {
+      frames.forEach((f) => f.remove());
+    }
+    return routes.length;
+  }, [me]);
+
+  /** Everything: every screen's page and code, the data behind each, and the next bookings. */
   const downloadForOffline = useCallback(
     async (opts?: { includeBookings?: boolean; quiet?: boolean }) => {
-      if (warmRun.current || !me || !navigator.serviceWorker?.controller) {
-        if (!navigator.serviceWorker?.controller && !opts?.quiet) toast.info('Offline mode is getting ready — reload the page once, then try again.');
+      if (warmRun.current || !me) return;
+      if (!navigator.serviceWorker?.controller) {
+        if (!opts?.quiet) toast.info('Offline mode is getting ready — reload the page once, then try again.');
         return;
       }
       warmRun.current = true;
-      const routes = [...new Set(NAV.flatMap((g) => g.items).filter((i) => !i.later && (!i.perm || me.permissions.includes(i.perm))).map((i) => i.href.split('?')[0]!))];
-      const extra = ['/reservations/new', '/reservations/new?walkin=1', '/account'];
-      const list = [...routes, ...extra];
-      let bookings: string[] = [];
-      if (opts?.includeBookings && me.permissions.includes('bookings:read')) {
-        try {
-          const [up, inHouse] = await Promise.all([
-            get<{ data: { id: string; arrival: string }[] }>('/reservations?status=upcoming&sort=arrival_asc'),
-            get<{ data: { id: string }[] }>('/reservations?status=IN_HOUSE'),
-          ]);
-          bookings = [...inHouse.data.map((r) => r.id), ...up.data.slice(0, 40).map((r) => r.id)];
-        } catch {
-          /* keep going with screens only */
-        }
-      }
-      const total = list.length + bookings.length;
-      setWarm({ running: true, done: 0, total, step: 'Saving screens', lastAt: warm.lastAt });
-      const frame = document.createElement('iframe');
-      frame.setAttribute('aria-hidden', 'true');
-      frame.tabIndex = -1;
-      frame.style.cssText = 'position:fixed;width:1280px;height:800px;left:-99999px;top:0;opacity:0;pointer-events:none;border:0';
-      document.body.appendChild(frame);
-      let done = 0;
       try {
-        for (const href of list) {
-          setWarm((w) => ({ ...w, step: href === '/' ? 'Today' : href }));
-          await new Promise<void>((resolve) => {
-            const t = setTimeout(resolve, 15_000);
-            frame.onload = () => setTimeout(() => { clearTimeout(t); resolve(); }, 2500);
-            // Exact URL: the saved page must match what is opened later (the router state includes the query).
-            frame.src = href;
-          });
-          done += 1;
-          setWarm((w) => ({ ...w, done }));
-        }
-        if (bookings.length) {
+        setWarm((w) => ({ ...w, running: true, done: 0, total: APP_ROUTES.length, step: 'Saving every screen' }));
+        precacheScreens(false);
+        const screens = await warmData((done, total, step) => setWarm((w) => ({ ...w, running: true, done, total, step })));
+        let bookings: string[] = [];
+        if (opts?.includeBookings !== false && me.permissions.includes('bookings:read')) {
           setWarm((w) => ({ ...w, step: 'Saving bookings' }));
-          // One booking page through the frame loads its code; the rest are saved directly.
-          await new Promise<void>((resolve) => {
-            const t = setTimeout(resolve, 15_000);
-            frame.onload = () => setTimeout(() => { clearTimeout(t); resolve(); }, 2500);
-            frame.src = `/reservations/${bookings[0]}`;
-          });
-          navigator.serviceWorker.controller?.postMessage({ type: 'PRECACHE_PAGES', urls: bookings.map((id) => `/reservations/${id}`) });
-          for (const id of bookings) {
-            await get(`/reservations/${id}`).catch(() => undefined);
-            done += 1;
-            setWarm((w) => ({ ...w, done }));
+          try {
+            const [up, inHouse] = await Promise.all([
+              get<{ data: { id: string }[] }>('/reservations?status=upcoming&sort=arrival_asc'),
+              get<{ data: { id: string }[] }>('/reservations?status=IN_HOUSE'),
+            ]);
+            bookings = [...new Set([...inHouse.data.map((r) => r.id), ...up.data.slice(0, 60).map((r) => r.id)])];
+            setWarm((w) => ({ ...w, done: 0, total: bookings.length }));
+            let n = 0;
+            for (const id of bookings) {
+              await Promise.all([get(`/reservations/${id}`).catch(() => undefined), get(`/desk/reservations/${id}/rooms`).catch(() => undefined)]);
+              n += 1;
+              setWarm((w) => ({ ...w, done: n }));
+            }
+          } catch {
+            /* screens are saved; bookings will follow next time */
           }
         }
         const at = Date.now();
         await metaSet(`warm:${me.id}`, at);
-        setWarm({ running: false, done: total, total, step: '', lastAt: at });
-        if (!opts?.quiet) toast.success(`Saved ${list.length} screens${bookings.length ? ` and ${bookings.length} bookings` : ''} for offline use`);
+        setWarm({ running: false, done: 0, total: 0, step: '', lastAt: at });
+        if (!opts?.quiet) toast.success(`Every screen is saved for offline use (${screens} screens${bookings.length ? `, ${bookings.length} bookings` : ''})`);
         await readStorage();
       } finally {
-        frame.remove();
         warmRun.current = false;
         setWarm((w) => ({ ...w, running: false }));
       }
     },
-    [me, readStorage, warm.lastAt],
+    [me, precacheScreens, warmData, readStorage],
   );
 
-  // Keep an offline copy fresh: quietly re-save the screens twice a day.
+  // Worker progress (saving pages and code).
+  useEffect(() => {
+    if (embedded) return;
+    return onOutbox((msg) => {
+      if (msg.type === 'precache-done' && msg.signedOut) console.warn('offline: some screens need a signed-in session to save');
+      if (msg.type === 'data-refreshed') setDataAt(Date.now());
+    });
+  }, [embedded]);
+
+  // Automatic: on sign-in and on every new version, save every screen; the first time, the data too.
   useEffect(() => {
     if (embedded || !me || !online || !reg) return;
     if (localStorage.getItem('rb-auto-offline') === '0') return;
     const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-    if (conn?.saveData) return;
+    let cancelled = false;
     const t = setTimeout(async () => {
+      // A brand-new install takes control a moment later (clients.claim) — wait for it.
+      if (!navigator.serviceWorker.controller) {
+        await new Promise<void>((resolve) => {
+          const done = () => resolve();
+          navigator.serviceWorker.addEventListener('controllerchange', done, { once: true });
+          setTimeout(done, 15_000);
+        });
+      }
+      if (cancelled || !navigator.serviceWorker.controller) return;
+      const key = `precached:${VERSION}:${me.id}`;
+      if (!(await metaGet<number>(key).catch(() => null))) {
+        precacheScreens(true);
+        await metaSet(key, Date.now()).catch(() => undefined);
+      }
       const lastAt = await metaGet<number>(`warm:${me.id}`).catch(() => null);
-      if (!lastAt || Date.now() - lastAt > 12 * 3600_000) void downloadForOffline({ quiet: true });
-    }, 45_000);
-    return () => clearTimeout(t);
+      if (!cancelled && !conn?.saveData && (!lastAt || Date.now() - lastAt > 12 * 3600_000)) void downloadForOffline({ quiet: true });
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [embedded, me, online, reg]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // While online: keep every known screen's data fresh in the background (every 15 minutes, and on reconnect).
+  useEffect(() => {
+    if (embedded || !online || !reg) return;
+    const refresh = () => document.visibilityState === 'visible' && navigator.serviceWorker.controller?.postMessage({ type: 'REFRESH_DATA' });
+    const first = setTimeout(refresh, 20_000);
+    const t = setInterval(refresh, 15 * 60_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, [embedded, online, reg]);
 
   const clearOfflineData = useCallback(async () => {
     navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_USER_DATA' });
@@ -443,6 +537,7 @@ export function PwaProvider({ me, children }: { me: MeDTO | undefined; children:
       push,
       storage,
       warm,
+      dataAt,
       centerOpen,
       setCenterOpen,
       sync: () => void syncNow(),
@@ -457,7 +552,7 @@ export function PwaProvider({ me, children }: { me: MeDTO | undefined; children:
       downloadForOffline,
       clearOfflineData,
     }),
-    [online, syncing, items, pending, lastSyncAt, savedCopyAt, reg, updateReady, bip, installed, push, storage, warm, centerOpen, applyUpdate, install, enablePush, disablePush, testPush, requestPersist, downloadForOffline, clearOfflineData],
+    [online, syncing, items, pending, lastSyncAt, savedCopyAt, reg, updateReady, bip, installed, push, storage, warm, dataAt, centerOpen, applyUpdate, install, enablePush, disablePush, testPush, requestPersist, downloadForOffline, clearOfflineData],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

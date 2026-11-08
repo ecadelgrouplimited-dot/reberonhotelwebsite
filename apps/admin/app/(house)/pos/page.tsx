@@ -43,7 +43,7 @@ import type {
   PosStaffDTO,
   PosTableDTO,
 } from '@reberon/contracts';
-import { ApiError, del, get, patch, post } from '@/lib/api';
+import { ApiError, OfflineQueuedError, del, get, patch, post } from '@/lib/api';
 import { useMe } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { dateTime } from '@/lib/format';
@@ -68,6 +68,7 @@ import {
   toMajorStr,
   unitPrice,
   useNow,
+  printOfflineSlip,
 } from '@/components/pos/pos-kit';
 import { BillCard, KitchenBoard } from '@/components/pos/boards';
 import { SettleDialog } from '@/components/pos/settle-dialog';
@@ -434,7 +435,33 @@ export default function PosPage() {
         });
       resetTicket();
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not save the bill'),
+    onError: (e, settleNow) => {
+      // Offline: the till keeps selling. The bill is kept on this device, a provisional slip
+      // can be printed now, and the real bill number and receipt arrive when it syncs.
+      if (e instanceof OfflineQueuedError) {
+        const where = tableOrRoom.trim() || targetOpenOrder?.tableOrRoom || editingOpenOrder?.tableOrRoom || 'Walk-up';
+        const slip = {
+          ref: `OFF-${e.item.id.slice(0, 6).toUpperCase()}`,
+          outlet: currentOutlet?.name ?? 'POS',
+          where,
+          servedBy: servedByName.trim() || me.name,
+          currency,
+          lines: cart.map((l) => ({ name: l.item.name, qty: l.quantity, unit: (unitPrice(l.item, currency) ?? 0n).toString(), notes: l.notes })),
+          discount: (discountMinor ?? 0n).toString(),
+          total: total.toString(),
+          paid: settleNow ? paymentMethod : null,
+          at: new Date().toISOString(),
+        };
+        toast.success(`${where} saved offline · ${money(slip.total, currency)}`, {
+          description: settleNow ? 'Paid — the receipt is issued when the connection is back.' : 'Sent to the kitchen list on this device — syncs when the connection is back.',
+          action: { label: 'Print slip', onClick: () => printOfflineSlip(slip) },
+          duration: 10_000,
+        });
+        resetTicket();
+        return;
+      }
+      toast.error(e instanceof ApiError ? e.message : 'Could not save the bill');
+    },
   });
 
   const updateStatus = useMutation({

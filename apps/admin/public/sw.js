@@ -39,6 +39,9 @@ self.addEventListener('activate', (event) => {
       if (self.registration.navigationPreload) await self.registration.navigationPreload.enable().catch(() => undefined);
       await self.clients.claim();
       broadcast({ type: 'sw-activated', version: VERSION });
+      // New release: save every screen again in the background (needs a signed-in cookie; skipped otherwise).
+      const routes = await metaGet('routes');
+      if (Array.isArray(routes) && routes.length) precacheAll(routes).catch(() => undefined);
     })(),
   );
 });
@@ -128,6 +131,8 @@ async function page(event, req) {
   if (res) return res;
   const hit = (await cache.match(key)) || (await cache.match(key, { ignoreSearch: true }));
   if (hit) return hit;
+  const tpl = await fromTemplate(cache, req.url);
+  if (tpl) return tpl;
   // Slow but alive: keep waiting for the real page rather than show the offline card.
   const late = await network.catch(() => null);
   if (late) return late;
@@ -138,6 +143,7 @@ async function apiNetworkFirst(event, req) {
   const cache = await caches.open(API);
   const scope = (await metaGet('userId')) || 'anon';
   const key = `${self.location.origin}/__rb/${scope}${new URL(req.url).pathname}${new URL(req.url).search}`;
+  event.waitUntil(remember(event.clientId, new URL(req.url)).catch(() => undefined));
   const network = (async () => {
     const res = await fetch(req);
     if (res.ok && (res.headers.get('content-type') || '').includes('application/json')) {
@@ -150,7 +156,7 @@ async function apiNetworkFirst(event, req) {
   event.waitUntil(network.catch(() => undefined));
   const res = await withTimeout(network, API_TIMEOUT);
   if (res && (res.ok || res.status < 500)) return res;
-  const hit = await cache.match(key);
+  const hit = (await cache.match(key)) || (await newestSamePath(cache, key));
   if (hit) {
     const h = new Headers(hit.headers);
     h.set('x-rb-cache', hit.headers.get('x-rb-saved-at') || 'unknown');
@@ -174,6 +180,161 @@ function offlinePage(path) {
 <style>:root{color-scheme:light dark}body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;background:#F4F5F7;color:#1A1E43}@media(prefers-color-scheme:dark){body{background:#0B0E22;color:#F4F5F7}}main{max-width:26rem;padding:2rem;text-align:center}img{width:64px;height:64px;border-radius:16px}h1{font-size:1.25rem;margin:1rem 0 .5rem}p{opacity:.75}a,button{display:inline-block;margin:.5rem .25rem 0;padding:.6rem 1.1rem;border-radius:999px;border:0;background:#E88432;color:#fff;font:inherit;font-weight:600;text-decoration:none;cursor:pointer}a.ghost{background:transparent;color:inherit;border:1px solid currentColor;opacity:.8}</style></head>
 <body><main><img src="/pwa/maskable-192.png" alt=""><h1>This page isn’t saved offline yet</h1><p><code>${path.replace(/[<>&"]/g, '')}</code> hasn’t been opened on this device while online. Everything you have opened before still works, and changes you make are kept and synced when the connection returns.</p><a href="/">Go to Today</a><a class="ghost" href="/desk">Front desk</a><button onclick="location.reload()">Try again</button></main></body></html>`;
   return new Response(html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+}
+
+/* ───────── every screen offline ───────── */
+
+const ID_LIKE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-z]{20,}|\d+)$/i;
+const segs = (u) => new URL(u, self.location.origin).pathname.split('/').filter(Boolean);
+const pattern = (path) => '/' + path.split('/').filter(Boolean).map((x) => (ID_LIKE.test(x) ? ':id' : x)).join('/');
+
+/**
+ * A detail page (/reservations/<id>) that was never opened: take any saved page of the
+ * same shape (a template is saved for every detail route) and swap the id everywhere in
+ * it, so the server-rendered HTML and the router agree on which record this is.
+ */
+async function fromTemplate(cache, url) {
+  const want = segs(url);
+  if (!want.some((x) => ID_LIKE.test(x))) return null;
+  const keys = await cache.keys();
+  let best = null;
+  for (const k of keys) {
+    const have = segs(k.url);
+    if (have.length !== want.length) continue;
+    let ok = true;
+    const swaps = [];
+    for (let i = 0; i < want.length; i++) {
+      if (have[i] === want[i]) continue;
+      if (ID_LIKE.test(have[i]) && ID_LIKE.test(want[i])) swaps.push([have[i], want[i]]);
+      else { ok = false; break; }
+    }
+    if (!ok || !swaps.length) continue;
+    best = { k, swaps };
+    if (have.some((x) => x.startsWith('00000000-'))) break; // prefer the clean template
+  }
+  if (!best) return null;
+  const res = await cache.match(best.k);
+  if (!res) return null;
+  let html = await res.text();
+  for (const [from, to] of best.swaps) html = html.split(from).join(to);
+  return new Response(html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'x-rb-template': '1' } });
+}
+
+/** The desk asks for today's date; offline tomorrow, yesterday's copy of the same screen beats nothing. */
+async function newestSamePath(cache, key) {
+  const path = key.split('?')[0];
+  let best = null;
+  let bestAt = 0;
+  for (const k of await cache.keys()) {
+    if (k.url.split('?')[0] !== path) continue;
+    const r = await cache.match(k);
+    const at = Date.parse((r && r.headers.get('x-rb-saved-at')) || '') || 0;
+    if (r && at >= bestAt) { best = r; bestAt = at; }
+  }
+  return best;
+}
+
+/** Which API reads each screen makes — so the worker can refresh them without opening the screen. */
+let apimap = null;
+let apimapDirty = false;
+async function remember(clientId, apiUrl) {
+  if (!clientId) return;
+  const client = await self.clients.get(clientId);
+  if (!client) return;
+  const screen = pattern(new URL(client.url).pathname);
+  apimap ??= (await metaGet('apimap')) || {};
+  const list = (apimap[screen] ??= []);
+  const u = apiUrl.pathname + apiUrl.search;
+  if (list.includes(u)) return;
+  list.push(u);
+  if (list.length > 40) list.shift();
+  if (!apimapDirty) {
+    apimapDirty = true;
+    setTimeout(() => { apimapDirty = false; metaPut('apimap', apimap); }, 3000);
+  }
+}
+
+let refreshing = null;
+/** Re-download every API read the screens are known to make (newest first, max 400). */
+function refreshData() {
+  refreshing ??= (async () => {
+    const map = apimap || (await metaGet('apimap')) || {};
+    const scope = (await metaGet('userId')) || 'anon';
+    const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
+    const urls = [...new Set(Object.values(map).flat())]
+      // a dated read is refreshed for today, not the day it was first seen
+      .map((u) => u.replace(/([?&](?:date|day)=)\d{4}-\d{2}-\d{2}/, `$1${today}`))
+      .slice(-400);
+    const cache = await caches.open(API);
+    let n = 0;
+    await pool(urls, 4, async (u) => {
+      try {
+        const res = await fetch(u, { credentials: 'include', headers: { 'x-reberon-client': 'admin' } });
+        if (res.ok && (res.headers.get('content-type') || '').includes('application/json')) {
+          await cache.put(`${self.location.origin}/__rb/${scope}${u}`, new Response(await res.blob(), { headers: { 'content-type': 'application/json', 'x-rb-saved-at': new Date().toISOString() } }));
+          n += 1;
+        }
+      } catch {}
+    });
+    await metaPut('dataRefreshedAt', Date.now());
+    broadcast({ type: 'data-refreshed', count: n, total: urls.length });
+    return n;
+  })().finally(() => (refreshing = null));
+  return refreshing;
+}
+
+async function pool(items, size, fn) {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => {
+    while (i < items.length) await fn(items[i++]);
+  }));
+}
+
+let precaching = null;
+/**
+ * Save every screen of the app: its HTML and every code file it references.
+ * Detail routes are saved once with a placeholder id and used as templates.
+ */
+function precacheAll(routes) {
+  precaching ??= (async () => {
+    const pages = await caches.open(PAGES);
+    const statics = await caches.open(STATIC);
+    const assets = new Set();
+    let done = 0;
+    let saved = 0;
+    let signedOut = false;
+    broadcast({ type: 'precache-start', total: routes.length });
+    await pool(routes, 4, async (r) => {
+      try {
+        const res = await fetch(r, { credentials: 'include', headers: { accept: 'text/html' } });
+        if (res.redirected || new URL(res.url).pathname.startsWith('/login')) signedOut = true;
+        else if (res.ok) {
+          const html = await res.clone().text();
+          await pages.put(pageKey(new URL(r, self.location.origin).toString()), res);
+          for (const m of html.matchAll(/\/_next\/static\/[^"'\\\s)<>]+/g)) assets.add(m[0]);
+          saved += 1;
+        }
+      } catch {}
+      done += 1;
+      broadcast({ type: 'precache-progress', done, total: routes.length, phase: 'screens' });
+    });
+    const missing = [];
+    for (const a of assets) if (!(await statics.match(a))) missing.push(a);
+    let got = 0;
+    await pool(missing, 6, async (a) => {
+      try {
+        const res = await fetch(a);
+        if (res.ok) await statics.put(a, res);
+      } catch {}
+      got += 1;
+      if (got % 10 === 0 || got === missing.length) broadcast({ type: 'precache-progress', done: got, total: missing.length, phase: 'code' });
+    });
+    await metaPut('precachedAt', Date.now());
+    await metaPut('precachedVersion', VERSION);
+    broadcast({ type: 'precache-done', saved, total: routes.length, assets: assets.size, signedOut });
+    return { saved, signedOut };
+  })().finally(() => (precaching = null));
+  return precaching;
 }
 
 /* ───────── IndexedDB (shared schema with lib/offline/idb.ts) ───────── */
@@ -315,14 +476,7 @@ self.addEventListener('periodicsync', (event) => {
   event.waitUntil(
     (async () => {
       await replay().catch(() => undefined);
-      const scope = (await metaGet('userId')) || 'anon';
-      const cache = await caches.open(API);
-      for (const path of ['/v1/admin/auth/me', '/v1/admin/pulse', '/v1/admin/desk', '/v1/admin/live-console', '/v1/admin/rack', '/v1/admin/housekeeping']) {
-        try {
-          const res = await fetch(path, { credentials: 'include', headers: { 'x-reberon-client': 'admin' } });
-          if (res.ok) await cache.put(`${self.location.origin}/__rb/${scope}${path}`, new Response(await res.blob(), { headers: { 'content-type': 'application/json', 'x-rb-saved-at': new Date().toISOString() } }));
-        } catch {}
-      }
+      await refreshData();
     })(),
   );
 });
@@ -334,6 +488,10 @@ self.addEventListener('message', (event) => {
   const reply = (data) => event.source && event.source.postMessage(data);
   if (msg.type === 'SKIP_WAITING') self.skipWaiting();
   if (msg.type === 'SYNC_NOW') event.waitUntil(replay());
+  if (msg.type === 'PRECACHE_ALL' && Array.isArray(msg.routes)) {
+    event.waitUntil(metaPut('routes', msg.routes).then(() => precacheAll(msg.routes)).then(() => (msg.withData ? refreshData() : undefined)));
+  }
+  if (msg.type === 'REFRESH_DATA') event.waitUntil(refreshData());
   if (msg.type === 'CLEAR_USER_DATA') {
     event.waitUntil(Promise.all([caches.delete(API), caches.delete(PAGES)]).then(() => reply({ type: 'cleared' })));
   }
