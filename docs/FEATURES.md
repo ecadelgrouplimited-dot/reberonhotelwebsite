@@ -1,298 +1,252 @@
-# Reberon Hotel Suite — what has been built
+# Reberon Hotel Suite — Master Feature Specification & Technical Reference
 
-*Status as of 1 October 2026.*
+*Comprehensive system documentation as of November 2026 (incorporating ADR-001 through ADR-033).*
 
-This document lists every feature that exists today, where to find it, and what is switched off until the hotel is ready.
+The **Reberon Hotel Suite** is a unified, offline-first hospitality management and guest experience platform engineered specifically for **Reberon Hotel**, situated at 1,900 m on the slopes of Mount Elgon in Kapchorwa, Uganda.
 
-The plan behind it lives in [`docs/planning/`](planning/00-README.md). Steps to go live are in [`planning/13-deployment.md`](planning/13-deployment.md).
-
-The suite has three parts:
-
-| Part | Who uses it | Address in development |
-|---|---|---|
-| **The website** | Guests | `http://localhost:3000` |
-| **The House** (management platform) | Hotel staff | `http://localhost:3001` |
-| **The API** | Both of the above; never used directly | `http://localhost:4000` |
-
-Nothing guest-facing is hard-coded. Every word, photo, price and page on the website comes from the House.
-
-## At a glance
-
-| Area | Spec modules | State |
-|---|---|---|
-| Website, rooms, Kapchorwa guide, enquiries, first-stay list | M01–M03, M10, M11, M19 | **Live** |
-| Content management (pages, media, publishing) | M01, M22 | **Live** |
-| Rates, availability, online booking, payments, confirmations | M05–M09, M12, M21 | Built, **switched off** until rates and Pesapal keys exist |
-| Front desk, room rack, housekeeping, guests, feedback, reports | M12–M15, M21 | **Live** in the House |
-| Virtual tours | M04 | Built, **switched off** until the owner is ready |
-| Messages to guests (email, SMS, WhatsApp) | M09, M10 | Email **live**. SMS and WhatsApp work by hand until their keys are entered |
-| Integrations vault (Pesapal, SMS, WhatsApp, email keys) | M22 | **Live**, empty |
-| People and access | M22 | **Live** |
-| Receipts, refund notes, invoices | M08, M09 | **Live** |
-| Deployment and continuous integration | — | Ready; waits for a domain and a server |
-
-Features marked "switched off" are flipped on by the owner in **Settings → Features**. No developer is needed.
+The suite comprises three tightly integrated applications built on top of shared core packages:
+1. **The Guest Website (`apps/web`)** — High-performance, SEO-optimized public portal, online booking engine, Sipi AI Concierge, and guest self-service hub.
+2. **The House Management Platform (`apps/admin`)** — Installable, offline-first Progressive Web Application (PWA) powering front desk operations, housekeeping, kitchen/bar POS, health club/spa, inventory, HR, accounting, and content management.
+3. **The Core API (`apps/api`)** — NestJS backend providing authoritative validation, database transaction boundaries, Redis-backed idempotency, immutable document generation, and external service orchestration.
 
 ---
 
-## 1. The website (for guests)
+## Architecture & Foundational Principles
 
-**Pages built from blocks.** Every page is a stack of blocks that staff arrange in the House. The available blocks are:
+```mermaid
+flowchart TD
+  subgraph Public ["Guest Facing"]
+    W["Web App (apps/web)<br/>Next.js 16 + Server Components"]
+    G["Guest Self-Service (/stay)<br/>Folios, Feedback, Documents"]
+    AI["Sipi AI Concierge<br/>Interactive Assistant"]
+  end
 
-- Hero, story, stats, features
-- Room grid and room spotlight
-- Facilities
-- Gallery (masonry, filmstrip or mosaic)
-- Hotel-rising timeline
-- Destination cards, journey, seasons
-- Quote, questions (FAQ), contact card, map
-- Enquiry form, first-stay form, call-to-action band
-- Live weather strip, guest voices, virtual tour, package cards
-- Rich text, spacer
+  subgraph Staff ["Staff & Management"]
+    H["The House (apps/admin)<br/>Offline-First PWA + Service Worker"]
+    IDB[("IndexedDB Outbox<br/>Offline Actions Queue")]
+    PWA["Web Push & Background Sync"]
+  end
 
-Other website features:
+  subgraph Backend ["Backend Core"]
+    API["Core API (apps/api)<br/>NestJS Modular Monolith"]
+    PG[("PostgreSQL 16 Database<br/>Prisma ORM (77 Models)")]
+    RD[("Redis 7<br/>BullMQ & 24h Idempotency")]
+  end
 
-- **Rooms.** A page per room type with:
-  - a gallery and the room's facts (sleeps, bed, size, view)
-  - amenities and a starting price, switchable between UGX and USD
-  - a "walk this room" tour, once tours are switched on
-- **Kapchorwa.** A guide to Sipi Falls, Mount Elgon, coffee, getting here and when to come.
-- **Hotel rising.** Construction progress with photos and milestones.
-- **Contact.**
-  - Click-to-chat on WhatsApp, with the room and dates already in the first message.
-  - An enquiry form that lands in the House inbox.
-  - The guest gets an acknowledgement with the reply-time promise.
-- **First-stay list.** Before opening, guests claim a first stay: name, phone, dates and room type.
-- **Online booking at `/book`** (switched off for now):
-  - Search, then a room, then extras, then the guest's details, then payment.
-  - Real availability and prices for every night.
-  - Rooms are held for 20 minutes while the guest pays.
-  - Payment by Pesapal (card and mobile money).
-- **Your stay at `/stay`.** Guests find their booking with the booking code and their phone number. There they can:
-  - see the dates, room and what they have paid
-  - pay the balance
-  - open and print their receipts and invoices
-  - tell the hotel how the stay was
+  W -->|Read/Book/Enquire| API
+  G -->|View/Pay/Verify| API
+  AI -->|Knowledge Base & Booking| API
+  H -->|Network Reads/Writes| API
+  H <-->|Offline Cache/Replay| IDB
+  IDB -->|Replay on Reconnect| API
+  PWA <-->|Push Alerts & Sync| API
+  API --> PG
+  API --> RD
+```
 
-  Optionally, a guest must also enter a code texted to them (once SMS is connected).
-- **Check a receipt at `/verify`.** Anyone holding a Reberon receipt can confirm it is genuine using its number and check code.
-- **Honesty rules.**
-  - Drawings and renders are labelled as drawings.
-  - Construction progress shows only what really exists.
-  - "Coming soon" facilities are labelled as such.
-- **Built to be found and fast.**
-  - Search-engine data (hotel, rooms, FAQs, breadcrumbs), a sitemap and share images.
-  - Scroll animations that need no JavaScript.
-  - Images served at the right size for each screen.
+### 1. Dual-Currency Financial Integrity (ADR-007)
+- **Zero Silent Conversions**: Monetary values are permanently stored as integers in minor units alongside their ISO currency code (`UGX` and `USD`). UGX and USD are never summed or converted silently.
+- **Folio Immutability**: All guest billing ledgers, restaurant bills, and invoices are strictly append-only. Mistakes are corrected by posting offset lines (`ADJUSTMENT`, `DISCOUNT`, `WRITE_OFF`), never by modifying or deleting historical rows.
+- **Gap-Free Numbering**: Official documents (`RCT` receipts, `INV` invoices, `RFD` refund notes) are sequenced in atomic PostgreSQL transactions without gaps.
 
-## 2. The House (for staff)
+### 2. Double-Booking & Overselling Prevention (ADR-018)
+- Room occupancy is enforced via PostgreSQL exclusion constraints on `RoomAssignment` ranges.
+- Room blocks (e.g. for maintenance or deep cleans) raise `InventoryDay.blockedRooms` atomically. An allocation request that exceeds inventory availability is refused at the database level.
 
-Each person sees only the screens their access allows (see §3.1).
+### 3. Offline-First PWA Architecture (ADR-029 & ADR-030)
+- **Preload-On-Boot**: The service worker (`sw.js`) automatically pre-caches all 45 permitted `/app/(house)` routes and script dependencies on initial sign-in and upon new version deployments.
+- **Three-Tier Caching**:
+  - Static bundles: Cache-First.
+  - Page routes: Network-First with a 3.5s timeout fallback to cached copies.
+  - API reads: Cached per signed-in user with background revalidation every 15 minutes.
+- **IndexedDB Outbox & Redis Idempotency**: Offline mutations are stamped with unique `Idempotency-Key` headers and queued in IndexedDB. Upon reconnection or via Background Sync, mutations replay against the API's global `IdempotencyInterceptor` (backed by Redis with a 24-hour TTL) guaranteeing exactly-once execution.
+- **Provisional POS Receipts**: Till staff can continue ringing up food, drinks, and day passes when offline; provisional slips print immediately, and fiscal numbered receipts are issued automatically upon synchronization.
 
-### Everyday
-- **Today.** The day at a glance: arrivals, messages, website health.
-  Housekeeping staff land straight on their cleaning list instead.
-- **Inbox.** Website enquiries and WhatsApp conversations in one list. Staff assign, reply and close them.
-- **First-stay list.** Who asked for a first stay. Staff contact them, then convert them into a reservation in one step.
-- **Sent messages.** Every email, SMS and WhatsApp sent to a guest. Messages for channels that are not connected yet wait here, with a one-tap "send from WhatsApp" link.
+---
 
-### Website
-- **Publishing.** Every unpublished change across the site, in one place.
-- **Pages.** A block page builder with:
-  - autosaved drafts and a live preview of the real site
-  - scheduled publishing and version history with restore
-  - automatic redirects when a page's address changes
+## Module 1: The Guest-Facing Website (`apps/web`)
 
-  Changes appear on the website within about a second of publishing.
-- **Content editors.** Rooms, facilities, virtual tours, Kapchorwa guide, hotel rising, questions, navigation and redirects.
-- **Media.** A photo and document library:
-  - drag-and-drop upload, with every size generated automatically
-  - "replace everywhere" for a photo
-  - images in use cannot be deleted by accident
-- **Virtual tours.** One tour per place: each room type, the hall (cleared and set for forty), lobby, compound and "beyond the gate".
-  - Sources: Matterport, Kuula, YouTube or Vimeo, or an **image walk** built from the media library before any scan exists.
-  - Hotspots state facts: the bed, the bath, the view, how many it sleeps.
-  - A **live** tour added later replaces the pre-opening one everywhere, with no page edits.
-  - Anonymous analytics show who walked a room and then booked and paid.
+### 1. Modular Block Content Management (ADR-004, ADR-032)
+Every page on the public website is assembled from dynamic, customizable blocks managed within The House:
+- **Hero Block**: Immersive heading, brand tagline, seasonal backdrop image or video, and booking callout.
+- **Story Block**: Brand narrative, historical context of Mount Elgon and Kapchorwa coffee heritage.
+- **Room Grid & Room Spotlight**: Showcases room categories with pricing, capacity, bed configuration, views, and walk-through tours.
+- **Facilities Block**: Displays amenities and hotel facilities using structured details from `Facility.details`.
+- **Cards Block**: Configurable display formats (grid, carousel, or text-over-image cards) for packages, dining specials, and activities.
+- **Video Block**: Lazy-loaded player supporting local uploads, YouTube, and Vimeo; defers external network calls until play is clicked.
+- **Photo-Book Gallery Block**: Masonry, filmstrip, or mosaic layouts displaying media assets with per-photo captions, alt text, and photographer credits.
+- **Hotel Rising Block**: Construction and property development milestone timeline with authentic photography and architecture renders.
+- **Kapchorwa Destination Block**: Regional highlights, waterfall trails, coffee experiences, and seasonal guides.
+- **FAQ Block**: Categorized frequently asked questions with schema.org accordion markup.
+- **Live Weather Block**: Real-time Kapchorwa weather and highland climate indicators.
+- **Guest Voices Block**: Verified testimonials and reviews curated by hotel management.
+- **Enquiry & Waitlist Blocks**: Interactive forms with validation and reply-time promises.
 
-### Bookings
-- **Reservations.**
-  - Every booking, whatever the source: website, WhatsApp, phone or walk-in.
-  - New bookings for phone and WhatsApp guests, either confirmed straight away or held with a payment link.
-  - Each booking page shows:
-    - the bill, with every charge and payment in order; lines are never edited
-    - payments, refunds and cancellations, with the refund worked out from the booking's cancellation terms
-    - notes, messages to the guest, receipts and history
-- **Calendar and rates.**
-  - Prices per night, per rate plan, in UGX and USD.
-  - Rooms available per night; nights can be closed to sale.
-  - Rate plans: bed and breakfast, room only, long stay.
-- **Extras and packages.** Transfers, guided walks, meals and late check-out. Packages such as First Light, Sipi Sunday and Seed to Cup.
-- **Receipts.** The register of every receipt, refund note and invoice (see §3.3).
-- **Owner brief.** Tomorrow's arrivals, tonight's occupancy and money received. Emailed to the owners at 19:00.
+### 2. Sipi AI Concierge Widget
+- **Local Intelligence**: Context-aware assistant trained on Kapchorwa topography, Sipi Falls hiking trails, Mount Elgon National Park excursions, coffee tours, and hotel policies.
+- **Booking & Availability Assist**: Answers guest queries about room categories, amenities, rates, and availability.
+- **WhatsApp Handoff**: Allows seamless transition from web chat to direct WhatsApp conversation with hotel staff with context pre-filled.
 
-### The house (daily operations)
-- **Front desk.** Designed for a tablet, with 56 px buttons. It shows today's arrivals, guests in the house, departures, and guests who were due earlier but never arrived.
-  - **Check-in:**
-    - choose a room (clean ones are suggested)
-    - take the balance
-    - record the ID document; the number is stored encrypted and only the last four digits are ever shown
-    - offer to print the receipt
-  - **Check-out:**
-    - shows the bill and takes the balance
-    - handles early departures; only a manager can close a bill with money still owed
-    - asks how the stay was
-    - produces the numbered invoice, ready to print
-  - Walk-ins, no-shows, moving a guest to another room, and adding charges or credits to the bill.
-- **Room rack.**
-  - Every room by floor: clean, dirty, occupied, inspected, blocked or out of order, with who is in it and who arrives today.
-  - A room can be taken off sale for maintenance. If that would oversell a night, it is refused.
-- **Housekeeping.** Designed for a phone.
-  - Each task goes start → done → inspected.
-  - Rooms with a guest arriving today come first.
-  - Stay-over tidies, with a "not today" option.
-  - No money or phone numbers are ever shown here.
-- **Guests.** One profile per person:
-  - the whole stay history, stays and nights
-  - preferred room, tags, VIP flag and notes
-  - what they told the hotel
+### 3. Room Exploration & Rate Engine
+- Dedicated routes for each room type (`/rooms/[slug]`).
+- Instant currency toggle between **UGX** and **USD**.
+- Specifications: maximum occupancy, bed configuration, room square meters, mountain/falls views.
+- High-definition gallery and 360-degree virtual tour integration.
 
-  Returning guests show as "2nd stay" at the desk. Duplicate records are spotted and can be merged.
-- **Feedback.** Good / OK / Not good, from the desk or the guest's stay page. Anything less than good waits until someone deals with it. With the guest's consent, the owner can put their words on the website as "Guest voices".
-- **Reports.** Occupancy, average rate (ADR) and revenue per available room (RevPAR). Also room revenue and money received, where bookings come from and how far ahead people book, with a CSV export. UGX and USD are never mixed.
+### 4. Online Booking Engine (`/book`)
+- **Direct Date Search**: Real-time room availability calculation across selected check-in and check-out dates.
+- **Atomic 20-Minute Holds**: Selected rooms are placed on a temporary hold while guests complete details and payments.
+- **Add-On Extras**: Mountain guide hire, airport/Mbale transfers, packed picnic lunches, and late check-outs.
+- **Payment Processing**: Seamless payment gateway integration (Pesapal) supporting Visa, Mastercard, MTN Mobile Money, and Airtel Money.
 
-### Admin
-- **Settings.**
-  - Hotel details, contact numbers and check-in times.
-  - Receipt details: company name, TIN, VAT, footer, default paper.
-  - Search defaults.
-  - Feature switches (owner only).
-- **Messages.** The words guests receive, editable for each message and channel:
-  - confirmation, failed payment, hold ended, cancellation
-  - "before you come", "are you still coming?", thank you
-  - receipt, one-time code
+### 5. Guest Self-Service Portal (`/stay`)
+- Lookup via booking code (`RB-XXXXX`) and guest phone number.
+- Verified access via SMS/Email OTP (when configured).
+- Review itinerary, room allocation, check-in instructions, and payment history.
+- Settle outstanding folio balances online via card or mobile money.
+- Download and print original receipts, invoices, and stay statements.
+- Submit post-stay feedback and private reviews directly to hotel leadership.
 
-  Each comes with a live preview, an SMS length counter and a test send.
-- **Integrations** (owner only). Keys for Pesapal, Africa's Talking SMS, the WhatsApp Cloud API and email. Each has sandbox/live modes and a test-connection button.
-- **People and access** (owner only). See §3.1.
-- **Audit log.** Who changed what, and when, for every action in the House.
+### 6. Document Verification Portal (`/verify`)
+- Public verification tool allowing guests, corporate accountants, and tax authorities to verify any Reberon Hotel receipt, invoice, or quotation.
+- Validates the document number against the SHA-256 check code and confirms document status (Original, Copy, or Voided).
 
-## 3. Features in more depth
+---
 
-### 3.1 People and access
-- **Not everyone signs in.** Cleaners and guards can be on the staff list without a login. They can still be given rooms to clean.
-- **Access is per person.** The role is only a starting point: owner, manager, front desk or housekeeping. The owner switches single permissions on or off for each person. There are 37 permissions, each described in plain words, and those that touch money are marked.
-- **Sign-in hours** (Kampala time) and an **access end date** for relief or seasonal staff.
-- **Changes apply on the person's next click.** There is also a "sign out everywhere" button and a list of signed-in devices.
-- **Owner-only powers** stay with owners: managing people, holding keys, switching features. Nobody can change their own access, and the last owner cannot be locked out.
+## Module 2: The House Management Platform (`apps/admin`)
 
-### 3.2 Money
-- Amounts are stored exactly, in UGX and USD, and never converted between the two.
-- The bill is append-only: a mistake is corrected with a new line, never by editing an old one.
-- Two guests can never get the last room. The database refuses it, and this was tested with five simultaneous bookings.
-- One room can never be given to two stays on the same night. The database refuses that too.
-- Pesapal payment notifications are double-checked with Pesapal and counted once, even if they arrive twice.
-- Unpaid holds release their rooms automatically.
+### 1. Command & Comms Workspace (`/`, `apps/admin/app/(house)/page.tsx`)
+- **Role-Adaptive Workspace**:
+  - **Owner / GM**: Executive KPI dashboard (occupancy %, RevPAR, ADR, revenue inflow, aged receivables, pending approvals).
+  - **Front Desk**: High-priority operational dials, arrivals queue, expected departures, in-house movement, and fast booking actions.
+  - **Housekeeping**: Streamlined task board displaying dirty, in-progress, and ready rooms.
+- **Quick Action Bar**: Walk-in bookings, create reservation, issue POS receipt, record expense, request inventory stock.
+- **Live Alert Stream**: Real-time system notifications for guest arrivals, online bookings, and critical operational events.
+- **Collapsible Sidebar**: Full-screen workspace toggle with session persistence.
 
-### 3.3 Receipts, refund notes and invoices
-- **What is issued.**
-  - A **receipt** for every payment. It is emailed automatically when the guest paid online.
-  - A **refund note** for every refund.
-  - An **invoice** at check-out.
-  - Numbers run in order with no gaps, e.g. `RCT-2026-00001`, `RFD-…`, `INV-…`.
-- **What a document shows.**
-  - It is frozen once issued: a reprint shows exactly what the guest was given.
-  - The first print says ORIGINAL; later prints say COPY 2, 3…
-  - The amount in words ("Uganda Shillings … Only"), the payment method and reference, and the balance.
-  - The TIN, the VAT included (when the hotel is VAT-registered) and a **check code**.
-- **Printing and sending.**
-  - Print on A4 or an **80 mm receipt printer**.
-  - Send by email, SMS or WhatsApp.
-  - Guests can open their own copies.
-- **Corrections.** A document is **voided** (watermarked VOID, with the reason) and a corrected one reissued, for example in a company's name.
-- A **statement** of the live bill can be printed at any time. It says "not a receipt".
-- The register shows totals and exports to CSV for the accountant.
-- These are hotel documents, not URA EFRIS fiscal invoices.
+### 2. Front Desk & Room Rack (`/desk`, `/rack`)
+- **Touch-Optimized Tablet Interface**: 56px touch targets for rapid desk operations.
+- **Arrivals & Check-In**: Room allocation suggestions (prioritizing inspected and clean rooms), identity document recording with AES-256 encrypted storage (displaying only the last 4 digits), and deposit collection.
+- **In-House Guest Management**: Add folio charges, process room moves within the same room category, log wake-up calls and guest requests.
+- **Departures & Check-Out**: Review itemized folio charges, settle balances across multiple payment rails, handle manager-authorized bill closures, and generate numbered tax invoices.
+- **Interactive Room Rack Grid**: Real-time room statuses across all floors (Vacant Clean, Vacant Dirty, Occupied, Inspected, Maintenance Block). Prevents maintenance blocks that would cause overselling.
 
-### 3.4 Messages to guests
-- **Sent automatically:**
-  - the confirmation
-  - "payment did not go through" and "hold ended"
-  - the cancellation notice
-  - the **pre-arrival note** at 10:00 the day before arrival
-  - the thank-you after check-out
-  - the receipt after an online payment
-- **Sent by the desk** from a reservation: "are you still coming?", or any other message.
-- **Channels:** email, SMS and WhatsApp. A WhatsApp message goes only to guests who opted in.
-- **Nothing is ever lost.** A channel that is not connected yet records the message for staff to send by hand.
+### 3. In-Place Reservation Amendment Suite (ADR-027, `/reservations/[id]`)
+- **In-Place Modifications**: Modify check-in/out dates, guest counts, room types, and add-on packages on existing reservations without cancellation and re-booking.
+- **Dry-Run Preview**: `POST /reservations/:id/amend` with `preview: true` returns policy comparisons, price deltas, and folio adjustments without persisting changes.
+- **Atomic Inventory Swap**: Releases old room dates and reserves new dates in a single database transaction.
+- **Rate Freezing**: Retains the original booked night rate unless the desk explicitly opts to recalculate with current seasonal rates.
+- **Corrective Folio Posting**: Adjustments are recorded as transparent ledger entries (added night charge, removed night credit, rate difference), preserving financial history.
+- **Hold Management**: Confirm holds without upfront deposits, extend hold expiration windows, and take immediate deposits during booking creation.
 
-### 3.5 Security
-- **Keys:** encrypted in the database and never sent to a browser.
-- **Sign-in and sessions:**
-  - accounts lock after five failed sign-ins
-  - sessions rotate, and a stolen session token is detected
-- **Requests and website forms:**
-  - every staff action carries an anti-forgery header
-  - website forms are rate-limited
-- **Every staff action is audited.** The API enforces every permission. The screens only hide what a person cannot use.
+### 4. POS: Restaurant, Bar & Table Management (`/pos`, `/pos/tables`)
+- **Interactive Floor Plan**: Graphical visual layout of restaurant and lounge tables showing table numbers, guest capacities, and real-time occupancy.
+- **Open Tabs & Orders**: Create table tabs, walk-up bar orders, and room-charge bills.
+- **Item Modifiers & Notes**: Kitchen printing notes, drink preparations, dietary requirements.
+- **Charge to Room Folio**: Route restaurant and bar bills directly to an in-house guest's stay folio with guest signature validation.
+- **Shift & Drawer Reconciliations**: Cash-in, cash-out, opening float, shift closing reports, discrepancy tracking, and print summaries.
+- **Offline Resilient**: Continues operating during internet dropouts; prints provisional order slips and reconciles with the server upon reconnection.
 
-## 4. What is switched off, and what it waits for
+### 5. Health Club & Spa Management (`/health-club`)
+- **Day Pass Register**: Issue and log pool, sauna, steam, and gym day passes.
+- **Membership Management**: Track monthly and annual health club memberships, renewal dates, and emergency contacts.
+- **Spa Appointments**: Schedule massage and wellness treatments, assign spa therapists, and record session completion.
+- **Multi-Rail Settlement**: Accept cash, mobile money, credit cards, or bill treatments directly to room folios.
 
-| Switch or item | Waits for | Where |
+### 6. Inventory, Linen & Stock Management (`/inventory`, `/inventory/categories`)
+- **SKU Catalog**: Centralized inventory tracking across Food & Beverage, Housekeeping Consumables, Linen, Maintenance Supplies, and Retail.
+- **Stock Movement Ledger**: Full audit trail of stock receipts (purchase orders), internal dispatches, kitchen usage, breakage, and write-offs.
+- **Low-Stock Triggers**: Automated warnings when SKU levels reach or fall below minimum reorder thresholds.
+- **Linen Lifecycle Tracking**: Monitor sheet, duvet, and towel rotation between guest rooms, dirty store, laundry cycle, and clean linen room.
+
+### 7. Store Requisitions & Internal Handover (`/requisitions`)
+- **Departmental Requisition Workflow**: Staff submit requisitions for kitchen supplies, cleaning detergents, or bar stock.
+- **Two-Step Approval Chain**: Department heads and general managers approve or decline requests with justification notes.
+- **Dispatch Tracking**: Storekeeper marks items as issued, updating inventory balances automatically.
+- **Shift Handover Logbook**: Digital communication channel for shift managers to pin handover notes, VIP alerts, and maintenance follow-ups.
+
+### 8. Quotations, Conferences & Events (`/quotations`)
+- **Corporate & Group Quotes**: Build detailed proposals for weddings, corporate retreats, conferences, and tour groups.
+- **Custom Line Items**: Hall hire, PA system, buffet catering, tea breaks, accommodation blocks, and guided excursions.
+- **Lifecycle Progression**: `DRAFT` → `SENT` → `ACCEPTED` → `EXPIRED` → `REJECTED`.
+- **Deposit & Booking Conversion**: One-click conversion of accepted quotes into confirmed reservations and room allocations.
+
+### 9. Human Resources Suite (`/hr`, `/departments`)
+- **Staff Directory**: Employee records including full name, photo, job title, department, employment type, start/end dates, and salary.
+- **National ID Encryption**: Sensitive identity documents and National Identification Numbers (NIN) are stored with AES-256 encryption.
+- **Department Hierarchy**: Manage hotel departments (Front Office, Housekeeping, Food & Beverage, Kitchen, Maintenance, Security, Accounts).
+- **Shift Rostering**: Schedule weekly and monthly staff shift rosters (Morning, Afternoon, Night, Off).
+- **Leave Management**: Submit, review, and approve annual, sick, and compassionate leave requests with balance tracking.
+- **Payroll & Tax Records**: Record monthly salary payments, NSSF contributions, PAYE tax deductions, and print employee pay slips.
+
+### 10. Financial Intelligence & Owner Reports (ADR-028, `/reports`, `/brief`)
+- **Recognized Revenue vs. Cash Inflow**:
+  - *Recognized Revenue*: Nightly room stays (as slept), settled POS/spa charges (on date of service), and non-refundable fees.
+  - *Collected Cash*: Actual payments collected across all rails (cash, bank, Pesapal, mobile money) minus refunds. Room-folio POS transfers are never counted as cash collections.
+- **Aged Receivables**: Bucketed tracking of unpaid guest balances (0–7 days, 8–14 days, 15–30 days, 30+ days after departure).
+- **VAT & Tax Shares**: Built-in tax calculation extracting the VAT share contained within inclusive prices.
+- **Automated 19:00 Daily Briefing**: Scheduled background job that compiles daily revenue, occupancy, arrivals, and pending action items, and dispatches the summary to hotel owners.
+
+### 11. Unified Print & Export Engine (ADR-031, `apps/admin/lib/`)
+- **Branded A4 Letterhead Printing (`lib/print.ts`)**: Strips away screen navigation, filters, and action buttons, rendering clean A4 printable documents featuring official hotel letterhead, logo, contact information, date, user signature, and pagination.
+- **In-Browser Excel Generator (`lib/export.ts`)**: Generates true native `.xlsx` workbooks directly in the browser with zero external bloat: styled header rows, frozen panes, correct number types, and isolated currency columns.
+- **Branded PDF & Plain CSV**: Clean CSV export for accounting software ingestion, and styled PDF generation for formal reporting.
+
+### 12. Curated Typography & Theme Engine (ADR-033, `/settings`)
+- **Curated 26-Font Catalogue**: Curated selection of elegant serif, clean sans-serif, and display Google fonts self-hosted via `next/font`.
+- **Zero Third-Party Tracking**: No font requests connect to Google servers, preserving guest privacy and supporting 100% offline usage.
+- **Independent Configuration**: Configure heading fonts, body fonts, weights, tracking, and scaling separately for the public website and The House workspace.
+- **Live Preview Bridge**: Real-time synchronization of typography adjustments to the live draft website preview before saving.
+
+### 13. Security, Access Control & Audit Log (`/settings/users`, `/settings/audit`)
+- **37 Granular Permissions**: Exacting permissions controlling access to financial operations, rate modifications, cancellations, staff management, and system integrations.
+- **Sign-In Window & Expiry Constraints**: Restrict staff logins to specific working hours (e.g., 07:00–19:00 Kampala time) and enforce auto-expiring accounts for seasonal workers.
+- **Immediate Revocation**: Role changes and permission modifications take effect on the user's next request without waiting for session expiration.
+- **Tamper-Evident Audit Logging**: Every staff action (creations, edits, status transitions, voids, exports) is recorded with timestamp, user ID, IP address, and payload diff.
+
+---
+
+## Module 3: Central API & Data Specifications (`apps/api`, `packages/db`)
+
+### 1. Database Entity Overview (`packages/db/prisma/schema.prisma`)
+The system data model is partitioned into logical domains across 77 PostgreSQL entities:
+
+| Domain | Key Models | Operational Role |
 |---|---|---|
-| Online booking | Confirmed rates and Pesapal keys | Settings → Features, Integrations |
-| Virtual tours | The owner's go-ahead; later, a camera walk | Settings → Features, Website → Virtual tours |
-| SMS | An Africa's Talking account and an approved sender ID | Integrations |
-| WhatsApp Cloud API | A WhatsApp Business number and Meta-approved message templates | Integrations, Messages |
-| Code by SMS for "your stay" | SMS live | Settings → Features |
-| VAT line on invoices | VAT registration and a TIN | Settings → Receipts and invoices |
-| Production website | The domain and a server | [`planning/13-deployment.md`](planning/13-deployment.md) |
+| **Identity & Security** | `User`, `RoleDefinition`, `Session`, `UserToken`, `PushSubscription` | Staff authentication, granular permissions, push notification tokens. |
+| **Guest CRM & Comms** | `Contact`, `Conversation`, `Message`, `WaitlistEntry`, `StayOtp` | Unified guest profiles, inbox messaging, SMS/WhatsApp outbox, waitlist. |
+| **Catalog & Website CMS** | `Page`, `PageVersion`, `Facility`, `Destination`, `Tour`, `MediaAsset` | Block-based website content, image library, virtual tours, navigation. |
+| **Rooms & Availability** | `RoomType`, `Room`, `RatePlan`, `Rate`, `InventoryDay`, `RoomBlock` | Room definitions, daily rates, inventory counts, maintenance blocks. |
+| **Reservations & Billing** | `Reservation`, `ReservationRoom`, `Folio`, `FolioLine`, `PaymentIntent` | Bookings, folio ledger lines, Pesapal payment intents, guest balances. |
+| **Front Desk & Housekeeping** | `RoomAssignment`, `HousekeepingTask`, `Feedback`, `GuestRequest` | Occupancy tracking, cleaner task boards, guest sentiment surveys. |
+| **Restaurant & Bar POS** | `PosOutlet`, `PosTable`, `PosCategory`, `PosItem`, `PosOrder`, `PosOrderItem` | Tables, menu items, open orders, kitchen tickets, bill settlements. |
+| **Health Club & Spa** | `HealthClubMembership`, `HealthClubAccessLog` | Membership subscriptions, daily pool/gym access logs. |
+| **Banqueting & Events** | `Quotation`, `QuotationLine` | Corporate quotations, conference packages, event booking. |
+| **Inventory & Linen** | `InventoryItem`, `ItemCategory`, `StockMovement`, `Requisition` | SKU tracking, stock receipts, internal department requisitions. |
+| **Human Resources** | `HotelDepartment`, `StaffProfile`, `StaffShift`, `StaffLeaveRequest`, `StaffPayrollRecord` | Employee records, weekly rosters, leave approvals, payroll slips. |
+| **Fiscal Documents & Settings** | `IssuedDocument`, `DocumentSequence`, `Setting`, `Integration`, `AuditLog` | Gap-free receipts/invoices, encrypted API keys, system audit trail. |
 
-Spec items deliberately left for later:
+### 2. Core API Modules (`apps/api/src/modules/`)
+- **`AuthModule` & `UsersModule`**: Argon2id password hashing, rotating refresh tokens, session revocation, permission guards.
+- **`BookingModule`**: Reservation amendments, rate lookup, atomic inventory holds, cancellation policies, folio transactions.
+- **`HouseModule` & `FinanceModule`**: Front desk workflows, housekeeping boards, room rack management, financial revenue recognition, aged receivables, 19:00 owner briefings.
+- **`OperationsModule`**: Restaurant POS, table management, health club check-ins, inventory stock movements, store requisitions.
+- **`HrModule`**: Staff records, shift scheduling, leave approval pipelines, payroll calculations.
+- **`ContentModule`**: Block CMS endpoints, media replace tools, draft revisions, virtual tour player.
+- **`DocumentsModule`**: HTML and PDF rendering for receipts, invoices, refund notes, and folio statements.
+- **`InboxModule` & `NotificationsModule`**: Guest enquiry management, outbox message processing (Email, SMS, WhatsApp), alert rules.
+- **`PushModule`**: Web push subscriptions, VAPID key generation, background notifications.
 
-- Events and hall bookings (M17)
-- Food and drink posting at a till (M18)
-- Group quotes (M19)
-- Booking-portal channel management (M20)
-- Other languages
+---
 
-Open questions for the owner, such as the room mix, real phone numbers and logo, are listed in [`planning/12-decisions-log.md`](planning/12-decisions-log.md).
+## System Configuration & Deployment State
 
-## 5. Trying it
-
-- **Start:**
-  ```sh
-  pnpm infra:up
-  pnpm dev
-  ```
-  Full setup is in the [README](../README.md).
-- **Demo sign-ins.** The password is `Reberon@Elgon1900` for every account:
-
-  | Account | Role |
-  |---|---|
-  | `owner@reberonhotel.com` | Owner |
-  | `manager@reberonhotel.com` | Manager |
-  | `desk@reberonhotel.com` | Front desk |
-  | `housekeeping@reberonhotel.com` | Housekeeping |
-  | `relief.desk@reberonhotel.com` | Front desk without "take payments", 07:00–19:00, access ends after three months |
-
-- **Demo data:**
-  - three months of past stays, with guests in the house and arrivals today
-  - a dirty room and a room under maintenance
-  - a duplicate guest to merge (Grace Chebet)
-  - two staff without a login
-  - receipts and invoices for the history
-
-  Every demo row is marked and can be removed on launch day in one step.
-
-## Appendix: for developers
-
-| | |
-|---|---|
-| **Repository** | pnpm + Turborepo monorepo |
-| **Apps** | `apps/web` (Next.js 16), `apps/admin` (Next.js 16), `apps/api` (NestJS) |
-| **Packages** | `db` (Prisma 7 / PostgreSQL 16), `contracts` (Zod schemas and types shared by all three apps), `media`, `ui`, `utils` |
-| **Infrastructure** | Redis with BullMQ for queues and scheduled jobs; Mailpit for email in development |
-| **Tests** | 33 API integration tests (`pnpm --filter @reberon/api test`); typecheck and lint across the repo; CI in `.github/workflows/ci.yml` |
-| **Deploy** | Docker Compose with Caddy; `infra/deploy.sh`, `infra/backup.sh` |
-| **Decisions** | ADR-001 to ADR-025 in [`planning/12-decisions-log.md`](planning/12-decisions-log.md) |
+| Parameter | Specification | Live Environment |
+|---|---|---|
+| **Production Server** | Ubuntu VPS (`72.62.185.212`) | Active |
+| **Public Domain** | `https://reberonhotel.com` | Reverse proxied via Nginx / Port 3400 |
+| **Management Suite** | `https://reberonhotel.com:8443` | Reverse proxied via Nginx / Port 3401 |
+| **API Port** | `http://127.0.0.1:4400` | Internal only |
+| **Database** | PostgreSQL 16 on `127.0.0.1:5432` | 18 migrations applied |
+| **Redis** | Redis 7 on `127.0.0.1:6379` | BullMQ queues + Idempotency |
+| **System Services** | `reberonhotel-api.service`<br/>`reberonhotel-admin.service`<br/>`reberonhotel-web.service` | All units `active (running)` |
