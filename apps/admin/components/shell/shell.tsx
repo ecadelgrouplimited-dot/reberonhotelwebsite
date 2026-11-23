@@ -37,198 +37,11 @@ import { PwaProvider, usePwa } from '@/components/pwa/pwa-provider';
 import { ConnectionPill, InstallNudge, OfflineBanner, SyncCenter, UpdateBar } from '@/components/pwa/pwa-ui';
 import { CloudOff } from 'lucide-react';
 
-export interface BadgeInfo {
-  count: number;
-  tone: 'red' | 'amber' | 'green' | 'neutral';
-  tooltip: string;
-}
-
-export function useAdminPulse(enabled: boolean) {
-  return useQuery({
-    queryKey: ['admin-pulse'],
-    queryFn: () => get<AdminPulseDTO>('/pulse'),
-    enabled,
-    refetchInterval: 25_000,
-  });
-}
-
-function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey, BadgeInfo>> {
-  if (!pulse) return {};
-  const map: Partial<Record<NavBadgeKey, BadgeInfo>> = {};
-
-  // 1. Command & Comms — Amber for pending triage, Neutral for passive open threads, Red strictly for failures
-  if (pulse.inbox.newCount > 0) {
-    map.inbox = {
-      count: pulse.inbox.newCount,
-      tone: 'amber',
-      tooltip: `${pulse.inbox.newCount} new unread enquiries (${pulse.inbox.openCount} open total)`,
-    };
-  } else if (pulse.inbox.openCount > 0) {
-    map.inbox = {
-      count: pulse.inbox.openCount,
-      tone: 'neutral',
-      tooltip: `${pulse.inbox.openCount} active threads · all new enquiries triaged`,
-    };
-  }
-
-  if (pulse.waitlist.newCount > 0) {
-    map.waitlist = {
-      count: pulse.waitlist.newCount,
-      tone: 'amber',
-      tooltip: `${pulse.waitlist.newCount} uncontacted first-stay signups (${pulse.waitlist.totalActive} active)`,
-    };
-  } else if (pulse.waitlist.totalActive > 0) {
-    map.waitlist = {
-      count: pulse.waitlist.totalActive,
-      tone: 'neutral',
-      tooltip: `${pulse.waitlist.totalActive} waitlist signups contacted`,
-    };
-  }
-
-  if (pulse.cms.failedOutboundMessages24h > 0) {
-    map.messages = {
-      count: pulse.cms.failedOutboundMessages24h,
-      tone: 'red',
-      tooltip: `${pulse.cms.failedOutboundMessages24h} failed outbound messages in the last 24h`,
-    };
-  }
-
-  // 2. Front Desk & Stays — Red only if overdue arrivals; Amber for scheduled check-in/out tasks; Green for in-house
-  const deskActionCount =
-    pulse.desk.arrivalsToday +
-    pulse.desk.lateArrivals +
-    pulse.desk.departuresToday +
-    pulse.desk.pendingGuestRequests;
-  if (deskActionCount > 0) {
-    map.desk = {
-      count: deskActionCount,
-      tone: pulse.desk.lateArrivals > 0 ? 'red' : 'amber',
-      tooltip: `${pulse.desk.arrivalsToday} arrivals, ${pulse.desk.departuresToday} departures, ${pulse.desk.lateArrivals} overdue, ${pulse.desk.pendingGuestRequests} guest requests`,
-    };
-  } else if (pulse.desk.inHouse > 0) {
-    map.desk = {
-      count: pulse.desk.inHouse,
-      tone: 'green',
-      tooltip: `${pulse.desk.inHouse} stays (${pulse.desk.guestsInHouse} guests) currently in-house`,
-    };
-  }
-
-  if (pulse.reservations.heldCount > 0) {
-    map.reservations = {
-      count: pulse.reservations.heldCount,
-      tone: 'amber',
-      tooltip: `${pulse.reservations.heldCount} held booking(s) awaiting payment · ${pulse.reservations.confirmedCount} confirmed`,
-    };
-  } else if (pulse.reservations.confirmedCount > 0) {
-    map.reservations = {
-      count: pulse.reservations.confirmedCount,
-      tone: 'neutral',
-      tooltip: `${pulse.reservations.confirmedCount} confirmed reservation(s)`,
-    };
-  }
-
-  if (pulse.rooms.totalActive > 0 && pulse.rooms.vacantClean === 0) {
-    map.rack = {
-      count: pulse.rooms.occupied,
-      tone: 'red',
-      tooltip: `0 vacant clean rooms ready · ${pulse.rooms.occupied} occupied`,
-    };
-  }
-
-  const hkAttention = pulse.rooms.vacantDirty + pulse.rooms.hkTodoCount + pulse.rooms.hkDoneToInspect;
-  if (hkAttention > 0) {
-    map.housekeeping = {
-      count: hkAttention,
-      tone: pulse.rooms.vacantDirty > 0 && pulse.desk.arrivalsToday > pulse.rooms.vacantClean ? 'red' : 'amber',
-      tooltip: `${pulse.rooms.vacantDirty} dirty room(s), ${pulse.rooms.hkTodoCount} task(s) to clean, ${pulse.rooms.hkDoneToInspect} awaiting inspection`,
-    };
-  }
-
-  if (pulse.feedback.openIssues > 0) {
-    map.feedback = {
-      count: pulse.feedback.openIssues,
-      tone: 'red',
-      tooltip: `${pulse.feedback.openIssues} unresolved guest feedback issue(s)`,
-    };
-  }
-
-  // 3. Revenue & Billing
-  if (pulse.finance.receiptsIssuedToday > 0) {
-    map.receipts = {
-      count: pulse.finance.receiptsIssuedToday,
-      tone: 'green',
-      tooltip: `${pulse.finance.receiptsIssuedToday} official document(s) issued today`,
-    };
-  }
-
-  if (pulse.finance.pendingQuotations > 0) {
-    map.quotations = {
-      count: pulse.finance.pendingQuotations,
-      tone: 'amber',
-      tooltip: `${pulse.finance.pendingQuotations} draft/sent quotation(s) awaiting client confirmation`,
-    };
-  }
-
-  // 4. Operations & POS
-  if (pulse.operations.posOpenOrders > 0) {
-    map.pos = {
-      count: pulse.operations.posOpenOrders,
-      tone: 'amber',
-      tooltip: `${pulse.operations.posOpenOrders} active kitchen/bar order(s) in preparation`,
-    };
-  }
-
-  if (pulse.operations.healthClubInsideNow > 0) {
-    map.healthclub = {
-      count: pulse.operations.healthClubInsideNow,
-      tone: 'green',
-      tooltip: `${pulse.operations.healthClubInsideNow} guest(s) currently checked into Health Club & Spa`,
-    };
-  }
-
-  if (pulse.operations.lowStockCount > 0) {
-    map.inventory = {
-      count: pulse.operations.lowStockCount,
-      tone: 'red',
-      tooltip: `${pulse.operations.lowStockCount} inventory item(s) at or below reorder par level`,
-    };
-  }
-
-  if (pulse.operations.pendingRequisitions > 0) {
-    map.requisitions = {
-      count: pulse.operations.pendingRequisitions,
-      tone: pulse.operations.urgentRequisitions > 0 ? 'red' : 'amber',
-      tooltip: `${pulse.operations.pendingRequisitions} requisition(s) awaiting approval (${pulse.operations.urgentRequisitions} urgent)`,
-    };
-  }
-
-  // 5. Human Resources
-  if (pulse.hr.pendingLeaves > 0) {
-    map.leave = {
-      count: pulse.hr.pendingLeaves,
-      tone: 'amber',
-      tooltip: `${pulse.hr.pendingLeaves} leave request(s) pending review`,
-    };
-  }
-  if (pulse.hr.draftPayrolls > 0) {
-    map.payroll = {
-      count: pulse.hr.draftPayrolls,
-      tone: 'amber',
-      tooltip: `${pulse.hr.draftPayrolls} draft payroll record(s) awaiting disbursement`,
-    };
-  }
-
-  // 6. Website CMS
-  if (pulse.cms.unpublishedPages > 0) {
-    map.publishing = {
-      count: pulse.cms.unpublishedPages,
-      tone: 'neutral',
-      tooltip: `${pulse.cms.unpublishedPages} page(s) have unpublished draft changes`,
-    };
-  }
-
-  return map;
-}
+export { computeBadges, useAdminPulse, type BadgeInfo } from './badges';
+import { ContextMenuProvider } from '@/components/os/context-menu';
+import { DesktopHandlers } from '@/components/os/desktop';
+import { Dock, useDockVisible } from '@/components/os/dock';
+import { computeBadges, useAdminPulse, type BadgeInfo } from './badges';
 
 function NavBadge({ badge, compact = false }: { badge?: BadgeInfo; compact?: boolean }) {
   if (!badge || badge.count <= 0) return null;
@@ -612,7 +425,12 @@ function AccountMenu() {
   const qc = useQueryClient();
   const pwa = usePwa();
   const [dark, setDark] = useState(false);
-  useEffect(() => setDark(document.documentElement.getAttribute('data-theme') === 'dark'), []);
+  useEffect(() => {
+    setDark(document.documentElement.getAttribute('data-theme') === 'dark');
+    const sync = () => setDark(document.documentElement.getAttribute('data-theme') === 'dark');
+    window.addEventListener('rb:theme-changed', sync);
+    return () => window.removeEventListener('rb:theme-changed', sync);
+  }, []);
   if (!me) return <Skeleton className="size-9 rounded-full" />;
   const initials = me.name.split(' ').map((p) => p[0]).slice(0, 2).join('');
   const toggleTheme = () => {
@@ -696,8 +514,9 @@ export function Shell({ children }: { children: ReactNode }) {
   // Load persisted collapse state from localStorage
   useEffect(() => {
     try {
+      // New people start with the clean desktop (dock + Home); the sidebar is one click or ⌘B away.
       const saved = localStorage.getItem('rb-admin-sidebar-collapsed');
-      if (saved === 'true') {
+      if (saved !== 'false') {
         setSidebarCollapsed(true);
       }
     } catch {
@@ -716,6 +535,22 @@ export function Shell({ children }: { children: ReactNode }) {
       return next;
     });
   };
+
+  const dockVis = useDockVisible();
+  const dockRoom = !!me && dockVis.show && !dockVis.autohide;
+
+  // Menus, shortcuts and the dock ask the shell to open search or toggle the sidebar.
+  useEffect(() => {
+    const palette = () => setPaletteOpen(true);
+    const sidebar = () => toggleSidebar();
+    window.addEventListener('rb:palette', palette);
+    window.addEventListener('rb:sidebar', sidebar);
+    return () => {
+      window.removeEventListener('rb:palette', palette);
+      window.removeEventListener('rb:sidebar', sidebar);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Offline with nothing saved yet is not a signed-out session — only the server can say that.
   const offlineNoMe = isError && !(error instanceof ApiError && (error.status === 401 || error.status === 403));
@@ -748,6 +583,7 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => setDocumentAuthor(me?.name ?? null), [me?.name]);
 
   return (
+    <ContextMenuProvider>
     <PwaProvider me={me}>
     <div
       className={cn(
@@ -804,10 +640,10 @@ export function Shell({ children }: { children: ReactNode }) {
             )}
           </button>
 
-          <button type="button" onClick={() => setPaletteOpen(true)} className="flex h-8 w-full max-w-sm items-center gap-2 rounded-lg border border-line bg-surface px-3 text-[12.5px] text-fg-subtle hover:border-line-strong">
+          <button type="button" onClick={() => setPaletteOpen(true)} aria-label="Search" className="flex h-8 w-auto items-center gap-2 rounded-lg border border-line bg-surface px-3 text-[12.5px] text-fg-subtle hover:border-line-strong sm:w-full sm:max-w-sm">
             <Search className="size-3.5" />
-            <span className="flex-1 text-left">Jump to page or search…</span>
-            <Kbd>⌘K</Kbd>
+            <span className="hidden flex-1 truncate text-left sm:inline">Jump to page or search…</span>
+            <span className="hidden sm:inline"><Kbd>⌘K</Kbd></span>
           </button>
           <div className="ml-auto flex items-center gap-2">
             <ConnectionPill />
@@ -820,7 +656,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <WebsiteHealth />
           </MeProvider>
         )}
-        <main className="w-full max-w-none flex-1 px-4 py-4 sm:px-6 lg:px-7 lg:py-5">
+        <main className={cn('w-full max-w-none flex-1 px-4 py-4 sm:px-6 lg:px-7 lg:py-5', dockRoom && 'pb-28 lg:pb-28')}>
           {me ? (
             <MeProvider me={me}>
               <ConfirmProvider>{children}</ConfirmProvider>
@@ -847,7 +683,14 @@ export function Shell({ children }: { children: ReactNode }) {
       </ConfirmProvider>
       <UpdateBar />
       <InstallNudge />
+      {me && (
+        <Suspense>
+          <DesktopHandlers />
+          <Dock />
+        </Suspense>
+      )}
     </div>
     </PwaProvider>
+    </ContextMenuProvider>
   );
 }

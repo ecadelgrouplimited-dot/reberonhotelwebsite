@@ -1,7 +1,7 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Post, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
-import { zLoginInput, zForgotInput, zResetInput, zAcceptInviteInput, zChangePasswordInput } from '@reberon/contracts';
+import { zLoginInput, zForgotInput, zResetInput, zAcceptInviteInput, zChangePasswordInput, zHousePrefs } from '@reberon/contracts';
 import type { z } from 'zod';
 import { PrismaService } from '../../common/prisma.service.js';
 import { CurrentUser, Public, REFRESH_COOKIE, type AuthUser } from '../../common/auth.js';
@@ -66,6 +66,12 @@ export class AuthController {
   async me(@CurrentUser() user: AuthUser) {
     const u = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
     return this.auth.me(u);
+  }
+
+  /** Each person edits only their own layout; no permission needed beyond being signed in. */
+  @Patch('me/preferences')
+  async savePreferences(@Body(new ZodPipe(zHousePrefs)) body: z.infer<typeof zHousePrefs>, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.auth.savePreferences(user.id, body, req);
   }
 
   @Post('password')

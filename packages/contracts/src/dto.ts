@@ -1,3 +1,4 @@
+import type { HousePrefs } from './prefs.js';
 import type { Typography } from './typography.js';
 import type { TourDTO } from './tours.js';
 import type { LText, LRich } from './localized.js';
@@ -221,6 +222,8 @@ export interface MeDTO {
   customRoleKey?: string | null;
   customRoleName?: string | null;
   permissions: string[];
+  /** Personal House layout (pins, hidden apps, dock). */
+  preferences?: HousePrefs;
 }
 
 export interface RoleDefinitionDTO {

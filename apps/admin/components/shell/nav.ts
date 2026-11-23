@@ -96,7 +96,8 @@ export const NAV: NavGroup[] = [
     icon: Radio,
     defaultOpen: true,
     items: [
-      { label: 'Today Overview', href: '/', icon: Home, badge: 'today' },
+      { label: 'Home', href: '/', icon: Home },
+      { label: 'Today Board', href: '/today', icon: Radio, badge: 'today' },
       { label: 'Inbox & Enquiries', href: '/inbox', icon: Inbox, perm: 'inbox:read', badge: 'inbox' },
       { label: 'First-Stay Waitlist', href: '/waitlist', icon: ListChecks, perm: 'waitlist:read', badge: 'waitlist' },
       { label: 'Sent Messages', href: '/messages', icon: Send, perm: 'messages:read', badge: 'messages' },

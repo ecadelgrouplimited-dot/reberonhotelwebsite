@@ -2,7 +2,7 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
-import type { MeDTO } from '@reberon/contracts';
+import { readHousePrefs, type HousePrefs, type MeDTO } from '@reberon/contracts';
 import type { User } from '@reberon/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
@@ -26,7 +26,7 @@ export class AuthService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  me(u: Pick<User, 'id' | 'email' | 'name' | 'role' | 'grants' | 'revokes'> & { avatarId?: string | null; jobTitle?: string | null; customRoleKey?: string | null; customRoleName?: string | null }): MeDTO {
+  me(u: Pick<User, 'id' | 'email' | 'name' | 'role' | 'grants' | 'revokes'> & { avatarId?: string | null; jobTitle?: string | null; customRoleKey?: string | null; customRoleName?: string | null; preferences?: unknown }): MeDTO {
     return {
       id: u.id,
       email: u.email ?? '',
@@ -37,7 +37,26 @@ export class AuthService {
       customRoleKey: u.customRoleKey ?? null,
       customRoleName: u.customRoleName ?? null,
       permissions: permissionsOf(u),
+      preferences: readHousePrefs(u.preferences),
     };
+  }
+
+  /** A person's own House layout (pins, hidden apps, dock). */
+  async savePreferences(userId: string, prefs: HousePrefs, req: Request) {
+    const before = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { preferences: true, name: true, email: true, role: true, grants: true, revokes: true } });
+    const next = { ...readHousePrefs(before.preferences), ...prefs };
+    await this.prisma.user.update({ where: { id: userId }, data: { preferences: next } });
+    await this.audit.record({
+      actor: { id: userId, email: before.email ?? '', name: before.name, role: before.role, perms: permissionsOf(before) },
+      action: 'user.preferences',
+      entityType: 'User',
+      entityId: userId,
+      summary: 'Changed their House layout',
+      before: before.preferences as object,
+      after: next,
+      req,
+    });
+    return next;
   }
 
   private asActor(u: User): AuthUser {

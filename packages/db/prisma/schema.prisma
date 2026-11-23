@@ -68,6 +68,8 @@ model User {
   accessExpiresAt DateTime?
   status          UserStatus @default(ACTIVE)
   avatarId        String?    @db.Uuid
+  /// Personal House layout (HousePrefs in contracts): pinned apps, hidden apps, dock
+  preferences     Json       @default("{}")
   lastLoginAt     DateTime?
   failedLogins    Int        @default(0)
   lockedUntil     DateTime?
