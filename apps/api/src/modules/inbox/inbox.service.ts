@@ -190,19 +190,23 @@ export class InboxService {
     };
   }
 
-  async get(id: string, user: AuthUser): Promise<ConversationDetailDTO> {
+  /** Opening a conversation reads it (and a NEW one becomes OPEN); changing it from a list or menu does not. */
+  async get(id: string, user: AuthUser, opts: { markRead?: boolean } = {}): Promise<ConversationDetailDTO> {
+    const markRead = opts.markRead ?? true;
     const c = await this.prisma.conversation.findUnique({ where: { id }, include: this.include(user.id) });
     if (!c) throw notFound('Conversation');
     const messages = await this.prisma.message.findMany({ where: { conversationId: id }, orderBy: { createdAt: 'asc' }, include: { author: { select: { id: true, name: true } } } });
-    await this.prisma.conversationRead.upsert({
-      where: { conversationId_userId: { conversationId: id, userId: user.id } },
-      create: { conversationId: id, userId: user.id },
-      update: { readAt: new Date() },
-    });
-    if (c.status === 'NEW') await this.prisma.conversation.update({ where: { id }, data: { status: 'OPEN' } });
+    if (markRead) {
+      await this.prisma.conversationRead.upsert({
+        where: { conversationId_userId: { conversationId: id, userId: user.id } },
+        create: { conversationId: id, userId: user.id },
+        update: { readAt: new Date() },
+      });
+      if (c.status === 'NEW') await this.prisma.conversation.update({ where: { id }, data: { status: 'OPEN' } });
+    }
     return {
-      ...this.summary({ ...c, reads: [{ readAt: new Date() }] }),
-      status: c.status === 'NEW' ? 'OPEN' : c.status,
+      ...this.summary(markRead ? { ...c, reads: [{ readAt: new Date() }] } : c),
+      status: markRead && c.status === 'NEW' ? 'OPEN' : c.status,
       context: c.context as Record<string, unknown>,
       messages: messages.map((m) => ({ id: m.id, direction: m.direction, body: m.body, author: m.author, createdAt: m.createdAt.toISOString() })),
     };
@@ -214,7 +218,7 @@ export class InboxService {
     await this.prisma.conversation.update({ where: { id }, data: patch });
     const bits = [patch.status && `status → ${patch.status}`, patch.assigneeId !== undefined && `assignee changed`, patch.intent && `intent → ${patch.intent}`].filter(Boolean);
     await this.audit.record({ actor: user, action: 'conversation.update', entityType: 'Conversation', entityId: id, summary: `${before.reference}: ${bits.join(', ')}`, before: { status: before.status, assigneeId: before.assigneeId }, after: patch, req });
-    return this.get(id, user);
+    return this.get(id, user, { markRead: false });
   }
 
   async reply(id: string, body: string, kind: 'REPLY' | 'NOTE', user: AuthUser, req: Request) {

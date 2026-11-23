@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Copy, ExternalLink, Home, Keyboard, LayoutGrid, Moon, PanelLeft, Pin, PinOff, Plus, Printer, RefreshCw, Search, UserRoundPlus,
 } from 'lucide-react';
 import { useMeQuery } from '@/lib/providers';
+import { addRecent } from '@/lib/recents';
 import { usePrefs } from '@/lib/prefs';
 import { printScreen } from '@/lib/print';
 import { Dialog } from '@/components/ui/dialog';
@@ -53,6 +54,15 @@ export function DesktopHandlers() {
   const latest = useRef({ prefs, me });
   latest.current = { prefs, me };
   const [help, setHelp] = useState(false);
+  const pathname = usePathname();
+  const search = useSearchParams();
+
+  // Every app opened goes into this device's recents (records add themselves on their pages).
+  useEffect(() => {
+    const tab = search.get('tab') ?? search.get('view');
+    const app = APP_BY_HREF.get(tab ? `${pathname}?${search.get('tab') ? 'tab' : 'view'}=${tab}` : pathname) ?? APP_BY_HREF.get(pathname);
+    if (app) addRecent({ href: app.href, label: app.fullName, detail: app.group, kind: 'app' });
+  }, [pathname, search]);
 
   useEffect(() => {
     const open = () => setHelp(true);

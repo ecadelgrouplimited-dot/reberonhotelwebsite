@@ -29,6 +29,9 @@ import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
 import { SelectInput, TextInput } from '@/components/ui/field';
+import { undoToast } from '@/lib/undo';
+
+const HK_WORD: Record<string, string> = { VACANT_CLEAN: 'clean', INSPECTED: 'inspected and ready', VACANT_DIRTY: 'dirty', OCCUPIED: 'occupied', BLOCKED: 'blocked', OUT_OF_ORDER: 'out of order' };
 import { HkBadge, TASK_KIND } from '@/components/house/hk';
 
 type Filter = 'open' | 'mine' | 'inspect' | 'all' | 'rooms';
@@ -96,12 +99,14 @@ export default function HousekeepingPage() {
   });
 
   const quickRoomStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: HkStatus }) => patch(`/rack/${id}/status`, { status }),
-    onSuccess: () => {
-      toast.success('Room status updated');
+    mutationFn: ({ id, status }: { id: string; status: HkStatus; from?: HkStatus; number?: string }) => patch(`/rack/${id}/status`, { status }),
+    onSuccess: (_r, v) => {
+      const what = `${v.number ? `Room ${v.number}` : 'Room'} marked ${HK_WORD[v.status] ?? v.status.toLowerCase()}`;
+      if (v.from && v.from !== v.status) undoToast(what, async () => { await patch(`/rack/${v.id}/status`, { status: v.from }); refresh(); });
+      else toast.success(what);
       refresh();
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not update room status'),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not update room'),
   });
 
   const bulkInspect = useMutation({
@@ -441,7 +446,7 @@ export default function HousekeepingPage() {
                                   size="sm"
                                   variant="ghost"
                                   icon={<BrushCleaning className="size-3" />}
-                                  onClick={() => quickRoomStatus.mutate({ id: r.id, status: 'VACANT_DIRTY' })}
+                                  onClick={() => quickRoomStatus.mutate({ id: r.id, status: 'VACANT_DIRTY', from: r.hkStatus, number: r.number })}
                                 >
                                   Mark Dirty
                                 </Button>
@@ -451,7 +456,7 @@ export default function HousekeepingPage() {
                                   size="sm"
                                   variant="secondary"
                                   icon={<CircleCheck className="size-3" />}
-                                  onClick={() => quickRoomStatus.mutate({ id: r.id, status: 'VACANT_CLEAN' })}
+                                  onClick={() => quickRoomStatus.mutate({ id: r.id, status: 'VACANT_CLEAN', from: r.hkStatus, number: r.number })}
                                 >
                                   Mark Clean
                                 </Button>
@@ -461,7 +466,7 @@ export default function HousekeepingPage() {
                                   size="sm"
                                   variant="primary"
                                   icon={<CheckCheck className="size-3" />}
-                                  onClick={() => quickRoomStatus.mutate({ id: r.id, status: 'INSPECTED' })}
+                                  onClick={() => quickRoomStatus.mutate({ id: r.id, status: 'INSPECTED', from: r.hkStatus, number: r.number })}
                                 >
                                   Inspect
                                 </Button>

@@ -204,7 +204,8 @@ export class ReservationsAdminController {
       where,
       include: { contact: true, rooms: true },
       orderBy,
-      take: 300,
+      // Search asks for a handful; lists get up to 300.
+      take: Math.min(Math.max(Number(q.limit) || 300, 1), 300),
     });
     const names = await this.booking.roomTypeNames();
     const counts = await this.prisma.reservation.groupBy({ by: ['status'], _count: true });

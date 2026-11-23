@@ -360,7 +360,7 @@ export function PageBuilder({ id }: { id: string }) {
   };
 
   return (
-    <div className="fade-in -mx-4 -my-6 flex h-[calc(100dvh-4rem)] flex-col sm:-mx-6 lg:-mx-8 lg:-my-8">
+    <div data-own-undo className="fade-in -mx-4 -my-6 flex h-[calc(100dvh-4rem)] flex-col sm:-mx-6 lg:-mx-8 lg:-my-8">
       {/* Publish bar */}
       <header className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2.5 sm:px-6">
         <Link href="/website/pages" className="grid size-8 place-items-center rounded-full hover:bg-surface-2" aria-label="All pages">

@@ -17,6 +17,10 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Empty, Pill, Skeleton, Status, Tabs, Kbd } from '@/components/ui/bits';
 import { SelectInput } from '@/components/ui/field';
+import { Clock, Copy, ExternalLink, RotateCcw, UserRoundCheck } from 'lucide-react';
+import { useContextMenu, type MenuItem } from '@/components/os/context-menu';
+import { contactItems } from '@/components/os/record-menus';
+import { undoToast } from '@/lib/undo';
 import { NewConversation } from './new-conversation';
 
 const CHANNEL: Record<string, { label: string; icon: typeof Globe }> = {
@@ -63,6 +67,43 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
       toast.error(err instanceof ApiError ? err.message : 'Could not clear spam');
     },
   });
+
+  const menu = useContextMenu();
+  const me = useMe();
+  const quick = useMutation({
+    mutationFn: ({ id, patch: p }: { id: string; patch: Record<string, unknown> }) => patch(`/conversations/${id}`, p),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      qc.invalidateQueries({ queryKey: ['conversation'] });
+      qc.invalidateQueries({ queryKey: ['admin-pulse'] });
+    },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Could not update'),
+  });
+  const setStatusWithUndo = (c: ConversationSummaryDTO, next: ConversationSummaryDTO['status'], label: string) =>
+    quick.mutate(
+      { id: c.id, patch: { status: next } },
+      { onSuccess: () => undoToast(`${c.contact.name} — ${label}`, () => quick.mutateAsync({ id: c.id, patch: { status: c.status } })) },
+    );
+  const rowMenu = (e: React.MouseEvent, c: ConversationSummaryDTO) =>
+    menu.open(
+      e,
+      [
+        { label: 'Open', icon: ExternalLink, onSelect: () => router.push(`/inbox/${c.id}`) },
+        { label: 'Open in a new tab', icon: ExternalLink, onSelect: () => window.open(`/inbox/${c.id}`, '_blank', 'noopener') },
+        { kind: 'separator' },
+        ...(c.status !== 'DONE'
+          ? ([{ label: 'Mark done', icon: CheckCheck, onSelect: () => setStatusWithUndo(c, 'DONE', 'marked done') }] as MenuItem[])
+          : ([{ label: 'Reopen', icon: RotateCcw, onSelect: () => setStatusWithUndo(c, 'OPEN', 'reopened') }] as MenuItem[])),
+        ...(c.status !== 'WAITING_GUEST' && c.status !== 'DONE' ? ([{ label: 'Waiting for the guest', icon: Clock, onSelect: () => setStatusWithUndo(c, 'WAITING_GUEST', 'waiting for the guest') }] as MenuItem[]) : []),
+        ...(c.assignee?.id !== me.id
+          ? ([{ label: 'Assign to me', icon: UserRoundCheck, onSelect: () => quick.mutate({ id: c.id, patch: { assigneeId: me.id } }, { onSuccess: () => undoToast(`Assigned to you`, () => quick.mutateAsync({ id: c.id, patch: { assigneeId: c.assignee?.id ?? null } })) }) }] as MenuItem[])
+          : ([{ label: 'Unassign me', icon: UserRoundCheck, onSelect: () => quick.mutate({ id: c.id, patch: { assigneeId: null } }) }] as MenuItem[])),
+        { label: `Copy reference ${c.reference}`, icon: Copy, onSelect: () => void navigator.clipboard.writeText(c.reference).then(() => toast.success('Reference copied')) },
+        { kind: 'separator' },
+        ...contactItems(c.contact, `Hello ${c.contact.name.split(' ')[0]}, this is Reberon Hotel replying to your message (${c.reference}).`),
+      ],
+      `${c.reference} · ${c.contact.name}`,
+    );
 
   const deleteConvMut = useMutation({
     mutationFn: (id: string) => del(`/conversations/${id}`),
@@ -229,7 +270,7 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
             const Icon = CHANNEL[c.channel]?.icon ?? Globe;
             return (
               <li key={c.id} className="group relative">
-                <Link href={`/inbox/${c.id}`} className={cn('relative flex gap-3 border-b border-line px-4 py-3.5 transition-colors', c.id === selectedId ? 'bg-surface-2' : 'hover:bg-surface-2/60')}>
+                <Link href={`/inbox/${c.id}`} onContextMenu={(e) => rowMenu(e, c)} className={cn('relative flex gap-3 border-b border-line px-4 py-3.5 transition-colors', c.id === selectedId ? 'bg-surface-2' : 'hover:bg-surface-2/60')}>
                   {c.unread && <span className="absolute left-1.5 top-5 size-1.5 rounded-full bg-accent" aria-label="Unread" />}
                   <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-moss-700/10 text-[12px] font-semibold text-brand">
                     {initials(c.contact.name)}

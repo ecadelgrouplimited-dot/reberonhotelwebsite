@@ -30,6 +30,8 @@ import { ExportMenu } from '@/components/ui/export-menu';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Section, Skeleton, Status } from '@/components/ui/bits';
+import { useContextMenu } from '@/components/os/context-menu';
+import { bookingItems, contactItems } from '@/components/os/record-menus';
 import { Dialog } from '@/components/ui/dialog';
 
 const SOURCE: Record<string, string> = {
@@ -55,6 +57,7 @@ interface AuditRow {
 
 export default function ReservationsPage() {
   const router = useRouter();
+  const menu = useContextMenu();
   const searchParams = useSearchParams();
   const initialSort = searchParams.get('sort') || 'latest';
   const me = useMe();
@@ -386,6 +389,7 @@ export default function ReservationsPage() {
                   key={r.id}
                   className="cursor-pointer hover:bg-surface-2/40 transition-colors"
                   onClick={() => router.push(`/reservations/${r.id}`)}
+                  onContextMenu={(e) => menu.open(e, [...bookingItems(r, router.push), { kind: 'separator' }, ...contactItems(r.guest, `Hello ${r.guest.name.split(' ')[0]}, this is Reberon Hotel about your booking ${r.code}.`)], `${r.code} · ${r.guest.name}`)}
                 >
                   <td className="px-3 py-2.5 font-mono font-semibold whitespace-nowrap">{r.code}</td>
                   <td className="px-3 py-2.5 font-semibold text-fg">

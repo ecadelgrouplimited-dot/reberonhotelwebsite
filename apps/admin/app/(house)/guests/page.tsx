@@ -24,6 +24,8 @@ import { ExportMenu } from '@/components/ui/export-menu';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Section, Skeleton } from '@/components/ui/bits';
+import { useContextMenu } from '@/components/os/context-menu';
+import { contactItems } from '@/components/os/record-menus';
 import { Dialog } from '@/components/ui/dialog';
 
 interface AuditRow {
@@ -41,6 +43,7 @@ interface AuditRow {
 
 export default function GuestsPage() {
   const router = useRouter();
+  const menu = useContextMenu();
   const me = useMe();
   const can = useCan();
   const qc = useQueryClient();
@@ -325,6 +328,18 @@ export default function GuestsPage() {
                     key={g.id}
                     className="cursor-pointer hover:bg-surface-2/40 transition-colors"
                     onClick={() => router.push(`/guests/${g.id}`)}
+                    onContextMenu={(e) =>
+                      menu.open(
+                        e,
+                        [
+                          { label: 'Open profile', icon: ExternalLink, onSelect: () => router.push(`/guests/${g.id}`) },
+                          { label: 'Open in a new tab', icon: ExternalLink, onSelect: () => window.open(`/guests/${g.id}`, '_blank', 'noopener') },
+                          { kind: 'separator' },
+                          ...contactItems(g),
+                        ],
+                        g.name,
+                      )
+                    }
                   >
                     <td className="px-3 py-2.5 font-semibold">
                       <span className="inline-flex items-center gap-1.5">

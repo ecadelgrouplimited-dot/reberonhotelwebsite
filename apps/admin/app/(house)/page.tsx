@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Check, Eye, EyeOff, ExternalLink, Keyboard, LayoutGrid, Pin, PinOff, Plus, RotateCcw, Search, ShoppingBag, UserRoundPlus, X } from 'lucide-react';
+import { BedDouble, Contact, History, Inbox as InboxIcon, Trash2, ChevronRight, Check, Eye, EyeOff, ExternalLink, Keyboard, LayoutGrid, Pin, PinOff, Plus, RotateCcw, Search, ShoppingBag, UserRoundPlus, X } from 'lucide-react';
 import { useCan, useMe } from '@/lib/providers';
 import { usePrefs } from '@/lib/prefs';
 import { useNow } from '@/lib/use-now';
+import { forgetRecent, useRecents } from '@/lib/recents';
 import { cn } from '@/lib/cn';
 import { Switch } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/dialog';
@@ -13,6 +14,7 @@ import { NAV } from '@/components/shell/nav';
 import { AppGlyph, AppTile } from '@/components/os/app-icon';
 import { useContextMenu, type MenuItem } from '@/components/os/context-menu';
 import { mod, shellAction } from '@/components/os/actions';
+import { DayBrief } from '@/components/os/day-brief';
 import type { HouseApp } from '@/components/os/apps';
 
 const kampala = (d: number, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Kampala', ...o }).format(d);
@@ -34,6 +36,7 @@ export default function HomeScreen() {
   const [customise, setCustomise] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [folder, setFolder] = useState<string | null>(null);
+  const recents = useRecents().filter((r) => r.kind !== 'app').slice(0, 6);
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('customise')) setCustomise(true);
   }, []);
@@ -122,6 +125,8 @@ export default function HomeScreen() {
         </div>
       )}
 
+      <DayBrief pulse={pulse} />
+
       {/* Needs you — quiet notifications */}
       <section aria-label="Needs you" className="mx-auto mt-8 max-w-2xl">
         {needs.length === 0 ? (
@@ -162,6 +167,47 @@ export default function HomeScreen() {
           </ul>
         )}
       </section>
+
+      {/* Jump back in — records opened recently on this device */}
+      {recents.length > 0 && !customise && (
+        <section aria-label="Jump back in" className="mx-auto mt-8 max-w-3xl">
+          <h2 className="mb-2 flex items-center gap-1.5 px-2 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+            <History className="size-3.5" /> Jump back in
+          </h2>
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+            {recents.map((r) => {
+              const Icon = r.kind === 'booking' ? BedDouble : r.kind === 'guest' ? Contact : InboxIcon;
+              return (
+                <li key={r.href} className="min-w-0">
+                  <a
+                    href={r.href}
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey) return;
+                      e.preventDefault();
+                      router.push(r.href);
+                    }}
+                    onContextMenu={(e) =>
+                      menu.open(e, [
+                        { label: 'Open', icon: ExternalLink, onSelect: () => router.push(r.href) },
+                        { label: 'Open in a new tab', icon: ExternalLink, onSelect: () => window.open(r.href, '_blank', 'noopener') },
+                        { kind: 'separator' },
+                        { label: 'Forget', icon: Trash2, onSelect: () => forgetRecent(r.href) },
+                      ], r.label)
+                    }
+                    className="flex items-center gap-2.5 rounded-xl border border-line bg-surface/80 px-3 py-2 transition hover:border-line-strong focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg-muted"><Icon className="size-4" /></span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold">{r.label}</span>
+                      {r.detail && <span className="block truncate text-[11.5px] text-fg-muted">{r.detail}</span>}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {/* Customise bar */}
       {customise && (

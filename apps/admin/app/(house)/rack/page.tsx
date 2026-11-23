@@ -39,6 +39,9 @@ import { Empty, PageHeader, Pill, Skeleton } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
 import { SelectInput, Switch, TextInput } from '@/components/ui/field';
 import { useConfirm } from '@/components/ui/confirm';
+import { undoToast } from '@/lib/undo';
+
+const HK_WORD: Record<string, string> = { VACANT_CLEAN: 'clean', INSPECTED: 'inspected and ready', VACANT_DIRTY: 'dirty', OCCUPIED: 'occupied', BLOCKED: 'blocked', OUT_OF_ORDER: 'out of order' };
 import { BLOCK_REASON, HK, HkBadge, RackGrid, TASK_KIND } from '@/components/house/hk';
 
 type Block = { id: string; room: { id: string; number: string }; fromDate: string; toDate: string; reason: string; note: string | null };
@@ -106,9 +109,11 @@ function Rack() {
   };
 
   const quickStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: HkStatus }) => patch(`/rack/${id}/status`, { status }),
-    onSuccess: () => {
-      toast.success('Room status updated');
+    mutationFn: ({ id, status }: { id: string; status: HkStatus; from?: HkStatus; number?: string }) => patch(`/rack/${id}/status`, { status }),
+    onSuccess: (_r, v) => {
+      const what = `${v.number ? `Room ${v.number}` : 'Room'} marked ${HK_WORD[v.status] ?? v.status.toLowerCase()}`;
+      if (v.from && v.from !== v.status) undoToast(what, async () => { await patch(`/rack/${v.id}/status`, { status: v.from }); refresh(); });
+      else toast.success(what);
       refresh();
     },
     onError: err,
@@ -497,17 +502,17 @@ function Rack() {
                           {vacant && r.isActive && (
                             <>
                               {r.hkStatus !== 'VACANT_DIRTY' && (
-                                <Button size="sm" variant="ghost" onClick={() => quickStatus.mutate({ id: r.id, status: 'VACANT_DIRTY' })}>
+                                <Button size="sm" variant="ghost" onClick={() => quickStatus.mutate({ id: r.id, status: 'VACANT_DIRTY', from: r.hkStatus, number: r.number })}>
                                   Dirty
                                 </Button>
                               )}
                               {r.hkStatus !== 'VACANT_CLEAN' && (
-                                <Button size="sm" variant="secondary" onClick={() => quickStatus.mutate({ id: r.id, status: 'VACANT_CLEAN' })}>
+                                <Button size="sm" variant="secondary" onClick={() => quickStatus.mutate({ id: r.id, status: 'VACANT_CLEAN', from: r.hkStatus, number: r.number })}>
                                   Clean
                                 </Button>
                               )}
                               {can('rooms:inspect') && r.hkStatus !== 'INSPECTED' && (
-                                <Button size="sm" variant="primary" onClick={() => quickStatus.mutate({ id: r.id, status: 'INSPECTED' })}>
+                                <Button size="sm" variant="primary" onClick={() => quickStatus.mutate({ id: r.id, status: 'INSPECTED', from: r.hkStatus, number: r.number })}>
                                   Inspect
                                 </Button>
                               )}

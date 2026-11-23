@@ -17,6 +17,7 @@ import { StayPanel, type StayDetail } from '@/components/house/stay-panel';
 import { ReservationMessages } from '@/components/messages/reservation-messages';
 import { DocumentsPanel } from '@/components/documents/documents-panel';
 import { AmendDialog } from '@/components/house/amend-dialog';
+import { useTrackRecent } from '@/lib/recents';
 import { useConfirm } from '@/components/ui/confirm';
 
 type Detail = {
@@ -45,6 +46,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
   const isOwner = me.role === 'OWNER';
   const autoCheckIn = useSearchParams().get('checkin') === '1';
   const { data: r, isLoading, error } = useQuery({ queryKey: ['reservation', id], queryFn: () => get<Detail>(`/reservations/${id}`) });
+  useTrackRecent(r ? { href: `/reservations/${id}`, label: r.contact.name, detail: `${r.code} · ${dateRange(r.arrival, r.departure)}`, kind: 'booking' } : null);
   const [dialog, setDialog] = useState<null | 'pay' | 'refund' | 'cancel' | 'delete' | 'amend' | 'extend'>(null);
   const confirm = useConfirm();
   const [notes, setNotes] = useState('');

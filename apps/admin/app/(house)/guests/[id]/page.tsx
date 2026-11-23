@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader, Pill, Section, Skeleton, Status } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
 import { Switch, TextArea, TextInput } from '@/components/ui/field';
+import { useTrackRecent } from '@/lib/recents';
 import { useConfirm } from '@/components/ui/confirm';
 
 const FACE = { GOOD: Smile, OK: Meh, BAD: Frown } as const;
@@ -30,6 +31,7 @@ export default function GuestPage({ params }: { params: Promise<{ id: string }> 
   const canDelete = me.role === 'OWNER' || me.role === 'MANAGER';
   const confirm = useConfirm();
   const { data: g, isLoading, error } = useQuery({ queryKey: ['guest', id], queryFn: () => get<GuestProfileDTO>(`/guests/${id}`) });
+  useTrackRecent(g ? { href: `/guests/${id}`, label: g.name, detail: [g.phone, g.email].filter(Boolean).join(' · ') || 'Guest profile', kind: 'guest' } : null);
   const { data: guestAudit } = useQuery({
     queryKey: ['guest-audit', id],
     queryFn: () => get<{ data: { id: string; action: string; summary: string | null; actor: { name: string; role?: string } | null; createdAt: string }[] }>(`/audit?entityType=Contact&entityId=${id}`),

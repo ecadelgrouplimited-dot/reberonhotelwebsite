@@ -77,6 +77,9 @@ import {
 } from '@/components/house/desk-dialogs';
 import { AttentionRail, type AttentionItem } from '@/components/dashboard/attention';
 import { RoomMap } from '@/components/dashboard/room-map';
+import { undoToast } from '@/lib/undo';
+
+const HK_WORD: Record<string, string> = { VACANT_CLEAN: 'clean', INSPECTED: 'inspected and ready', VACANT_DIRTY: 'dirty', OCCUPIED: 'occupied', BLOCKED: 'blocked', OUT_OF_ORDER: 'out of order' };
 import { PosLive } from '@/components/dashboard/pos-live';
 
 const CHANNEL: Record<string, string> = {
@@ -271,16 +274,18 @@ export default function Today() {
   });
 
   const quickRoomStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: HkStatus }) => patch(`/rack/${id}/status`, { status }),
+    mutationFn: ({ id, status }: { id: string; status: HkStatus; from?: HkStatus; number?: string }) => patch(`/rack/${id}/status`, { status }),
     onSuccess: (_r, v) => {
-      toast.success(v.status === 'INSPECTED' ? 'Room inspected and ready' : 'Room marked clean');
+      const what = `${v.number ? `Room ${v.number}` : 'Room'} marked ${HK_WORD[v.status] ?? v.status.toLowerCase()}`;
+      if (v.from && v.from !== v.status) undoToast(what, async () => { await patch(`/rack/${v.id}/status`, { status: v.from }); refreshWorkspace(); });
+      else toast.success(what);
       refreshWorkspace();
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not update room'),
   });
 
-  const markRoomClean = (room: { id: string }) =>
-    quickRoomStatusMutation.mutate({ id: room.id, status: canInspect ? 'INSPECTED' : 'VACANT_CLEAN' });
+  const markRoomClean = (room: { id: string; hkStatus?: HkStatus; number?: string }) =>
+    quickRoomStatusMutation.mutate({ id: room.id, status: canInspect ? 'INSPECTED' : 'VACANT_CLEAN', from: room.hkStatus, number: room.number });
 
   const toStayRef = (s: DeskStayDTO): StayRef => ({
     ...s,

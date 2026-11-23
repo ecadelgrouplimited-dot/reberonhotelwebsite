@@ -38,6 +38,8 @@ import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Skeleton, Status } from '@/components/ui/bits';
 import { useConfirm } from '@/components/ui/confirm';
 import { RackGrid, RackLegend } from '@/components/house/hk';
+import { useContextMenu, type MenuItem } from '@/components/os/context-menu';
+import { bookingItems, contactItems } from '@/components/os/record-menus';
 import {
   AssignRoomDialog,
   CheckInDialog,
@@ -70,6 +72,7 @@ export default function DeskPage() {
   const router = useRouter();
   const can = useCan();
   const confirm = useConfirm();
+  const menu = useContextMenu();
   const today = kampalaToday();
   const [date, setDate] = useState(today);
   const [tab, setTab] = useState<Tab>('arrivals');
@@ -404,7 +407,34 @@ export default function DeskPage() {
                     const canAssignPreArrival = s.status === 'CONFIRMED' || s.status === 'HELD';
 
                     return (
-                      <tr key={s.id} className={cn('hover:bg-surface-2/40 transition-colors', done && 'opacity-60')}>
+                      <tr
+                        key={s.id}
+                        className={cn('hover:bg-surface-2/40 transition-colors', done && 'opacity-60')}
+                        onContextMenu={(e) =>
+                          menu.open(
+                            e,
+                            [
+                              ...((tab === 'arrivals' || tab === 'late') && s.status === 'CONFIRMED' ? ([{ label: 'Check in', icon: LogIn, onSelect: () => setDialog({ kind: 'in', stay: toStayRef(s) }) }] as MenuItem[]) : []),
+                              ...(s.status === 'IN_HOUSE' ? ([{ label: 'Check out', icon: LogOut, onSelect: () => setDialog({ kind: 'out', stay: toStayRef(s) }) }] as MenuItem[]) : []),
+                              ...(s.status === 'HELD' ? ([{ label: 'Take deposit', icon: Receipt, onSelect: () => setDialog({ kind: 'charge', stay: toStayRef(s) }) }] as MenuItem[]) : []),
+                              ...(['CONFIRMED', 'IN_HOUSE'].includes(s.status) ? ([{ label: 'Folio / take payment', icon: Receipt, onSelect: () => setDialog({ kind: 'charge', stay: toStayRef(s) }) }] as MenuItem[]) : []),
+                              ...(['CONFIRMED', 'HELD', 'IN_HOUSE'].includes(s.status)
+                                ? ([assignedList.length
+                                    ? { label: 'Move room', icon: BedDouble, onSelect: () => setDialog({ kind: 'move', stay: toStayRef(s), currentRooms: assignedList }) }
+                                    : { label: 'Assign a room', icon: BedDouble, onSelect: () => setDialog({ kind: 'assign', stay: toStayRef(s) }) }] as MenuItem[])
+                                : []),
+                              ...(tab === 'late' && s.status === 'CONFIRMED'
+                                ? ([{ label: 'Mark no-show…', icon: UserX, danger: true, onSelect: async () => (await confirm({ title: `Mark ${s.guest.name} as no-show?`, body: 'Assigned rooms return to inventory.', confirm: 'Mark no-show', danger: true })) && noShow.mutate(s) }] as MenuItem[])
+                                : []),
+                              { kind: 'separator' },
+                              ...bookingItems(s, router.push),
+                              { kind: 'separator' },
+                              ...contactItems(s.guest, `Hello ${s.guest.name.split(' ')[0]}, greetings from Reberon Hotel Front Desk (${s.code}).`),
+                            ],
+                            `${s.code} · ${s.guest.name}`,
+                          )
+                        }
+                      >
                         <td className="px-3 py-2.5">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <Link href={`/reservations/${s.id}`} className="font-semibold text-fg hover:underline">
