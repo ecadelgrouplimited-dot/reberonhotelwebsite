@@ -59,6 +59,7 @@ import { badRequest, forbidden, notFound } from '../../common/errors.js';
 import { env } from '../../config.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { renderQrSvg } from '../documents/qr.js';
+import { BRAND, docFooter, docShell, esc, letterhead, loadHotel } from '../documents/letterhead.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 
 @Injectable()
@@ -1225,109 +1226,52 @@ export class OperationsService {
           qrTarget = `${env.WEB_URL}/verify?number=${encodeURIComponent(doc.number)}&check=${encodeURIComponent(chk)}`;
         }
       }
-      qrHtml = `<div style="margin: 8px auto 0; text-align: center;">${renderQrSvg(qrTarget, 84)}<div style="font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px;">${isPaid ? 'Scan to Verify Final Receipt' : 'Bill Ref · Present at Cashier'}</div></div>`;
+      qrHtml = `<div class="qr">${renderQrSvg(qrTarget, 84)}<span>${isPaid ? 'Scan to verify the receipt' : 'Bill reference · show at the cashier'}</span></div>`;
     }
+    const hotel = await loadHotel(this.prisma);
     const rowsHtml = order.items
       .map(
-        (it) => `
-        <tr>
-          <td class="qty">${it.quantity}×</td>
-          <td class="item">
-            <div class="name">${esc(it.itemName)}</div>
-            ${it.notes ? `<div class="note">▸ ${esc(it.notes)}</div>` : ''}
-          </td>
-          ${!isKot ? `<td class="amt">${fmtMoney(it.totalMinor, order.currency)}</td>` : ''}
-        </tr>`,
+        (it) => `<tr><td class="q">${it.quantity}×</td><td class="it"><b>${esc(it.itemName)}</b>${it.notes ? `<div class="nt">▸ ${esc(it.notes)}</div>` : ''}</td>${!isKot ? `<td class="n">${fmtMoney(it.totalMinor, order.currency)}</td>` : ''}</tr>`,
       )
       .join('');
-
-    const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>${esc(order.orderNumber)} · ${title}</title>
-  <style nonce="${nonce}">
-    @page { size: 80mm auto; margin: 4mm; }
-    * { box-sizing: border-box; }
-    body {
-      font-family: ui-monospace, 'Cascadia Mono', 'Courier New', monospace;
-      width: 72mm;
-      margin: 0 auto;
-      padding: 2mm 0;
-      color: #000;
-      font-size: 12px;
-      line-height: 1.35;
-    }
-    .hdr { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 6px; margin-bottom: 8px; }
-    .brand { font-size: 15px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
-    .sub { font-size: 10.5px; margin-top: 2px; }
-    .badge {
-      display: inline-block;
-      margin-top: 5px;
-      padding: 2px 8px;
-      border: 1.5px solid #000;
-      font-size: 12px;
-      font-weight: 800;
-    }
-    .meta { margin-bottom: 8px; font-size: 11.5px; border-bottom: 1px dashed #000; padding-bottom: 6px; }
-    .meta div { display: flex; justify-content: space-between; margin: 2px 0; }
-    .station { font-size: 15px; font-weight: 900; margin: 4px 0; border: 1.5px solid #000; padding: 3px 6px; text-align: center; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-    td { vertical-align: top; padding: 4px 0; border-bottom: 1px dotted #555; }
-    td.qty { width: 14%; font-weight: 900; font-size: ${isKot ? '15px' : '12.5px'}; }
-    td.item .name { font-weight: 700; font-size: ${isKot ? '14px' : '12px'}; }
-    td.item .note { font-size: 11px; font-weight: 700; margin-top: 2px; }
-    td.amt { text-align: right; white-space: nowrap; font-weight: 700; }
-    .totals { border-top: 2px dashed #000; padding-top: 6px; margin-top: 4px; }
-    .totals div { display: flex; justify-content: space-between; margin: 2px 0; }
-    .totals .grand { font-size: 14px; font-weight: 900; margin-top: 4px; border-top: 1px solid #000; padding-top: 4px; }
-    .order-note { border: 1.5px solid #000; padding: 5px; margin: 6px 0; font-weight: 700; font-size: 12px; }
-    .ftr { text-align: center; margin-top: 10px; font-size: 10.5px; border-top: 1px dashed #000; padding-top: 6px; }
-    .no-print { text-align: center; margin-bottom: 10px; }
-    .btn { padding: 6px 14px; background: #111; color: #fff; border: 0; border-radius: 4px; font-weight: 700; cursor: pointer; }
-    @media print { .no-print { display: none; } }
-  </style>
-</head>
-<body>
-  <div class="no-print"><button class="btn" id="pbtn">Print 80mm Slip</button></div>
-  <div class="hdr">
-    <div class="brand">Reberon Hotel</div>
-    <div class="sub">${esc(order.outlet.name)} · Kapchorwa</div>
-    <div class="badge">${title}</div>
-  </div>
-  <div class="station">${esc(order.tableOrRoom || 'COUNTER / WALK-IN')}</div>
-  <div class="meta">
-    <div><span>Bill / Order #:</span><strong>${esc(order.orderNumber)}</strong></div>
-    <div><span>Time:</span><span>${esc(timeStr)}</span></div>
-    <div><span>Guest:</span><strong>${esc(order.customerName || 'Walk-in')}</strong></div>
-    <div><span>Waiter / Server:</span><strong>${esc(order.servedByName || 'Staff')}</strong></div>
-  </div>
-  <table>
-    <tbody>${rowsHtml}</tbody>
-  </table>
-  ${order.notes ? `<div class="order-note">ORDER NOTE: ${esc(order.notes)}</div>` : ''}
-  ${
-    !isKot
-      ? `<div class="totals">
-          <div><span>Subtotal</span><span>${fmtMoney(order.subtotalMinor, order.currency)}</span></div>
-          ${order.discountMinor > 0n ? `<div><span>Discount</span><span>- ${fmtMoney(order.discountMinor, order.currency)}</span></div>` : ''}
-          <div class="grand"><span>${isPaid ? 'AMOUNT PAID' : 'TOTAL AMOUNT DUE'}</span><span>${fmtMoney(order.totalMinor, order.currency)}</span></div>
-          <div><span>Payment Status</span><strong>${isPaid ? `CONFIRMED & PAID (${order.paymentMethod.replace('_', ' ')})` : 'WAITING FOR PAYMENT (NOT A RECEIPT)'}</strong></div>
-        </div>
-        ${!isPaid ? `<div class="order-note" style="text-align:center;">THIS IS A GUEST BILL / INVOICE ONLY.<br/>Please request your Official Payment Receipt after paying the Cashier.</div>` : ''}
-        <div class="ftr">
-          Thank you for dining at Reberon Hotel<br/>
-          Stay In Comfort, Leave With Memories · reberonhotel.com
-          ${qrHtml}
-        </div>`
-      : `<div class="ftr">Prepared for ${esc(order.outlet.deviceStation || order.outlet.name)}</div>`
-  }
-  <script nonce="${nonce}">
-    document.getElementById('pbtn')?.addEventListener('click', () => window.print());
-    ${autoprint ? 'window.addEventListener("load", () => setTimeout(() => window.print(), 150));' : ''}
-  </script>
-</body>
-</html>`;
+    const meta = [
+      ['Bill', order.orderNumber],
+      ['Time', timeStr],
+      ['Guest', order.customerName || 'Walk-in'],
+      ['Served by', order.servedByName || 'Staff'],
+    ];
+    const body = `
+      ${
+        isKot
+          ? `<header class="kot-h"><div class="kot-t">${esc(title)}</div><div class="kot-o">${esc(order.outlet.deviceStation || order.outlet.name)}</div></header>`
+          : letterhead(hotel, { title: order.outlet.name, narrow: true, thermal: true, badge: isPaid ? 'Paid' : 'Bill — not a receipt', badgeTone: isPaid ? 'ok' : 'warn' })
+      }
+      <div class="where">${esc(order.tableOrRoom || 'Counter / walk-in')}</div>
+      <section class="meta">${meta.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</section>
+      <table class="items"><tbody>${rowsHtml}</tbody></table>
+      ${order.notes ? `<p class="onote">Note: ${esc(order.notes)}</p>` : ''}
+      ${
+        isKot
+          ? ''
+          : `<section class="tot">
+              <div><span>Subtotal</span><span>${fmtMoney(order.subtotalMinor, order.currency)}</span></div>
+              ${order.discountMinor > 0n ? `<div><span>Discount</span><span>− ${fmtMoney(order.discountMinor, order.currency)}</span></div>` : ''}
+              <div class="g"><span>${isPaid ? 'Paid' : 'Total due'}</span><span>${fmtMoney(order.totalMinor, order.currency)}</span></div>
+              ${isPaid ? `<div><span>Method</span><b>${esc(order.paymentMethod.replace(/_/g, ' ').toLowerCase())}</b></div>` : ''}
+            </section>
+            ${!isPaid ? '<p class="onote c">This is a bill, not a receipt. Ask for your official receipt after paying.</p>' : ''}
+            ${qrHtml}
+            ${docFooter(hotel, [`Thank you for dining with us at ${esc(order.outlet.name)}.`])}`
+      }`;
+    const css = `
+      .kot-h { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 2mm; } .kot-t { font-size: 13px; font-weight: 900; letter-spacing: .08em; } .kot-o { font-size: 11px; }
+      .where { margin: 2.5mm 0 1.5mm; padding: 1.2mm 2mm; border: 1.5px solid #000; text-align: center; font-size: ${isKot ? '17px' : '14px'}; font-weight: 900; }
+      .meta { display: grid; gap: .6mm; padding-bottom: 1.5mm; border-bottom: 1px dashed #000; } .meta div { display: flex; justify-content: space-between; gap: 3mm; } .meta span { color: #333; }
+      table.items { width: 100%; border-collapse: collapse; margin: 1.5mm 0; } .items td { padding: 1.3mm 0; border-bottom: 1px dotted #555; vertical-align: top; }
+      .items .q { width: 11mm; font-weight: 900; font-size: ${isKot ? '16px' : '12.5px'}; } .items .it b { font-size: ${isKot ? '15px' : '12px'}; } .items .nt { font-size: 11px; font-weight: 700; margin-top: .5mm; } .items .n { text-align: right; white-space: nowrap; font-weight: 700; }
+      .onote { margin: 2mm 0; padding: 1.5mm 2mm; border: 1.5px solid #000; font-weight: 700; } .onote.c { text-align: center; font-size: 10.5px; }
+      .tot { border-top: 1.5px dashed #000; padding-top: 1.5mm; display: grid; gap: .6mm; } .tot div { display: flex; justify-content: space-between; } .tot .g { margin-top: 1mm; padding-top: 1mm; border-top: 1px solid #000; font-size: 14px; font-weight: 900; }`;
+    const html = docShell({ title: `${order.orderNumber} · ${isKot ? 'Kitchen ticket' : 'Bill'}`, nonce, narrow: true, thermal: true, body, css, autoprint });
     return { html, nonce };
   }
 
@@ -2576,269 +2520,87 @@ export class OperationsService {
   }
 
   async renderRequisitionPrintHtml(id: string, paper: 'A4' | '80MM', autoprint: boolean) {
-    const req = await this.prisma.requisition.findUnique({
-      where: { id },
-      include: { items: true },
-    });
+    const req = await this.prisma.requisition.findUnique({ where: { id }, include: { items: true } });
     if (!req) throw notFound('Requisition');
-
+    const hotel = await loadHotel(this.prisma);
     const nonce = randomBytes(16).toString('base64');
-    const esc = (s: string | null | undefined) =>
-      String(s ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    const fmtMoney = (minor: bigint | string, curr: string) =>
-      `${curr} ${Number(minor).toLocaleString('en-UG')}`;
+    const narrow = paper === '80MM';
+    const money = (minor: bigint | string, curr: string) => `${curr} ${Number(minor).toLocaleString('en-UG')}`;
+    const when = (d: Date | null | undefined) =>
+      d ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' }).format(d) : '';
+    const dept = req.department.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+    const status = req.status.replace(/_/g, ' ');
+    const tone = req.status === 'DISBURSED' ? 'ok' : req.status === 'REJECTED' ? 'bad' : 'warn';
+    const steps = [
+      { label: 'Requested', who: req.requestedByName, at: req.createdAt },
+      { label: 'Manager approved', who: req.managerApprovedBy, at: req.managerApprovedAt },
+      { label: 'Director authorised', who: req.directorApprovedBy, at: req.directorApprovedAt },
+      { label: 'Issued from stores', who: req.disbursedBy, at: req.disbursedAt },
+    ];
 
-    const dateStr = new Intl.DateTimeFormat('en-GB', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      timeZone: 'Africa/Kampala',
-    }).format(req.createdAt);
-
-    const isA4 = paper === 'A4';
-    const statusTone = req.status === 'DISBURSED' ? '#15803d' : req.status === 'REJECTED' ? '#b91c1c' : '#b45309';
-
-    const itemsHtml = req.items
-      .map((it, idx) => {
-        const qtyAppr = it.quantityApproved ?? it.quantityRequested;
-        if (isA4) {
-          return `<tr>
-            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: center; font-family: monospace;">${idx + 1}</td>
-            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb;">
-              <strong>${esc(it.itemName)}</strong>
-            </td>
-            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">${esc(it.unit)}</td>
-            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: center; font-family: monospace; font-weight: 700;">${it.quantityRequested}</td>
-            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: center; font-family: monospace; font-weight: 700; color: #15803d;">${qtyAppr}</td>
-            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-family: monospace;">${fmtMoney(it.estimatedUnitMinor, req.currency)}</td>
-            <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-family: monospace; font-weight: 700;">${fmtMoney(it.totalEstimatedMinor, req.currency)}</td>
-          </tr>`;
-        }
-        return `<tr>
-          <td style="padding: 4px 0; border-bottom: 1px dotted #888; font-weight: 800; width: 18%;">${it.quantityRequested} ${esc(it.unit)}</td>
-          <td style="padding: 4px 0; border-bottom: 1px dotted #888;">
-            <div><strong>${esc(it.itemName)}</strong></div>
-            <div style="font-size: 10px; color: #444;">Appr: ${qtyAppr} | @ ${fmtMoney(it.estimatedUnitMinor, req.currency)}</div>
-          </td>
-          <td style="padding: 4px 0; border-bottom: 1px dotted #888; text-align: right; font-weight: 700;">${fmtMoney(it.totalEstimatedMinor, req.currency)}</td>
-        </tr>`;
+    const rows = req.items
+      .map((it, i) => {
+        const appr = it.quantityApproved ?? it.quantityRequested;
+        return narrow
+          ? `<tr><td class="q">${it.quantityRequested} ${esc(it.unit)}</td><td><b>${esc(it.itemName)}</b><div class="sub">Approved ${appr} · @ ${money(it.estimatedUnitMinor, req.currency)}</div></td><td class="n">${money(it.totalEstimatedMinor, req.currency)}</td></tr>`
+          : `<tr><td class="c">${i + 1}</td><td><b>${esc(it.itemName)}</b></td><td class="c">${esc(it.unit)}</td><td class="c">${it.quantityRequested}</td><td class="c ok">${appr}</td><td class="n">${money(it.estimatedUnitMinor, req.currency)}</td><td class="n"><b>${money(it.totalEstimatedMinor, req.currency)}</b></td></tr>`;
       })
       .join('');
 
-    const html = isA4
-      ? `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>${esc(req.number)} · Requisition Voucher</title>
-  <style nonce="${nonce}">
-    @page { size: A4; margin: 15mm; }
-    * { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      color: #111827;
-      margin: 0;
-      padding: 0;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111827; padding-bottom: 14px; margin-bottom: 18px; }
-    .brand h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
-    .brand p { margin: 2px 0 0 0; color: #4b5563; font-size: 12px; }
-    .doc-meta { text-align: right; }
-    .doc-title { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin: 0; }
-    .doc-num { font-size: 16px; font-weight: 800; font-family: monospace; color: #0284c7; margin: 2px 0 0 0; }
-    .status-badge { display: inline-block; margin-top: 5px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; background: #f3f4f6; color: ${statusTone}; border: 1px solid ${statusTone}; }
-    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 18px; }
-    .grid .field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #6b7280; margin-bottom: 2px; }
-    .grid .field span { font-size: 12.5px; font-weight: 600; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-    th { background: #f3f4f6; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #d1d5db; color: #374151; }
-    .total-card { display: flex; justify-content: flex-end; margin-bottom: 24px; }
-    .total-box { min-width: 260px; background: #f9fafb; border: 1.5px solid #111827; border-radius: 6px; padding: 10px 14px; }
-    .total-box .line { display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; }
-    .sign-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 30px; }
-    .sign-box { border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; min-height: 85px; display: flex; flex-direction: column; justify-content: space-between; }
-    .sign-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: #4b5563; border-bottom: 1px dashed #e5e7eb; padding-bottom: 4px; }
-    .sign-name { font-size: 11.5px; font-weight: 600; color: #111827; }
-    .sign-line { border-top: 1px solid #9ca3af; margin-top: 25px; padding-top: 3px; font-size: 10px; color: #6b7280; display: flex; justify-content: space-between; }
-    .no-print { text-align: center; margin-bottom: 20px; }
-    .btn { padding: 8px 18px; background: #111827; color: #fff; border: 0; border-radius: 6px; font-weight: 700; cursor: pointer; }
-    @media print { .no-print { display: none; } }
-  </style>
-</head>
-<body>
-  <div class="no-print">
-    <button class="btn" id="pbtn">Print Requisition Voucher (A4)</button>
-  </div>
+    const facts = [
+      ['Department', dept],
+      ['Raised', when(req.createdAt)],
+      ['Requested by', req.requestedByName],
+      ['Priority', req.priority],
+    ];
 
-  <div class="header">
-    <div class="brand">
-      <h1>Reberon Hotel & Resort</h1>
-      <p>Kapchorwa HQ · Mount Elgon, Uganda · Finance & Operations</p>
-    </div>
-    <div class="doc-meta">
-      <div class="doc-title">Internal Requisition Voucher</div>
-      <div class="doc-num">${esc(req.number)}</div>
-      <div class="status-badge">${esc(req.status.replace(/_/g, ' '))}</div>
-    </div>
-  </div>
+    const body = `
+      ${letterhead(hotel, { title: 'Store Requisition Voucher', number: req.number, date: when(req.createdAt), badge: status, badgeTone: tone, narrow })}
+      <section class="facts">${facts.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</section>
+      ${req.notes ? `<p class="purpose"><span>Purpose</span>${esc(req.notes)}</p>` : ''}
+      ${req.rejectionReason ? `<p class="purpose bad"><span>Rejected</span>${esc(req.rejectionReason)}</p>` : ''}
+      <table class="items">
+        ${narrow ? '' : '<thead><tr><th class="c">#</th><th>Item</th><th class="c">Unit</th><th class="c">Requested</th><th class="c">Approved</th><th class="n">Unit price</th><th class="n">Total</th></tr></thead>'}
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="grand"><span>Estimated total</span><b>${money(req.totalEstimatedMinor, req.currency)}</b></div>
+      <section class="trail">
+        ${steps
+          .map(
+            (st) => `<div class="step ${st.who ? 'done' : ''}">
+              <span class="lbl">${esc(st.label)}</span>
+              <b>${st.who ? esc(st.who) : '—'}</b>
+              <span class="at">${st.who ? esc(when(st.at)) : 'Pending'}</span>
+              <span class="sig">Signature</span>
+            </div>`,
+          )
+          .join('')}
+      </section>
+      <p class="recv">Received by (name &amp; signature): <span></span></p>
+      ${docFooter(hotel, ['Internal store document — not a tax invoice.'], { internal: true })}`;
 
-  <div class="grid">
-    <div class="field">
-      <label>Department</label>
-      <span>${esc(req.department)}</span>
-    </div>
-    <div class="field">
-      <label>Date & Time</label>
-      <span>${dateStr}</span>
-    </div>
-    <div class="field">
-      <label>Requested By</label>
-      <span>${esc(req.requestedByName)}</span>
-    </div>
-    <div class="field">
-      <label>Priority</label>
-      <span>${esc(req.priority)}</span>
-    </div>
-  </div>
+    const css = narrow
+      ? `.facts { margin: 2.5mm 0; display: grid; gap: .8mm; } .facts div { display: flex; justify-content: space-between; gap: 3mm; } .facts span { color: #444; }
+         .purpose { margin: 2mm 0; padding: 1.5mm 2mm; border: 1px dashed #000; } .purpose span { display: block; font-weight: 800; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; }
+         table.items { width: 100%; border-collapse: collapse; margin-top: 2mm; } .items td { padding: 1.3mm 0; border-bottom: 1px dotted #555; vertical-align: top; } .items .q { width: 17mm; font-weight: 800; } .items .n { text-align: right; white-space: nowrap; font-weight: 700; } .sub { font-size: 9.5px; color: #333; }
+         .grand { display: flex; justify-content: space-between; margin-top: 2mm; padding-top: 1.5mm; border-top: 1.5px dashed #000; font-size: 13px; font-weight: 800; }
+         .trail { margin-top: 3mm; display: grid; gap: 1.5mm; } .step { display: grid; grid-template-columns: 1fr auto; font-size: 10.5px; border-bottom: 1px dotted #888; padding-bottom: 1mm; } .step .lbl { color: #444; } .step .at { grid-column: 1 / -1; font-size: 9.5px; color: #555; } .step .sig { display: none; }
+         .recv { margin-top: 4mm; font-size: 10.5px; } .recv span { display: block; border-bottom: 1px solid #000; height: 7mm; }`
+      : `.facts { margin: 6mm 0 4mm; display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; padding: 3.5mm 4mm; background: ${BRAND.mist}; border-radius: 6px; }
+         .facts div span { display: block; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: ${BRAND.muted}; font-weight: 700; } .facts b { font-size: 13px; }
+         .purpose { margin: 0 0 4mm; padding: 3mm 4mm; border-left: 3px solid ${BRAND.copper}; background: #FFF8F1; } .purpose.bad { border-color: #b91c1c; background: #FEF2F2; }
+         .purpose span { display: block; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: ${BRAND.copper}; }
+         table.items { width: 100%; border-collapse: collapse; } .items th { background: ${BRAND.navy}; color: #fff; text-align: left; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 2.2mm 2.5mm; }
+         .items td { padding: 2.2mm 2.5mm; border-bottom: 1px solid ${BRAND.line}; } .items tbody tr:nth-child(even) td { background: #FAFBFC; }
+         .items .c { text-align: center; } .items .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; } .items .ok { color: #15803d; font-weight: 700; }
+         .grand { display: flex; justify-content: flex-end; gap: 8mm; align-items: baseline; margin-top: 3mm; padding: 3mm 2.5mm; border-top: 2px solid ${BRAND.navy}; font-size: 14px; } .grand b { font-size: 18px; }
+         .trail { margin-top: 9mm; display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; }
+         .step { display: flex; flex-direction: column; gap: .6mm; padding: 3mm; border: 1px solid ${BRAND.line}; border-radius: 6px; min-height: 30mm; }
+         .step.done { border-color: ${BRAND.navy}; } .step .lbl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: ${BRAND.copper}; font-weight: 800; }
+         .step .at { font-size: 11px; color: ${BRAND.muted}; } .step .sig { margin-top: auto; padding-top: 1.5mm; border-top: 1px solid #9CA3AF; font-size: 10px; color: ${BRAND.muted}; }
+         .recv { margin-top: 7mm; display: flex; gap: 3mm; align-items: flex-end; } .recv span { flex: 1; border-bottom: 1px solid ${BRAND.navy}; height: 6mm; }`;
 
-  ${req.notes ? `<div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 10px 14px; margin-bottom: 18px; font-size: 12px;"><strong>Purpose / Justification:</strong> ${esc(req.notes)}</div>` : ''}
-
-  <table>
-    <thead>
-      <tr>
-        <th style="width: 40px; text-align: center;">#</th>
-        <th>Item Description</th>
-        <th style="width: 70px; text-align: center;">Unit</th>
-        <th style="width: 80px; text-align: center;">Qty Req.</th>
-        <th style="width: 80px; text-align: center;">Qty Appr.</th>
-        <th style="width: 120px; text-align: right;">Unit Price</th>
-        <th style="width: 130px; text-align: right;">Total Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${itemsHtml}
-    </tbody>
-  </table>
-
-  <div class="total-card">
-    <div class="total-box">
-      <div class="line">
-        <span>Grand Total:</span>
-        <span>${fmtMoney(req.totalEstimatedMinor, req.currency)}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="sign-grid">
-    <div class="sign-box">
-      <div class="sign-title">1. Initiated / Requested By</div>
-      <div class="sign-name">${esc(req.requestedByName)}</div>
-      <div class="sign-line"><span>Signature</span> <span>Date: ${new Date(req.createdAt).toLocaleDateString('en-GB')}</span></div>
-    </div>
-    <div class="sign-box">
-      <div class="sign-title">2. Head of Dept / Manager</div>
-      <div class="sign-name">${req.managerApprovedBy ? esc(req.managerApprovedBy) : 'Pending Review'}</div>
-      <div class="sign-line"><span>Signature</span> <span>Date: ${req.managerApprovedAt ? new Date(req.managerApprovedAt).toLocaleDateString('en-GB') : '__________'}</span></div>
-    </div>
-    <div class="sign-box">
-      <div class="sign-title">3. Director / GM Authorization</div>
-      <div class="sign-name">${req.directorApprovedBy ? esc(req.directorApprovedBy) : (req.managerApprovedBy ? 'Authorized' : 'Pending')}</div>
-      <div class="sign-line"><span>Signature</span> <span>Date: ${req.directorApprovedAt ? new Date(req.directorApprovedAt).toLocaleDateString('en-GB') : '__________'}</span></div>
-    </div>
-    <div class="sign-box">
-      <div class="sign-title">4. Stores / Disbursed By</div>
-      <div class="sign-name">${req.disbursedBy ? esc(req.disbursedBy) : 'Pending Issue'}</div>
-      <div class="sign-line"><span>Signature</span> <span>Date: ${req.disbursedAt ? new Date(req.disbursedAt).toLocaleDateString('en-GB') : '__________'}</span></div>
-    </div>
-    <div class="sign-box" style="grid-column: span 2;">
-      <div class="sign-title">5. Goods Received In Good Order By Department</div>
-      <div class="sign-name">Name: ____________________________________________________</div>
-      <div class="sign-line"><span>Recipient Signature: _______________________</span> <span>Date: ____ / ____ / 2026</span></div>
-    </div>
-  </div>
-
-  <script nonce="${nonce}">
-    document.getElementById('pbtn')?.addEventListener('click', () => window.print());
-    ${autoprint ? 'window.addEventListener("load", () => setTimeout(() => window.print(), 150));' : ''}
-  </script>
-</body>
-</html>`
-      : `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>${esc(req.number)} · Requisition Slip</title>
-  <style nonce="${nonce}">
-    @page { size: 80mm auto; margin: 4mm; }
-    * { box-sizing: border-box; }
-    body {
-      font-family: ui-monospace, 'Cascadia Mono', 'Courier New', monospace;
-      width: 72mm;
-      margin: 0 auto;
-      padding: 2mm 0;
-      color: #000;
-      font-size: 11.5px;
-      line-height: 1.35;
-    }
-    .hdr { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 6px; margin-bottom: 6px; }
-    .brand { font-size: 14px; font-weight: 800; text-transform: uppercase; }
-    .sub { font-size: 10px; margin-top: 2px; }
-    .badge { display: inline-block; margin-top: 4px; padding: 2px 6px; border: 1.5px solid #000; font-size: 11px; font-weight: 800; }
-    .meta { font-size: 11px; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 6px; }
-    .meta div { display: flex; justify-content: space-between; margin: 2px 0; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
-    .totals { border-top: 2px dashed #000; padding-top: 6px; margin-top: 4px; font-size: 12.5px; font-weight: 800; display: flex; justify-content: space-between; }
-    .sig { border-top: 1px dashed #000; margin-top: 8px; padding-top: 6px; font-size: 10.5px; }
-    .sig div { margin: 4px 0; }
-    .no-print { text-align: center; margin-bottom: 10px; }
-    .btn { padding: 6px 14px; background: #111; color: #fff; border: 0; border-radius: 4px; font-weight: 700; cursor: pointer; }
-    @media print { .no-print { display: none; } }
-  </style>
-</head>
-<body>
-  <div class="no-print">
-    <button class="btn" id="pbtn">Print 80mm Voucher</button>
-  </div>
-  <div class="hdr">
-    <div class="brand">Reberon Hotel</div>
-    <div class="sub">Store Requisition & Issue Slip</div>
-    <div class="badge">${esc(req.number)}</div>
-  </div>
-  <div class="meta">
-    <div><span>Dept:</span> <strong>${esc(req.department)}</strong></div>
-    <div><span>Date:</span> <span>${dateStr}</span></div>
-    <div><span>Req By:</span> <span>${esc(req.requestedByName)}</span></div>
-    <div><span>Status:</span> <strong>${esc(req.status)}</strong></div>
-    ${req.notes ? `<div><span>Note:</span> <span>${esc(req.notes)}</span></div>` : ''}
-  </div>
-  <table>
-    <tbody>
-      ${itemsHtml}
-    </tbody>
-  </table>
-  <div class="totals">
-    <span>Total Est:</span>
-    <span>${fmtMoney(req.totalEstimatedMinor, req.currency)}</span>
-  </div>
-  <div class="sig">
-    <div>Req: ${esc(req.requestedByName)}</div>
-    <div>Mgr: ${req.managerApprovedBy ? esc(req.managerApprovedBy) : '__________'}</div>
-    <div>Store Issue: ${req.disbursedBy ? esc(req.disbursedBy) : '__________'}</div>
-    <div>Recv Sig: ________________________</div>
-  </div>
-  <script nonce="${nonce}">
-    document.getElementById('pbtn')?.addEventListener('click', () => window.print());
-    ${autoprint ? 'window.addEventListener("load", () => setTimeout(() => window.print(), 150));' : ''}
-  </script>
-</body>
-</html>`;
-
-    return { html };
+    return { html: docShell({ title: `${req.number} · Store Requisition`, nonce, narrow, thermal: narrow, body, css, autoprint }), nonce };
   }
 
   async announcements(): Promise<StaffAnnouncementDTO[]> {

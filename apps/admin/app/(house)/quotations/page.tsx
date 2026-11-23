@@ -33,6 +33,7 @@ import { Empty, PageHeader, Pill, Skeleton, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
 import { useConfirm } from '@/components/ui/confirm';
 import { SelectInput, Switch, TextInput } from '@/components/ui/field';
+import { downloadDoc, printDoc } from '@/lib/documents';
 import { printDocument } from '@/components/documents/documents-panel';
 
 const STATUS_TONE: Record<QuotationStatus, 'amber' | 'blue' | 'green' | 'neutral' | 'red'> = {
@@ -45,7 +46,10 @@ const STATUS_TONE: Record<QuotationStatus, 'amber' | 'blue' | 'green' | 'neutral
 };
 
 export function printQuotation(id: string, paper: 'A4' | '80MM' = 'A4') {
-  window.open(`/v1/admin/quotations/${id}/print?autoprint=1&paper=${paper}`, '_blank', 'noopener');
+  void printDoc(`/v1/admin/quotations/${id}/print?paper=${paper}`);
+}
+export function downloadQuotation(id: string, number: string, paper: 'A4' | '80MM' = 'A4') {
+  void downloadDoc(`/v1/admin/quotations/${id}/print?paper=${paper}`, number);
 }
 
 export default function QuotationsPage() {
@@ -453,6 +457,9 @@ export default function QuotationsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant="ghost" onClick={() => printQuotation(viewing.id, '80MM')}>
                   80mm Slip
+                </Button>
+                <Button size="sm" variant="ghost" icon={<Download className="size-3.5" />} onClick={() => downloadQuotation(viewing.id, viewing.number)}>
+                  Download PDF
                 </Button>
                 <Button
                   size="sm"

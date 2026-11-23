@@ -37,6 +37,7 @@ import { ZodPipe } from '../../common/zod.pipe.js';
 import { env } from '../../config.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import type { Paper } from '../documents/render.js';
+import { sendDocument } from '../documents/letterhead.js';
 import { OperationsService } from './operations.service.js';
 
 const zReorderTables = z.object({ ids: z.array(z.string().uuid()).min(1).max(500) });
@@ -115,13 +116,7 @@ export class OperationsController {
   ) {
     const k = kind?.toUpperCase() === 'BILL' ? 'BILL' : 'KOT';
     const out = await this.ops.renderPosOrderPrintHtml(id, k, autoprint === '1');
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader(
-      'Content-Security-Policy',
-      `default-src 'none'; style-src 'nonce-${out.nonce}'; script-src 'nonce-${out.nonce}'; img-src data: https:; base-uri 'none'; form-action 'none'; frame-ancestors 'self' ${env.WEB_URL} ${env.ADMIN_URL}`,
-    );
-    res.setHeader('Cache-Control', 'no-store');
-    res.send(out.html);
+    sendDocument(res, out);
   }
 
   @Patch('pos/orders/:id')
@@ -341,13 +336,7 @@ export class OperationsController {
   ) {
     const p: Paper = paper?.toUpperCase() === '80MM' ? '80MM' : 'A4';
     const out = await this.docs.renderQuotationHtml(id, p, autoprint === '1');
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader(
-      'Content-Security-Policy',
-      `default-src 'none'; style-src 'nonce-${out.nonce}'; script-src 'nonce-${out.nonce}'; img-src data: https:; base-uri 'none'; form-action 'none'; frame-ancestors 'self' ${env.WEB_URL} ${env.ADMIN_URL}`,
-    );
-    res.setHeader('Cache-Control', 'no-store');
-    res.send(out.html);
+    sendDocument(res, out);
   }
 
   /* ───── Inventory, Segregated Linen & Fixed Assets ───── */
@@ -504,8 +493,7 @@ export class OperationsController {
   ) {
     const p = paper === '80MM' ? '80MM' : 'A4';
     const out = await this.ops.renderRequisitionPrintHtml(id, p, autoprint === '1');
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(out.html);
+    sendDocument(res, out);
   }
 
   @Post('requisitions')

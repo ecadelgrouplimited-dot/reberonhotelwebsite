@@ -47,6 +47,7 @@ import { ExportMenu } from '@/components/ui/export-menu';
 import { useRouter as useNavRouter } from 'next/navigation';
 import * as SI from 'lucide-react';
 import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
+import { downloadDoc, printDoc } from '@/lib/documents';
 import { SelectInput, Switch, TextArea, TextInput } from '@/components/ui/field';
 
 const STATUS_TONE: Record<RequisitionStatus, 'amber' | 'blue' | 'green' | 'neutral' | 'red'> = {
@@ -77,7 +78,10 @@ const DEPT_LABELS: Record<string, string> = {
 };
 
 export function printRequisition(id: string, paper: 'A4' | '80MM' = 'A4') {
-  window.open(`/v1/admin/requisitions/${id}/print?paper=${paper}&autoprint=1`, '_blank', 'noopener');
+  void printDoc(`/v1/admin/requisitions/${id}/print?paper=${paper}`);
+}
+export function downloadRequisition(id: string, number: string, paper: 'A4' | '80MM' = 'A4') {
+  void downloadDoc(`/v1/admin/requisitions/${id}/print?paper=${paper}`, number);
 }
 
 export default function RequisitionsPage() {
@@ -878,6 +882,9 @@ function RequisitionDetailDialog({
               onClick={() => printRequisition(req.id, '80MM')}
             >
               80mm Slip
+            </Button>
+            <Button size="sm" variant="ghost" icon={<Download className="size-3.5" />} onClick={() => downloadRequisition(req.id, req.number)}>
+              Download PDF
             </Button>
           </div>
 

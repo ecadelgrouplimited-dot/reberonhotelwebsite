@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Ban, Copy, Eye, ExternalLink, FileText, Mail, MessageSquareText, Printer, QrCode, Receipt, Smartphone } from 'lucide-react';
+import { Ban, Copy, Download, Eye, ExternalLink, FileText, Mail, MessageSquareText, Printer, QrCode, Receipt, Share2, Smartphone } from 'lucide-react';
 import { DOCUMENT_LABEL, type DocumentRegisterDTO, type IssuedDocumentDTO, type OutboundMessageDTO } from '@reberon/contracts';
 import { ApiError, get, post } from '@/lib/api';
 import { useCan } from '@/lib/providers';
@@ -12,11 +12,22 @@ import { cn } from '@/lib/cn';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Pill, Section } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { canShareFiles, downloadDoc, printDoc, shareDoc } from '@/lib/documents';
+import { useContextMenu } from '@/components/os/context-menu';
 import { Switch, TextInput } from '@/components/ui/field';
 
-/** Open the printable page in a new tab and start printing. It counts as a print (the next one says COPY). */
+/** Print right here (no new tab). It counts as a print — the next one says COPY. */
 export function printDocument(id: string, paper?: 'A4' | '80MM') {
-  window.open(`/v1/admin/documents/${id}/print?autoprint=1${paper ? `&paper=${paper}` : ''}`, '_blank', 'noopener');
+  void printDoc(`/v1/admin/documents/${id}/print${paper ? `?paper=${paper}` : ''}`);
+}
+
+/** Save as a PDF named after the document (does not count as a print). */
+export function downloadDocument(id: string, number: string, paper?: 'A4' | '80MM') {
+  void downloadDoc(`/v1/admin/documents/${id}/print?purpose=pdf${paper ? `&paper=${paper}` : ''}`, number);
+}
+
+export function shareDocument(id: string, number: string, paper?: 'A4' | '80MM') {
+  void shareDoc(`/v1/admin/documents/${id}/print?purpose=pdf${paper ? `&paper=${paper}` : ''}`, number);
 }
 
 export function previewDocumentUrl(id: string, paper?: 'A4' | '80MM') {
@@ -62,6 +73,14 @@ export function DocumentActions({ d, compact, onChanged }: { d: IssuedDocumentDT
       <button type="button" className={buttonClass('ghost', 'sm')} onClick={() => printDocument(d.id, '80MM')} title="80 mm receipt printer">
         80 mm
       </button>
+      <Button size="sm" variant="ghost" icon={<Download className="size-3.5" />} onClick={() => downloadDocument(d.id, d.number)} title="Save as PDF">
+        PDF
+      </Button>
+      {canShareFiles() && (
+        <Button size="sm" variant="ghost" icon={<Share2 className="size-3.5" />} onClick={() => shareDocument(d.id, d.number)} title="Share the PDF (WhatsApp, email…)">
+          Share
+        </Button>
+      )}
       {valid && can('receipts:issue') && !compact && d.reservation && (
         <span className="flex items-center rounded-full border border-line" role="group" aria-label="Send to the guest">
           <Button
@@ -246,9 +265,27 @@ function VoidDialog({ d, open, onClose, onDone }: { d: IssuedDocumentDTO; open: 
 
 export function DocumentRow({ d, showBooking, onChanged }: { d: IssuedDocumentDTO; showBooking?: boolean; onChanged?: () => void }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const menu = useContextMenu();
   const Icon = d.kind === 'INVOICE' ? FileText : Receipt;
   return (
-    <li className={cn('grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-2 py-3 lg:grid-cols-[auto_1fr_8.5rem_auto]', d.voided && 'opacity-60')}>
+    <li
+      onContextMenu={(e) =>
+        menu.open(
+          e,
+          [
+            { label: 'Preview', icon: Eye, onSelect: () => setPreviewOpen(true) },
+            { label: 'Print A4', icon: Printer, onSelect: () => printDocument(d.id, 'A4') },
+            { label: 'Print 80 mm slip', icon: Printer, onSelect: () => printDocument(d.id, '80MM') },
+            { label: 'Download PDF', icon: Download, onSelect: () => downloadDocument(d.id, d.number) },
+            ...(canShareFiles() ? [{ label: 'Share PDF…', icon: Share2, onSelect: () => shareDocument(d.id, d.number) }] : []),
+            { kind: 'separator' as const },
+            { label: `Copy number ${d.number}`, icon: Copy, onSelect: () => void navigator.clipboard.writeText(d.number).then(() => toast.success('Number copied')) },
+          ],
+          `${DOCUMENT_LABEL[d.kind]} ${d.number}`,
+        )
+      }
+      className={cn('grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-2 py-3 lg:grid-cols-[auto_1fr_8.5rem_auto]', d.voided && 'opacity-60')}
+    >
       <Icon className="size-4 text-fg-subtle" aria-hidden />
       <span className="min-w-0">
         <span className="flex flex-wrap items-center gap-2 font-mono text-[12.5px] font-semibold">

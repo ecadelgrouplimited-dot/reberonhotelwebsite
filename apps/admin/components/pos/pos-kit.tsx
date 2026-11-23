@@ -12,6 +12,7 @@ import type { CurrencyCode, PosItemDTO, PosPaymentMethod, PosStaffDTO } from '@r
 import { money, toMinorStr } from '@/lib/money';
 import { useState } from 'react';
 import { brandNow } from '@/lib/brand';
+import { downloadDoc, printDoc } from '@/lib/documents';
 import { cn } from '@/lib/cn';
 
 export { useNow } from '@/lib/use-now';
@@ -60,9 +61,12 @@ export const CATEGORY_DOTS = [
   'bg-indigo-500',
 ];
 
+/** Bill or kitchen ticket, printed right here on the POS (no new window). */
 export function printPosSlip(orderId: string, kind: 'KOT' | 'BILL') {
-  const url = `/v1/admin/pos/orders/${orderId}/print?kind=${kind}&autoprint=1`;
-  window.open(url, '_blank', 'noopener,noreferrer,width=420,height=720');
+  void printDoc(`/v1/admin/pos/orders/${orderId}/print?kind=${kind}`);
+}
+export function downloadPosSlip(orderId: string, number: string, kind: 'KOT' | 'BILL' = 'BILL') {
+  void downloadDoc(`/v1/admin/pos/orders/${orderId}/print?kind=${kind}`, `${number}-${kind === 'KOT' ? 'ticket' : 'bill'}`);
 }
 
 /** Price in the bill's currency, or null when the item has no price in it (never converted). */
@@ -385,13 +389,22 @@ export function printOfflineSlip(s: OfflineSlip) {
   h1{font-size:14px;text-align:center;margin:0}p{margin:2px 0;text-align:center}table{width:100%;border-collapse:collapse;margin:6px 0}
   td{padding:2px 0;vertical-align:top}.r{text-align:right;white-space:nowrap}.n{font-size:10px;color:#444}.t td{border-top:1px dashed #000;font-weight:bold;padding-top:4px}
   .box{border:1px dashed #000;padding:4px;margin-top:6px;text-align:center;font-size:11px}</style></head><body>
-  <h1>${esc(brandNow().name)}</h1><p>${esc(s.outlet)} · ${esc(s.where)}</p><p>${when} · ${esc(s.servedBy)}</p><p><b>${esc(s.ref)}</b></p>
+  <h1>${esc(brandNow().name)}</h1>${brandNow().address ? `<p>${esc(brandNow().address!)}</p>` : ''}${brandNow().phone ? `<p>${esc(brandNow().phone!)}</p>` : ''}<p>${esc(s.outlet)} · ${esc(s.where)}</p><p>${when} · ${esc(s.servedBy)}</p><p><b>${esc(s.ref)}</b></p>
   <table>${rows}${BigInt(s.discount) > 0n ? `<tr><td>Discount</td><td class="r">−${fmt(s.discount)}</td></tr>` : ''}<tr class="t"><td>Total</td><td class="r">${fmt(s.total)}</td></tr></table>
   ${s.paid ? `<p>Paid · ${esc(s.paid.replace('_', ' ').toLowerCase())}</p>` : '<p>Not yet paid</p>'}
   <div class="box">PROVISIONAL — recorded offline.<br>The numbered receipt is issued when the till reconnects.</div>
   <script>onload=()=>{print();setTimeout(()=>close(),400)}</script></body></html>`;
-  const w = window.open('', '_blank', 'width=420,height=720');
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
+  // Print right here from a hidden frame — no popup to block or close.
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'position:fixed;left:-12000px;top:0;width:420px;height:900px;border:0;opacity:0';
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument!;
+  doc.open();
+  doc.write(html.replace(/<script>[\s\S]*?<\/script>/, ''));
+  doc.close();
+  setTimeout(() => {
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+    setTimeout(() => frame.remove(), 60_000);
+  }, 200);
 }

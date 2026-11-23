@@ -167,6 +167,9 @@ export function renderDocument(d: RenderInput): string {
   .toolbar a { background: transparent; color: #1A1E43; }
   .toolbar button:hover { background: #D76E1B; }
   .toolbar a:hover { background: #E2DED4; }
+  html.embedded .toolbar { display: none; }
+  html.embedded body { background: #fff; }
+  html.embedded .sheet { margin: 0 auto; box-shadow: none; }
   @media print {
     body { background: #fff !important; }
     .sheet { margin: 0 !important; box-shadow: none !important; width: 100% !important; min-height: 0 !important; padding: ${narrow ? '0' : '2mm 0'} !important; }
@@ -174,6 +177,7 @@ export function renderDocument(d: RenderInput): string {
   }
 </style></head>
 <body>
+  <script nonce="${d.nonce}">if (window.self !== window.top) document.documentElement.classList.add('embedded');</script>
   <div class="toolbar">
     <button type="button" id="print"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>Print / Save PDF</button>
     <a href="${esc(d.altPaperUrl)}">${narrow ? 'Switch to A4 Page' : 'Switch to 80 mm Thermal'}</a>
