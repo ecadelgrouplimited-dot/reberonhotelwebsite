@@ -116,7 +116,7 @@ export class RoomsAdminController {
 
   @Delete('room-types/:id')
   @HttpCode(204)
-  @Requires('content:write')
+  @Requires('content:write', 'records:delete')
   async remove(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
     const r = await this.prisma.roomType.findFirst({ where: { id, deletedAt: null }, include: { _count: { select: { rooms: true } } } });
     if (!r) throw notFound('Room type');
@@ -212,7 +212,7 @@ export class FacilitiesAdminController {
 
   @Delete(':id')
   @HttpCode(204)
-  @Requires('content:write')
+  @Requires('content:write', 'records:delete')
   async remove(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
     const f = await this.prisma.facility.update({ where: { id }, data: { deletedAt: new Date(), slug: `deleted-${Date.now()}` } });
     await this.ops.done(user, req, 'facility.delete', 'Facility', id, `Deleted facility`, ['facilities'], { id: f.id });
@@ -290,7 +290,7 @@ export class DestinationsAdminController {
 
   @Delete(':id')
   @HttpCode(204)
-  @Requires('content:write')
+  @Requires('content:write', 'records:delete')
   async remove(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
     const d = await this.prisma.destination.findFirst({ where: { id, deletedAt: null } });
     if (!d) throw notFound('Destination');
@@ -358,7 +358,7 @@ export class ProgressAdminController {
 
   @Delete(':id')
   @HttpCode(204)
-  @Requires('content:write')
+  @Requires('content:write', 'records:delete')
   async remove(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
     const p = await this.prisma.progressUpdate.findFirst({ where: { id, deletedAt: null } });
     if (!p) throw notFound('Update');
@@ -400,7 +400,7 @@ export class FaqAdminController {
 
   @Delete('faq-groups/:id')
   @HttpCode(204)
-  @Requires('content:write')
+  @Requires('content:write', 'records:delete')
   async deleteGroup(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
     const g = await this.prisma.faqGroup.delete({ where: { id } });
     await this.ops.done(user, req, 'faq_group.delete', 'FaqGroup', id, `Deleted FAQ group ${g.key}`, ['faqs']);
@@ -425,7 +425,7 @@ export class FaqAdminController {
 
   @Delete('faq-items/:id')
   @HttpCode(204)
-  @Requires('content:write')
+  @Requires('content:write', 'records:delete')
   async deleteItem(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
     await this.prisma.faqItem.delete({ where: { id } });
     await this.ops.done(user, req, 'faq_item.delete', 'FaqItem', id, 'Deleted a question', ['faqs']);

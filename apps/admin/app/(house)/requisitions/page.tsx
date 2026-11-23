@@ -852,7 +852,7 @@ function RequisitionDetailDialog({
   const me = useMe();
   if (!req) return null;
 
-  const isHotelOwner = me.role === 'OWNER';
+  const canDeleteRecords = can('records:delete');
   const isRequester = req.requestedById === me.id || req.requestedByName.toLowerCase().includes(me.name.toLowerCase());
   const canApprove = can('requisitions:approve');
 
@@ -890,7 +890,7 @@ function RequisitionDetailDialog({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
-            {isHotelOwner && (
+            {canDeleteRecords && (
               <Button
                 variant="danger"
                 size="sm"

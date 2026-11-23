@@ -27,7 +27,7 @@ function WaitlistInner() {
   const qc = useQueryClient();
   const can = useCan();
   const me = useMe();
-  const isOwner = me.role === 'OWNER';
+  const canDelete = can('records:delete');
   const [status, setStatus] = useState('');
   const [room, setRoom] = useState('');
   const [month, setMonth] = useState('');
@@ -143,7 +143,7 @@ function WaitlistInner() {
                   <td className="px-4 py-3 text-right text-fg-subtle">
                     <div className="flex items-center justify-end gap-2">
                       <span>{ago(w.createdAt)}</span>
-                      {isOwner && (
+                      {canDelete && (
                         <Button
                           variant="danger"
                           size="sm"
@@ -187,7 +187,7 @@ function EntryDrawer({ id, onClose }: { id: string | null; onClose: () => void }
   const qc = useQueryClient();
   const can = useCan();
   const me = useMe();
-  const isOwner = me.role === 'OWNER';
+  const canDelete = can('records:delete');
   const { data: w } = useQuery({ queryKey: ['waitlist-entry', id], queryFn: () => get<Detail>(`/waitlist/${id}`), enabled: !!id });
   const [notes, setNotes] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -223,7 +223,7 @@ function EntryDrawer({ id, onClose }: { id: string | null; onClose: () => void }
         description={w ? `${w.reference} · asked ${ago(w.createdAt)}` : undefined}
         footer={
           <div className="flex w-full items-center justify-between">
-            {isOwner && w ? (
+            {canDelete && w ? (
               <Button
                 variant="danger"
                 size="sm"

@@ -275,8 +275,8 @@ export class RackService {
   }
 
   async deleteRoom(id: string, actor: AuthUser) {
-    if (!['OWNER', 'MANAGER'].includes(actor.role)) {
-      throw forbidden('Only the Owner or Manager can delete a physical room');
+    if (!has(actor, 'records:delete')) {
+      throw forbidden('You are not allowed to delete rooms');
     }
     const existing = await this.prisma.room.findUnique({
       where: { id },

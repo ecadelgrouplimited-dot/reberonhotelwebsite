@@ -43,7 +43,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
   const qc = useQueryClient();
   const can = useCan();
   const me = useMe();
-  const isOwner = me.role === 'OWNER';
+  const canDelete = can('records:delete');
   const autoCheckIn = useSearchParams().get('checkin') === '1';
   const { data: r, isLoading, error } = useQuery({ queryKey: ['reservation', id], queryFn: () => get<Detail>(`/reservations/${id}`) });
   useTrackRecent(r ? { href: `/reservations/${id}`, label: r.contact.name, detail: `${r.code} · ${dateRange(r.arrival, r.departure)}`, kind: 'booking' } : null);
@@ -89,7 +89,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
             {can('payments:refund') && r.status === 'CANCELLED' && BigInt(r.paidMinor) > 0n && balance >= 0n && <Button icon={<Undo2 className="size-4" />} onClick={() => setDialog('refund')}>Record refund</Button>}
             {r.status === 'CONFIRMED' && r.contact.email && <Button icon={<Send className="size-4" />} loading={resend.isPending} onClick={() => resend.mutate()}>Resend confirmation</Button>}
             {can('bookings:write') && open && <Button variant="danger" icon={<Ban className="size-4" />} onClick={() => setDialog('cancel')}>Cancel</Button>}
-            {isOwner && <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setDialog('delete')}>Delete</Button>}
+            {canDelete && <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setDialog('delete')}>Delete</Button>}
           </>
         }
       />
@@ -201,7 +201,7 @@ export default function ReservationPage({ params }: { params: Promise<{ id: stri
       <PaymentDialog kind={dialog === 'refund' ? 'refund' : 'pay'} open={dialog === 'pay' || dialog === 'refund'} onClose={() => setDialog(null)} r={r} onDone={(d) => { refresh(d); setDialog(null); }} />
       {(open || r.status === 'IN_HOUSE') && <AmendDialog<Detail> r={r} mode={dialog === 'extend' ? 'extend' : 'full'} open={dialog === 'amend' || dialog === 'extend'} onClose={() => setDialog(null)} onDone={(d) => { refresh(d); setDialog(null); }} />}
       <CancelDialog open={dialog === 'cancel'} onClose={() => setDialog(null)} r={r} onDone={() => { refresh(); setDialog(null); }} />
-      {isOwner && <DeleteReservationDialog open={dialog === 'delete'} onClose={() => setDialog(null)} r={r} onDeleted={() => { qc.invalidateQueries({ queryKey: ['reservations'] }); router.push('/reservations'); }} />}
+      {canDelete && <DeleteReservationDialog open={dialog === 'delete'} onClose={() => setDialog(null)} r={r} onDeleted={() => { qc.invalidateQueries({ queryKey: ['reservations'] }); router.push('/reservations'); }} />}
     </div>
   );
 }

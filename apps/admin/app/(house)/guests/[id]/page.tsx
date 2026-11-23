@@ -28,7 +28,7 @@ export default function GuestPage({ params }: { params: Promise<{ id: string }> 
   const can = useCan();
   const me = useMe();
   const isOwner = me.role === 'OWNER';
-  const canDelete = me.role === 'OWNER' || me.role === 'MANAGER';
+  const canDelete = can('records:delete');
   const confirm = useConfirm();
   const { data: g, isLoading, error } = useQuery({ queryKey: ['guest', id], queryFn: () => get<GuestProfileDTO>(`/guests/${id}`) });
   useTrackRecent(g ? { href: `/guests/${id}`, label: g.name, detail: [g.phone, g.email].filter(Boolean).join(' · ') || 'Guest profile', kind: 'guest' } : null);

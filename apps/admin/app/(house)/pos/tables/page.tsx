@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import type { PosTableDTO } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
-import { useMe } from '@/lib/providers';
+import { useMe, useCan } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { cn } from '@/lib/cn';
 import { useNow } from '@/lib/use-now';
@@ -43,10 +43,11 @@ const KEY = ['pos', 'tables', 'all'];
 
 export default function TablesPage() {
   const me = useMe();
+  const can = useCan();
   const qc = useQueryClient();
   const confirm = useConfirm();
   const now = useNow();
-  const canManage = me.role === 'OWNER' || me.role === 'MANAGER';
+  const canManage = can('pos:manage');
 
   const [showHidden, setShowHidden] = useState(true);
   const [editing, setEditing] = useState<{ table: PosTableDTO | null; area?: string } | null>(null);

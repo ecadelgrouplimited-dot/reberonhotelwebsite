@@ -39,7 +39,7 @@ export function EntityEditor({ config, id }: { config: EntityConfig; id: string 
   const qc = useQueryClient();
   const can = useCan();
   const me = useMe();
-  const isOwner = me.role === 'OWNER';
+  const canDelete = can('records:delete');
   const confirm = useConfirm();
   const editable = can('content:write');
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -149,7 +149,7 @@ export function EntityEditor({ config, id }: { config: EntityConfig; id: string 
             {record?.updatedAt ? <p className="text-center text-[11.5px] text-fg-subtle">Last saved {ago(String(record.updatedAt))}</p> : null}
           </div>
           {config.extraSide?.(record ?? null)}
-          {!isNew && isOwner && (
+          {!isNew && canDelete && (
             <Button
               variant="danger"
               icon={<Trash2 className="size-4" />}

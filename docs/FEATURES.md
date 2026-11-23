@@ -10,7 +10,7 @@
 | **Property Location** | Kapchorwa Town, Slopes of Mount Elgon (1,900 m), Eastern Uganda |
 | **Official Public Website** | `https://reberonhotel.com` |
 | **The House (Staff & Owner PMS)** | `https://reberonhotel.com:8443` |
-| **Document Date** | November 2026 |
+| **Document Date** | November 2026 (progress revision: 23 November 2026) |
 | **Launch Readiness Status** | **CERTIFIED READY FOR PUBLIC LAUNCH (100% Built, Deployed & Verified on Production)** |
 
 ---
@@ -50,7 +50,7 @@ We hereby certify that **Reberon Hotel Suite is officially ready for public laun
    - **Append-Only Guest Bills:** Once a charge or payment is posted to a guest folio, it can never be silently edited or deleted. Corrections post a transparent adjustment or reversal line.
    - **Immutable Numbered Documents:** Receipts (`RCT`), Refund Notes (`RFD`), Invoices (`INV`), and Quotations (`QUO`) are numbered sequentially without gaps and sealed with a verification check code.
 4. **Database-Enforced Double-Booking Immunity:** PostgreSQL exclusion constraints make it mathematically impossible for two guests to be assigned the same physical room on overlapping nights, or for two online bookings to take the last room of a category simultaneously.
-5. **Bank-Grade Security & Per-Person Access:** Staff permissions are configured per individual (37 distinct permissions), with optional sign-in time windows (e.g., `07:00–19:00` Kampala time) and access expiry dates. Guest ID numbers and third-party API keys are encrypted at rest with **AES-256-GCM**.
+5. **Bank-Grade Security & Per-Person Access:** Staff permissions are configured per individual (47 distinct permissions), with optional sign-in time windows (e.g., `07:00–19:00` Kampala time) and access expiry dates. Guest ID numbers and third-party API keys are encrypted at rest with **AES-256-GCM**.
 
 ### 1.3 Owner-Controlled Go-Live Switches (No Developer Required)
 
@@ -159,9 +159,9 @@ Every page on the website (Home, About, Dining, Conferences, Contact, Legal, or 
 **The House** is the private, role-adaptive operating system for Reberon Hotel staff, managers, and proprietors. Every staff member sees only the navigation items, workspaces, and actions permitted by their individual access profile.
 
 ```mermaid
-flowchart TB
+flowchart LR
   subgraph Shell["The House Shell (Installable Offline-First PWA)"]
-    NAV["Collapsible Sidebar + Ctrl+K Search + Live Alerts + Sync Center"]
+    NAV["Home Launcher + Dock + Right-Click Menus + Ctrl+K Search + Live Alerts + Sync Center"]
   end
 
   Shell --> CMD["Command & Comms<br/>Role-Adaptive Overview, Inbox, Waitlist, Sent Messages"]
@@ -169,16 +169,34 @@ flowchart TB
   Shell --> REV["Revenue & Billing<br/>Owner Brief, Receipts & Folios, Quotations, Calendar & Rates, Extras, Finance Reports"]
   Shell --> OPS["Operations & POS<br/>Kitchen & Bar POS, Floor Plan & Tables, Health Club & Spa, Inventory, Categories, Requisitions"]
   Shell --> HRS["Human Resources<br/>Staff Directory, Departments, Shift Rosters, Leave Requests, Payroll & Taxes"]
-  Shell --> WEB["Website & Settings<br/>Live Page Builder, Publishing, Media, Typography, Users & 37 Permissions, Integrations, Audit Log"]
+  Shell --> WEB["Website & Settings<br/>Live Page Builder, Publishing, Media, Typography, Users & 47 Permissions, Integrations, Audit Log"]
 ```
 
 ---
 
-### 3.1 Command & Comms — Role-Adaptive Dashboard (`/`)
+### 3.1 The House Desktop — Home, Dock, Search & Right-Click (ADR-034 to ADR-037)
 
- Rather than cluttering every employee's screen with executive charts, the home screen adapts automatically to the signed-in user:
+The House now works like a familiar computer desktop: clean, calm and quick, with no crowded dashboard. Every person sees only the apps their access allows.
 
-#### A. Owner & Executive Overview
+![The House — Home launcher with “Your day” and the dock](handover/screenshots/house-01-home.jpg)
+
+- **Home Launcher (`/`):** A clock and greeting, one search box (“What do you need? A guest, a booking, a screen…”), three big actions (**Walk-in**, **New booking**, **New sale**), a short list of only the things that need attention, then every app the person may open, grouped by area. Apps can be pinned, hidden or reordered from a right-click.
+- **“Your day”:** Once a day, Home lists in plain words what still has to be done — arrivals still to check in, departures to check out, overdue guests, guest requests waiting, and rooms not yet ready for someone arriving. One click opens the right screen; **Got it** hides it until tomorrow.
+- **The Dock:** A row of pinned apps at the bottom of every screen (including the POS), with live counters (unread enquiries, open bills, pending requisitions). Pins start from the person's job — a barista gets POS and Kitchen, a housekeeper gets Housekeeping and the Rack, the front desk gets Desk, Bookings and Rack — and each person can change their own.
+- **One Search for Everything (`Ctrl/⌘ + K` or `/`):** Type a guest name, phone number, booking code, room number or screen name. Current stays come first; every typed word must match, so results are exact. Recently opened bookings, guests and apps appear under **Jump back in**.
+- **Right-Click Menus That Follow the Screen:** Right-clicking empty space offers what that screen is for — on the POS: *New bill, Tables, Bills, Kitchen*; on the Front Desk: *Walk-in check-in, Arrivals, In house, Departures, Overdue*; on Bookings, Inbox, Housekeeping, Rack, Guests, Receipts, Requisitions, Inventory, HR, Media, Website and Reports likewise. Right-clicking a row (a booking, a guest, a room, a conversation) offers that record's actions: check in/out, open folio, assign or move room, call, WhatsApp, email, copy.
+- **Single-Key Shortcuts:** Each screen's actions have a letter (e.g. **W** walk-in, **A** arrivals, **N** new bill/booking, **F** find). Press **?** to see them all. Keys never fire while typing or when a dialog is open.
+- **Undo for Quick Changes:** Changing a room status or an inbox conversation shows **Undo** for a few seconds (or `Ctrl/⌘ + Z`). The undo is itself an ordinary audited change.
+- **Personal Layout:** Light/Dark mode, larger icons, dock on/off and pinned apps are saved to the person's account and follow them to any device.
+
+| Right-click on the Front Desk | One search for guests, bookings, rooms and screens |
+| :---: | :---: |
+| ![Front Desk right-click menu](handover/screenshots/house-05-desk-menu.jpg) | ![Search](handover/screenshots/house-03-search.jpg) |
+
+#### Today Board (`/today`) — the detailed operations overview
+The earlier role-adaptive dashboard remains available as the **Today** app for anyone who wants the full picture:
+
+#### Owner & Executive View
 - **Compact KPI Ribbon:** Instant scannable metrics with one-click drill-downs:
   - *Cleared Revenue Today* (`UGX` / `USD`)
   - *POS & Health Club Revenue* (with open bill count)
@@ -191,14 +209,10 @@ flowchart TB
 - **Compact Room Rack Strip:** One-line visual status of all rooms on property (`101` to `205`) with colour-coded state dots, arrival/departure icons, and one-tap **Mark Clean** for dirty vacant rooms.
 - **Live Operational Boards:** Front Desk live movement (`Arrivals`, `In-House`, `Departures`), Room Readiness & Occupancy bar, and Housekeeping cleaner load.
 
-#### B. Front Desk, Barista & Operational Staff Workspace
+#### Front Desk, Barista & Operational Staff View
 - **Quick Actions Grid:** Large, one-click daily tool launchers (`+ Walk-In / Booking`, `Front Desk & Check-In`, `Housekeeping Queue`, `Room Rack`, `POS: Kitchen & Bar`, `Health Club & Spa`, `Guest Inbox`, `Store Requisitions`, `Receipts & Folios`).
 - **Focused Workbenches:** Direct inline benches for checking in arriving guests, settling folios, marking rooms clean, replying to guest enquiries, and reading pinned shift handover announcements.
 
-#### C. Shell Ergonomics & Navigation
-- **Collapsible Full-Screen Sidebar:** Staff can collapse the left navigation sidebar with one click (or expand it anytime) to maximize screen space for POS, Front Desk, or Financial Reports; the state persists across the session.
-- **Quick Jump Search (`Ctrl/Cmd + K`):** Instant keyboard-driven search to jump to any screen, reservation, or guest.
-- **Theme & Sound Controls:** One-click Light/Dark mode toggle and audible notification chime toggle.
 
 ---
 
@@ -288,7 +302,7 @@ flowchart LR
   - Switch between **Floor View** and **Menu / Till View**.
   - Tables are grouped by zone (*Main Dining*, *Terrace*, *Lounge & Bar*, *Garden*, *Poolside*) showing seat capacity, live occupancy state (`Available` vs. `Occupied`), current bill total, and how long the table has been open.
   - Clicking an available table opens a new bill linked to that table; clicking an occupied table opens its active bill to add rounds or settle.
-  - Owners and managers can add, rename, resize, change zones, or deactivate tables anytime at `/pos/tables`.
+  - The **General Manager** (and anyone the owner grants **Set up the POS**) can add, rename, reorder, change zones, or deactivate tables anytime at `/pos/tables` — the owner does not need to be on site (ADR-039).
 - **Multi-Outlet Menu & Categories:**
   - Supports **Restaurant**, **Bar**, **Pool Bar**, and **Room Service** outlets with category filtering, search, item modifiers/notes, and owner/manager menu item creation & price editing.
 - **Order, Kitchen Ticket & Settlement Workflow:**
@@ -376,7 +390,16 @@ Every operational and financial screen in The House shares a single, executive-g
 - **One-Click Export Menu (`ExportMenu` — Excel `.xlsx`, CSV & Branded PDF):**
   - **Excel (`.xlsx`):** Generates a genuine multi-styled Excel workbook directly in the browser (with letterhead header rows, styled column headers, frozen top row, auto-filters, real numeric cells formatted as `UGX #,##0` or `USD #,##0.00`, and separate currency total rows so UGX and USD are never summed together).
   - **CSV (`.csv`):** Clean UTF-8 data export with unformatted numbers for accounting software import.
-  - **PDF (Print to PDF):** Opens the branded A4 letterhead view ready to save as PDF.
+  - **PDF:** Saves the same branded A4 letterhead view as a PDF.
+
+#### Branded Hotel Documents — Print, Download PDF & Share in One Click (ADR-038)
+- **One Letterhead Everywhere:** Receipts, invoices, refund notes, statements, quotations, **store requisition vouchers** (A4 with approval trail and signature boxes, or 80 mm), **POS customer bills** and **kitchen/bar tickets** (80 mm thermal) all carry the Reberon monogram, hotel name, legal name, address, phone, email, TIN and footer — all taken from **Settings**, never typed into the code.
+- **Print Without Leaving the Screen:** Pressing **Print** opens the printer dialog right over the current screen — no new tab, nothing to close afterwards.
+- **Download PDF:** One click saves a properly named file (e.g. `RCT-2026-00143.pdf`) — A4 with margins and page breaks, or an 80 mm slip as one long page.
+- **Share (phones and tablets):** Hands the PDF straight to WhatsApp, email or any app on the device.
+- **Honest Copy Numbering:** Saving a PDF does not count as a reprint, so “COPY” marks stay accurate.
+
+![A branded receipt on the hotel letterhead](handover/screenshots/house-17-receipt.jpg)
 
 ---
 
@@ -395,7 +418,8 @@ Every operational and financial screen in The House shares a single, executive-g
 ### 3.8 Security, Access Control, Integrations & Audit Log (`/settings/*`)
 
 - **Per-Person Access Control (ADR-024, `/settings/users`):**
-  - Start from a role preset (`Owner`, `Manager`, `Front Desk`, `Housekeeping`) and toggle any of the **37 individual permissions** on or off for that specific person.
+  - Start from a role preset (`Owner`, `Manager`, `Front Desk`, `Housekeeping`) and toggle any of the **47 individual permissions** on or off for that specific person.
+  - **General Manager Runs the Hotel Day to Day (ADR-039):** The General Manager can now set up POS tables and menus, and delete records that are no longer needed — bookings, guests, rooms, extras, packages, menu items, stock items and categories, requisitions, quotations, departments, staff records, waitlist entries and website rooms, facilities and FAQs. These are two permissions, **Set up the POS** and **Delete records**, which the owner can also give to any other trusted person, or take away from a particular manager. Every deletion remains in the audit log. Staff accounts and their access, the encrypted key vault, feature switches and the audit log stay with the owner.
   - Set **Allowed Sign-In Hours** (Kampala time) and an **Access Expiry Date** for temporary or relief staff.
   - View active signed-in devices and trigger **Sign Out Everywhere** immediately if a device is lost.
 - **Encrypted Integrations Vault (ADR-020, `/settings/integrations`):**
@@ -407,12 +431,12 @@ Every operational and financial screen in The House shares a single, executive-g
 
 ---
 
-## 4. Complete Architecture Decision Record (ADR-001 to ADR-033)
+## 4. Complete Architecture Decision Record (ADR-001 to ADR-039)
 
 Every major engineering choice is documented and verified:
 - **ADR-001 to ADR-005:** Monorepo architecture (`apps/web`, `apps/admin`, `apps/api`), Prisma + PostgreSQL 16, shared Zod contracts, in-house block CMS, and localizable JSONB text.
 - **ADR-007:** Strict dual-currency (`UGX` / `USD`) minor-unit storage with zero silent conversion.
-- **ADR-009 & ADR-024:** Argon2id authentication, rotating refresh tokens, 37 per-person permissions, sign-in time windows, and immediate permission enforcement.
+- **ADR-009 & ADR-024:** Argon2id authentication, rotating refresh tokens, 47 per-person permissions, sign-in time windows, and immediate permission enforcement.
 - **ADR-017 & ADR-018:** Unified `Contact` guest profile with duplicate merge; PostgreSQL exclusion constraints preventing double-booked rooms and oversold maintenance blocks.
 - **ADR-020 & ADR-021:** AES-256-GCM encrypted Integrations Vault and resilient message outbox with manual WhatsApp fallback.
 - **ADR-022:** Slot-based 360° Virtual Tours with pre-opening image walk and live tour replacement.
@@ -424,6 +448,72 @@ Every major engineering choice is documented and verified:
 - **ADR-031:** Unified A4 letterhead print engine (`lib/print.ts`) and zero-dependency native `.xlsx` / CSV / PDF export suite (`lib/export.ts`).
 - **ADR-032:** Bidirectional Page Builder preview bridge (`postMessage`), Cards & lazy Video blocks, and database-driven `Facility.details`.
 - **ADR-033:** Curated 26-font self-hosted typography studio (`appearance.typography`) for both Website and The House.
+- **ADR-034:** The House as a desktop — Home launcher, dock with live counters, global right-click menu, keyboard shortcuts and per-person layout saved to the account.
+- **ADR-035:** One search for bookings, guests, rooms, conversations, actions and screens; “Jump back in” recents; right-click menus on booking, desk and guest rows.
+- **ADR-036:** Undo for quick changes (room status, inbox), inbox row menus and the daily “Your day” brief.
+- **ADR-037:** Screen-specific right-click menus and single-key shortcuts on every main workspace; job-aware default dock pins.
+- **ADR-038:** One hotel letterhead for every printed document (including requisition vouchers, POS bills and kitchen tickets), in-place printing, one-click named PDF download and share.
+- **ADR-039:** General Manager permissions — `pos:manage` (tables and menu set-up) and `records:delete` (audited deletions) replace owner-only checks; people, keys, feature switches and the audit log stay owner-only.
+
+---
+
+## 5. Progress Gallery — Screens as of 23 November 2026
+
+All screens below are taken from the running system with the hotel's own data. Nothing is a mock-up.
+
+### 5.1 The Public Website (`reberonhotel.com`)
+
+![Home page — “Sleep on the shoulder of Elgon.”](handover/screenshots/web-01-home.jpg)
+
+| Rooms | A room in detail |
+| :---: | :---: |
+| ![Rooms](handover/screenshots/web-03-rooms.jpg) | ![Elgon View King](handover/screenshots/web-04-room.jpg) |
+| **Facilities — Restaurant** | **Kapchorwa guide** |
+| ![Restaurant](handover/screenshots/web-05-facility.jpg) | ![Kapchorwa](handover/screenshots/web-06-kapchorwa.jpg) |
+| **Online booking — step 1** | **Sipi AI Concierge** |
+| ![Book](handover/screenshots/web-07-book.jpg) | ![Concierge](handover/screenshots/web-08-concierge.jpg) |
+
+### 5.2 Front Desk & Stays
+
+| Front Desk — guests in house | Bookings |
+| :---: | :---: |
+| ![Front Desk](handover/screenshots/house-04-desk.jpg) | ![Bookings](handover/screenshots/house-06-reservations.jpg) |
+| **A booking and its folio** | **Room Rack** |
+| ![Booking](handover/screenshots/house-07-booking.jpg) | ![Rack](handover/screenshots/house-08-rack.jpg) |
+| **Housekeeping** | **Right-click on Home** |
+| ![Housekeeping](handover/screenshots/house-09-housekeeping.jpg) | ![Right-click](handover/screenshots/house-02-rightclick.jpg) |
+
+### 5.3 Restaurant, Bar, Store & Team
+
+| Point of Sale | Tables & floor (General Manager can edit) |
+| :---: | :---: |
+| ![POS](handover/screenshots/house-10-pos.jpg) | ![Tables](handover/screenshots/house-11-pos-tables.jpg) |
+| **Inventory, linen & assets** | **Requisitions** |
+| ![Inventory](handover/screenshots/house-12-inventory.jpg) | ![Requisitions](handover/screenshots/house-13-requisitions.jpg) |
+| **People & HR** | **Access for the General Manager** |
+| ![HR](handover/screenshots/house-16-hr.jpg) | ![Access](handover/screenshots/house-20-access.jpg) |
+
+### 5.4 Money & Reports
+
+| Financial reports | Owner Brief |
+| :---: | :---: |
+| ![Reports](handover/screenshots/house-14-reports.jpg) | ![Brief](handover/screenshots/house-15-brief.jpg) |
+
+### 5.5 Website Control & Brand
+
+| Live page builder | Typography & fonts |
+| :---: | :---: |
+| ![Page builder](handover/screenshots/house-18-page-builder.jpg) | ![Typography](handover/screenshots/house-19-typography.jpg) |
+
+### 5.6 Dark Mode & Phones
+
+| POS in dark mode | Home in dark mode |
+| :---: | :---: |
+| ![Dark POS](handover/screenshots/house-21-dark.jpg) | ![Dark Home](handover/screenshots/house-22-dark-home.jpg) |
+
+| Website | Room | The House | Front Desk | Housekeeping |
+| :---: | :---: | :---: | :---: | :---: |
+| ![](handover/screenshots/phone-01-web-home.jpg) | ![](handover/screenshots/phone-02-web-room.jpg) | ![](handover/screenshots/phone-03-house-home.jpg) | ![](handover/screenshots/phone-04-house-desk.jpg) | ![](handover/screenshots/phone-05-housekeeping.jpg) |
 
 ---
 

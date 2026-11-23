@@ -44,7 +44,7 @@ import type {
   PosTableDTO,
 } from '@reberon/contracts';
 import { ApiError, OfflineQueuedError, del, get, patch, post } from '@/lib/api';
-import { useMe } from '@/lib/providers';
+import { useMe, useCan } from '@/lib/providers';
 import { money } from '@/lib/money';
 import { dateTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -101,9 +101,10 @@ const DISCOUNT_STEPS = [0, 5, 10, 15, 100];
 export default function PosPage() {
   const qc = useQueryClient();
   const me = useMe();
+  const can = useCan();
   const confirm = useConfirm();
-  const isOwner = me.role === 'OWNER';
-  const canManageTables = isOwner || me.role === 'MANAGER';
+  const canDeleteRecords = can('records:delete');
+  const canManageTables = can('pos:manage');
   const now = useNow();
   const searchRef = useRef<HTMLInputElement>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
@@ -897,7 +898,7 @@ export default function PosPage() {
                   <CatChip key={c.id} active={selectedCat === c.id} onClick={() => setSelectedCat(c.id)} dot={CATEGORY_DOTS[ci % CATEGORY_DOTS.length]}>
                     {c.name}
                     <span className="opacity-60">{c.items.length}</span>
-                    {manage && isOwner && (
+                    {manage && canDeleteRecords && (
                       <span
                         role="button"
                         tabIndex={0}
@@ -1361,7 +1362,7 @@ export default function PosPage() {
         outlet={currentOutlet}
         defaultCategoryId={selectedCat !== 'ALL' ? selectedCat : ''}
         stockItems={stockItems ?? []}
-        canDelete={isOwner}
+        canDelete={canDeleteRecords}
         onClose={() => setItemDialog(null)}
         onDelete={setDeletingMenuItem}
       />

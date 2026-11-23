@@ -10,7 +10,7 @@ import { normalizePhone } from '@reberon/utils';
 import type { Prisma } from '@reberon/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
-import { CurrentUser, Public, Requires, type AuthUser } from '../../common/auth.js';
+import { CurrentUser, Public, Requires, type AuthUser, has } from '../../common/auth.js';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import { badRequest, forbidden, notFound } from '../../common/errors.js';
 import { env } from '../../config.js';
@@ -514,7 +514,7 @@ export class SellablesAdminController {
   @HttpCode(204)
   @Requires('rates:write')
   async deleteExtra(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
-    if (user.role !== 'OWNER') throw forbidden('Only the hotel owner can delete extras');
+    if (!has(user, 'records:delete')) throw forbidden('You are not allowed to delete extras');
     const e = await this.prisma.extra.update({ where: { id }, data: { deletedAt: new Date(), status: 'HIDDEN', slug: `deleted-${Date.now()}` } });
     await this.audit.record({ actor: user, action: 'extra.delete', entityType: 'Extra', entityId: id, summary: `Deleted extra`, after: { id: e.id }, req });
   }
@@ -545,7 +545,7 @@ export class SellablesAdminController {
   @HttpCode(204)
   @Requires('rates:write')
   async deletePackage(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
-    if (user.role !== 'OWNER') throw forbidden('Only the hotel owner can delete packages');
+    if (!has(user, 'records:delete')) throw forbidden('You are not allowed to delete packages');
     const p = await this.prisma.package.update({ where: { id }, data: { deletedAt: new Date(), status: 'HIDDEN', slug: `deleted-${Date.now()}` } });
     await this.audit.record({ actor: user, action: 'package.delete', entityType: 'Package', entityId: id, summary: `Deleted package`, after: { id: p.id }, req });
   }

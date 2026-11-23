@@ -475,7 +475,7 @@ export default function ReservationsPage() {
                       >
                         Open <ExternalLink className="size-3" />
                       </Link>
-                      {isOwner && (
+                      {can('records:delete') && (
                         <button
                           type="button"
                           onClick={() => {

@@ -88,7 +88,7 @@ export default function InventoryPage() {
   const qc = useQueryClient();
   const can = useCan();
   const me = useMe();
-  const isOwner = me.role === 'OWNER';
+  const canDelete = can('records:delete');
 
   const [tab, setTab] = useState<'ALL' | InventoryCategory | 'MOVEMENTS'>('ALL');
   const [deptFilter, setDeptFilter] = useState<string>('ALL');
@@ -642,7 +642,7 @@ export default function InventoryPage() {
                             />
 
                             {/* Owner Delete Action */}
-                            {isOwner && (
+                            {canDelete && (
                               <Button
                                 size="sm"
                                 variant="danger"
@@ -683,7 +683,7 @@ export default function InventoryPage() {
           setSelectedItem(null);
           setDeletingItem(it);
         }}
-        isOwner={isOwner}
+        canDelete={canDelete}
       />
 
       {deletingItem && (
@@ -761,7 +761,7 @@ function ItemDetailDialog({
   onCount,
   onMove,
   onRequestDelete,
-  isOwner,
+  canDelete,
 }: {
   item: InventoryItemDTO | null;
   onClose: () => void;
@@ -769,7 +769,7 @@ function ItemDetailDialog({
   onCount: (it: InventoryItemDTO) => void;
   onMove: (it: InventoryItemDTO) => void;
   onRequestDelete: (it: InventoryItemDTO) => void;
-  isOwner: boolean;
+  canDelete: boolean;
 }) {
   const can = useCan();
   const itemId = item?.id;
@@ -795,7 +795,7 @@ function ItemDetailDialog({
       description={`${CATEGORY_SHORT[item.category] ?? item.category} · ${DEPT_LABELS[item.department] ?? item.department}`}
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          {isOwner ? (
+          {canDelete ? (
             <Button
               variant="danger"
               icon={<Trash2 className="size-3.5" />}

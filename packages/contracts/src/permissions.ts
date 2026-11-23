@@ -46,6 +46,8 @@ export const PERMISSIONS = [
   'requisitions:approve',
   'expenses:manage',
   'hr:manage',
+  'pos:manage',
+  'records:delete',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -159,6 +161,8 @@ export const PERMISSION_INFO: PermissionInfo[] = [
   { key: 'requisitions:approve', group: 'Operations & POS', label: 'Approve & disburse requisitions', description: 'Manager/Director approval and store disbursement for requisitions.', money: true },
   { key: 'expenses:manage', group: 'Operations & POS', label: 'Expense Management & Cost Drivers', description: 'Record, edit, and categorize hotel operational expenses, utility bills, and supplier payments.', money: true },
   { key: 'hr:manage', group: 'Operations & POS', label: 'Human Resource Management', description: 'Manage employee profiles, shift rosters, leave requests, and payroll records.', money: true },
+  { key: 'pos:manage', group: 'Operations & POS', label: 'Set up the POS', description: 'Add, rename, reorder and remove tables; edit the menu and its categories.' },
+  { key: 'records:delete', group: 'Settings', label: 'Delete records', description: 'Permanently remove bookings, extras, packages, menu and stock items, requisitions, departments and staff records. Every deletion is audited.' },
 
   { key: 'guests:read', group: 'Guests', label: 'Guest profiles', description: 'Guest history, notes and feedback.' },
   { key: 'guests:write', group: 'Guests', label: 'Edit guest profiles', description: 'Contact details, notes, tags, VIP.' },

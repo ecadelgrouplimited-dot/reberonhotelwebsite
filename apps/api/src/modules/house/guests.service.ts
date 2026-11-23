@@ -180,8 +180,8 @@ export class GuestsService {
   }
 
   async delete(id: string, reason: string | undefined, actor: AuthUser) {
-    if (!['OWNER', 'MANAGER'].includes(actor.role)) {
-      throw forbidden('Only the Super Admin (Owner) or Manager can delete a guest profile');
+    if (!has(actor, 'records:delete')) {
+      throw forbidden('You are not allowed to delete guest profiles');
     }
     const existing = await this.prisma.contact.findUnique({
       where: { id },
@@ -189,7 +189,7 @@ export class GuestsService {
     });
     if (!existing) throw notFound('Guest');
     const inHouse = existing.reservations.filter((r) => r.status === 'IN_HOUSE');
-    if (inHouse.length > 0 && actor.role !== 'OWNER') {
+    if (inHouse.length > 0 && !has(actor, 'records:delete')) {
       throw badRequest(`Cannot delete ${existing.name} while they have an active In-House stay (${inHouse.map((r) => r.code).join(', ')}). Check them out first.`);
     }
 

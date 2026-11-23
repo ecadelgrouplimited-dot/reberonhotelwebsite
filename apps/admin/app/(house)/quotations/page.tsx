@@ -23,7 +23,7 @@ import {
 import { whatsappLink } from '@reberon/utils';
 import type { EventType, QuotationDTO, QuotationStatus } from '@reberon/contracts';
 import { ApiError, del, get, patch, post } from '@/lib/api';
-import { useMe } from '@/lib/providers';
+import { useMe, useCan } from '@/lib/providers';
 import { money, toMinorStr } from '@/lib/money';
 import { cn } from '@/lib/cn';
 import { m, type ExportSpec } from '@/lib/export';
@@ -55,8 +55,9 @@ export function downloadQuotation(id: string, number: string, paper: 'A4' | '80M
 export default function QuotationsPage() {
   const qc = useQueryClient();
   const me = useMe();
+  const can = useCan();
   const confirm = useConfirm();
-  const canDelete = me.role === 'OWNER' || me.role === 'MANAGER';
+  const canDelete = can('records:delete');
 
   const [filter, setFilter] = useState<'ALL' | QuotationStatus>('ALL');
   const [search, setSearch] = useState('');

@@ -39,7 +39,7 @@ export default function DepartmentsPage() {
   const can = useCan();
   const me = useMe();
   const canHr = can('hr:manage');
-  const isOwner = me.role === 'OWNER';
+  const canDelete = can('records:delete');
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
@@ -442,7 +442,7 @@ export default function DepartmentsPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        {isOwner && (
+                        {canDelete && (
                           <Button
                             variant="ghost"
                             size="sm"

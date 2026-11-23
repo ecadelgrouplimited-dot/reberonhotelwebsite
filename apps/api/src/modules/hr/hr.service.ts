@@ -34,7 +34,7 @@ import type { User } from '@reberon/db';
 import { normalizePhone } from '@reberon/utils';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
-import { type AuthUser } from '../../common/auth.js';
+import { type AuthUser, has } from '../../common/auth.js';
 import { badRequest, forbidden, notFound } from '../../common/errors.js';
 
 @Injectable()
@@ -935,7 +935,7 @@ export class HrService {
   }
 
   async deleteStaff(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
-    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can terminate or delete staff profiles');
+    if (!has(actor, 'records:delete')) throw forbidden('You are not allowed to terminate or delete staff profiles');
     const existing = await this.prisma.staffProfile.findUnique({ where: { id } });
     if (!existing) throw notFound('Staff Profile');
 

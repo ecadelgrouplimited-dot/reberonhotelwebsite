@@ -39,7 +39,7 @@ export default function SellablesPage() {
   const [deletingRow, setDeletingRow] = useState<Row | null>(null);
   const can = useCan();
   const me = useMe();
-  const isOwner = me.role === 'OWNER';
+  const canDelete = can('records:delete');
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['sellables', tab], queryFn: () => get<Row[]>(`/${tab}`) });
   const fields = tab === 'extras' ? extraFields : packageFields;
@@ -88,7 +88,7 @@ export default function SellablesPage() {
                   <span className="tabular">{r.priceUgx ? money(String(r.priceUgx), 'UGX') : '—'}{r.priceUsd ? ` · ${money(String(r.priceUsd), 'USD')}` : ''}</span>
                   <Status value={r.status} />
                 </button>
-                {isOwner && (
+                {canDelete && (
                   <div className="pr-3">
                     <Button
                       variant="danger"
@@ -114,7 +114,7 @@ export default function SellablesPage() {
         title={editing === 'new' ? `New ${tab === 'extras' ? 'extra' : 'package'}` : String((editing as Row | null)?.name?.en ?? '')}
         footer={
           <div className="flex w-full items-center justify-between">
-            {editing !== 'new' && isOwner ? (
+            {editing !== 'new' && canDelete ? (
               <Button
                 variant="danger"
                 size="sm"

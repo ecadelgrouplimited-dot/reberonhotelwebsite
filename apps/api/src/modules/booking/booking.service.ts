@@ -746,8 +746,8 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   }
 
   async deleteReservation(id: string, reason: string | undefined, actor: AuthUser) {
-    if (actor.role !== 'OWNER') {
-      throw forbidden('Only the Super Admin (Owner) can delete reservations');
+    if (!has(actor, 'records:delete')) {
+      throw forbidden('You are not allowed to delete bookings');
     }
     const deleted = await this.prisma.$transaction(async (tx) => {
       const r = await tx.reservation.findUnique({ where: { id }, include: { contact: true, rooms: true } });

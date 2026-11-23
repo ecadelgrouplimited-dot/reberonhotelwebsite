@@ -158,8 +158,8 @@ export class OperationsService {
   }
 
   private assertTableManager(actor: AuthUser) {
-    if (actor.role !== 'OWNER' && actor.role !== 'MANAGER') {
-      throw forbidden('Only the owner or a manager can change tables');
+    if (!has(actor, 'pos:manage')) {
+      throw forbidden('You are not allowed to change tables');
     }
   }
 
@@ -1145,7 +1145,7 @@ export class OperationsService {
   }
 
   async deleteItem(id: string, actor: AuthUser) {
-    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete POS menu items');
+    if (!has(actor, 'records:delete')) throw forbidden('You are not allowed to delete menu items');
     const item = await this.prisma.posItem.findUnique({
       where: { id },
       include: { _count: { select: { orderItems: true } } },
@@ -1168,7 +1168,7 @@ export class OperationsService {
   }
 
   async deletePosCategory(id: string, actor: AuthUser) {
-    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete POS categories');
+    if (!has(actor, 'records:delete')) throw forbidden('You are not allowed to delete menu categories');
     const cat = await this.prisma.posCategory.findUnique({
       where: { id },
       include: { _count: { select: { items: true } } },
@@ -1735,8 +1735,8 @@ export class OperationsService {
   }
 
   async deleteQuotation(id: string, actor: AuthUser) {
-    if (actor.role !== 'OWNER' && actor.role !== 'MANAGER') {
-      throw forbidden('Only the hotel owner or manager can delete quotations');
+    if (!has(actor, 'records:delete')) {
+      throw forbidden('You are not allowed to delete quotations');
     }
     const existing = await this.prisma.quotation.findUnique({ where: { id } });
     if (!existing) throw notFound('Quotation');
@@ -2039,7 +2039,7 @@ export class OperationsService {
   }
 
   async deleteInventoryItem(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
-    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete inventory items');
+    if (!has(actor, 'records:delete')) throw forbidden('You are not allowed to delete stock items');
     const existing = await this.prisma.inventoryItem.findUnique({ where: { id } });
     if (!existing) throw notFound('Inventory Item');
 
@@ -2501,7 +2501,7 @@ export class OperationsService {
   }
 
   async deleteRequisition(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
-    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete requisitions');
+    if (!has(actor, 'records:delete')) throw forbidden('You are not allowed to delete requisitions');
     const req = await this.prisma.requisition.findUnique({ where: { id } });
     if (!req) throw notFound('Requisition');
 
@@ -3004,7 +3004,7 @@ export class OperationsService {
   }
 
   async deleteDepartment(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
-    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete departments');
+    if (!has(actor, 'records:delete')) throw forbidden('You are not allowed to delete departments');
     const existing = await this.prisma.hotelDepartment.findUnique({ where: { id } });
     if (!existing) throw notFound('HotelDepartment');
 
@@ -3221,7 +3221,7 @@ export class OperationsService {
   }
 
   async deleteItemCategory(id: string, actor: AuthUser): Promise<{ ok: boolean }> {
-    if (actor.role !== 'OWNER') throw forbidden('Only the hotel owner can delete item categories');
+    if (!has(actor, 'records:delete')) throw forbidden('You are not allowed to delete item categories');
     const existing = await this.prisma.itemCategory.findUnique({ where: { id } });
     if (!existing) throw notFound('ItemCategory');
 

@@ -167,7 +167,7 @@ export class WaitlistController {
   @HttpCode(200)
   @Requires('waitlist:write')
   async delete(@Param('id') id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
-    if (user.role !== 'OWNER') throw forbidden('Only the hotel owner can delete waitlist entries');
+    if (!has(user, 'records:delete')) throw forbidden('You are not allowed to delete waitlist entries');
     const existing = await this.prisma.waitlistEntry.findUnique({ where: { id } });
     if (!existing) throw notFound('Waitlist entry');
     await this.prisma.waitlistEntry.delete({ where: { id } });

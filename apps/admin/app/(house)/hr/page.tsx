@@ -79,7 +79,7 @@ export default function HrPage() {
   const me = useMe();
   const canHrRead = can('hr:manage');
   const canHrManage = can('hr:manage');
-  const isOwner = me.role === 'OWNER';
+  const canDelete = can('records:delete');
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
@@ -1110,7 +1110,7 @@ export default function HrPage() {
                                 <Edit className="size-3.5" />
                               </Button>
                             )}
-                            {isOwner && staff.status !== 'TERMINATED' && (
+                            {canDelete && staff.status !== 'TERMINATED' && (
                               <Button
                                 variant="ghost"
                                 size="sm"

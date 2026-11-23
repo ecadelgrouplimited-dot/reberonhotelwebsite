@@ -52,7 +52,7 @@ export default function GuestsPage() {
   const qc = useQueryClient();
 
   const isOwner = me.role === 'OWNER';
-  const canDeleteGuest = me.role === 'OWNER' || me.role === 'MANAGER';
+  const canDeleteGuest = can('records:delete');
   const canEditGuest = can('guests:write');
   const moneyOk = can('payments:record');
 

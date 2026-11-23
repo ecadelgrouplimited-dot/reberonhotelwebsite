@@ -46,7 +46,7 @@ export default function ItemCategoriesPage() {
   const qc = useQueryClient();
   const can = useCan();
   const me = useMe();
-  const isOwner = me.role === 'OWNER';
+  const canDelete = can('records:delete');
 
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>('ALL');
@@ -418,7 +418,7 @@ export default function ItemCategoriesPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        {isOwner && (
+                        {canDelete && (
                           <Button
                             variant="ghost"
                             size="sm"
