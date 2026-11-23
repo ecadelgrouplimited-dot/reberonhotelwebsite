@@ -14,6 +14,9 @@ import { ago } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Pill, Skeleton, Status, Tabs } from '@/components/ui/bits';
 import { Dialog } from '@/components/ui/dialog';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { SelectInput, TextInput } from '@/components/ui/field';
 
 const KIND_LABEL: Record<PageKind, string> = {
@@ -25,6 +28,17 @@ function PagesInner() {
   const { data, isLoading } = useQuery({ queryKey: ['pages'], queryFn: () => get<AdminPageSummaryDTO[]>('/pages') });
   const params = useSearchParams();
   const [creating, setCreating] = useState(false);
+  const screenNav = useNavRouter();
+  useScreenActions('Website pages', [
+    { label: 'New page', icon: SI.FilePlus2, key: 'n', onSelect: () => setCreating(true) },
+    { label: 'Find a page', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'Publishing & launch checklist', icon: SI.Rocket, onSelect: () => screenNav.push('/website/publishing') },
+    { label: 'Menus', icon: SI.Navigation, onSelect: () => screenNav.push('/website/navigation') },
+    { label: 'Media library', icon: SI.Image, onSelect: () => screenNav.push('/media') },
+    { label: 'Fonts', icon: SI.Type, onSelect: () => screenNav.push('/settings?tab=typography') },
+    { label: 'Open the website', icon: SI.ExternalLink, onSelect: () => window.open(process.env.NEXT_PUBLIC_WEB_URL ?? '/', '_blank', 'noopener') },
+  ]);
   const [copyOf, setCopyOf] = useState<string>('');
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<'all' | 'live' | 'changes' | 'draft' | 'scheduled'>('all');

@@ -19,6 +19,7 @@ import { cn } from '@/lib/cn';
 import { AppGlyph } from '@/components/os/app-icon';
 import { APP_BY_HREF } from '@/components/os/apps';
 import { mod, shellAction, toggleTheme } from '@/components/os/actions';
+import { currentScreen } from '@/components/os/screen-actions';
 
 type Action = { id: string; label: string; keywords: string; icon: LucideIcon; perm?: string | string[]; run: (go: (href: string) => void) => void; hint?: string };
 
@@ -146,6 +147,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     return () => window.removeEventListener('rb:refresh', refresh);
   }, [qc]);
   if (!open) return null;
+  const screen = currentScreen();
 
   const go = (href: string) => {
     onClose();
@@ -249,6 +251,21 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   <Row icon={<Inbox className="size-4" />} title={c.contact.name} detail={c.preview} right={c.reference} />
                 </Command.Item>
               ))}
+            </Command.Group>
+          )}
+
+          {screen && (
+            <Command.Group heading={`On this screen · ${screen.title}`} className={heading}>
+              {screen.items.filter((it) => (it.kind ?? 'item') === 'item').map((raw, i) => {
+                const it = raw as { label: string; icon?: LucideIcon; key?: string; hint?: string; onSelect: () => void; disabled?: boolean };
+                if (it.disabled) return null;
+                const Icon = it.icon ?? LayoutGrid;
+                return (
+                  <Command.Item key={`s${i}`} value={`screen ${screen.title} ${it.label}`} className={item} onSelect={() => { onClose(); setTimeout(it.onSelect, 0); }}>
+                    <Row icon={<Icon className="size-4" />} title={it.label} right={it.hint ?? it.key?.toUpperCase()} />
+                  </Command.Item>
+                );
+              })}
             </Command.Group>
           )}
 

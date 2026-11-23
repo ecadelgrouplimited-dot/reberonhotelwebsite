@@ -44,6 +44,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { m } from '@/lib/export';
 import { ExportMenu } from '@/components/ui/export-menu';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { SelectInput, Switch, TextArea, TextInput } from '@/components/ui/field';
 
 const STATUS_TONE: Record<RequisitionStatus, 'amber' | 'blue' | 'green' | 'neutral' | 'red'> = {
@@ -91,6 +94,19 @@ export default function RequisitionsPage() {
 
   const [newReqOpen, setNewReqOpen] = useState(false);
   const [newCommOpen, setNewCommOpen] = useState(false);
+  useScreenActions('Requisitions', [
+    { label: 'New requisition', icon: SI.Plus, key: 'n', onSelect: () => { setTab('REQUISITIONS'); setNewReqOpen(true); } },
+    { label: 'Post a handover note', icon: SI.Megaphone, key: 'h', onSelect: () => { setTab('COMMS'); setNewCommOpen(true); } },
+    { label: 'Search', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'Waiting for approval', icon: SI.Hourglass, key: 'w', onSelect: () => { setTab('REQUISITIONS'); setStatusFilter('PENDING' as never); } },
+    { label: 'Only mine', icon: SI.UserRoundCheck, key: 'm', onSelect: () => { setTab('REQUISITIONS'); setMineOnly(true); } },
+    { label: 'Urgent only', icon: SI.Siren, key: 'u', onSelect: () => { setTab('REQUISITIONS'); setPriorityFilter('URGENT'); } },
+    { label: 'Clear filters', icon: SI.FilterX, key: 'c', onSelect: () => { setStatusFilter('ALL'); setDeptFilter('ALL'); setPriorityFilter('ALL'); setMineOnly(false); setSearch(''); } },
+    { kind: 'separator' },
+    { label: 'Handover notes', icon: SI.Megaphone, onSelect: () => setTab('COMMS') },
+    { label: 'Devices & terminals', icon: SI.MonitorSmartphone, onSelect: () => setTab('DEVICES') },
+  ]);
   const [selectedReq, setSelectedReq] = useState<RequisitionDTO | null>(null);
   const [rejectingReq, setRejectingReq] = useState<RequisitionDTO | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');

@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, EyeOff, ExternalLink, Home, LayoutGrid, PinOff, Search } from 'lucide-react';
@@ -11,8 +11,11 @@ import { AppBadge, AppGlyph } from './app-icon';
 import { useContextMenu } from './context-menu';
 import { shellAction, mod } from './actions';
 
-/** Screens that need the whole height: the dock tucks away and slides up at the bottom edge. */
-const AUTOHIDE = [/^\/website\/pages\/[^/]+$/, /^\/pos$/, /^\/pos\/tables/];
+/**
+ * Only the page builder (a full-height editor with its own bottom bar) tucks the dock
+ * away — behind a visible handle. Everywhere else, including the POS, it stays put.
+ */
+const AUTOHIDE = [/^\/website\/pages\/[^/]+$/];
 
 export function useDockVisible() {
   const pathname = usePathname();
@@ -33,7 +36,7 @@ export function Dock() {
   const [peek, setPeek] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState(false);
-  if (!show) return null;
+  if (!show) return <DockSpace px={0} />;
 
   const current = pathname + (search.get('tab') ? `?tab=${search.get('tab')}` : search.get('view') ? `?view=${search.get('view')}` : '');
   const activeHref = prefs.pinned.find((a) => a.href === current)?.href ?? prefs.pinned.find((a) => !a.href.includes('?') && a.href !== '/' && (pathname === a.href || pathname.startsWith(`${a.href}/`)))?.href;
@@ -54,7 +57,22 @@ export function Dock() {
 
   return (
     <>
-      {autohide && <div aria-hidden className="fixed inset-x-0 bottom-0 z-40 h-3" onMouseEnter={() => setPeek(true)} />}
+      <DockSpace px={autohide ? 0 : 104} />
+      {autohide && (
+        <>
+          <div aria-hidden className="fixed inset-x-0 bottom-0 z-40 h-3" onMouseEnter={() => setPeek(true)} />
+          {!peek && (
+            <button
+              type="button"
+              onClick={() => setPeek(true)}
+              onMouseEnter={() => setPeek(true)}
+              className="no-print fixed bottom-1.5 left-1/2 z-40 h-1.5 w-28 -translate-x-1/2 rounded-full bg-fg/25 transition hover:h-2 hover:bg-fg/45"
+              aria-label="Show the dock"
+              title="Show the dock"
+            />
+          )}
+        </>
+      )}
       <nav
         data-dock
         aria-label="Dock"
@@ -161,4 +179,15 @@ function DockButton({ label, hint, active, href, onClick, onMenu, children }: { 
       {body}
     </button>
   );
+}
+
+/** Full-height panels (e.g. the POS bill) subtract this so the dock never covers them. */
+function DockSpace({ px }: { px: number }) {
+  useEffect(() => {
+    document.documentElement.style.setProperty('--dock-space', `${px}px`);
+    return () => {
+      document.documentElement.style.setProperty('--dock-space', '0px');
+    };
+  }, [px]);
+  return null;
 }

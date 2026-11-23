@@ -32,6 +32,9 @@ import { SelectInput, TextInput } from '@/components/ui/field';
 import { undoToast } from '@/lib/undo';
 
 const HK_WORD: Record<string, string> = { VACANT_CLEAN: 'clean', INSPECTED: 'inspected and ready', VACANT_DIRTY: 'dirty', OCCUPIED: 'occupied', BLOCKED: 'blocked', OUT_OF_ORDER: 'out of order' };
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { HkBadge, TASK_KIND } from '@/components/house/hk';
 
 type Filter = 'open' | 'mine' | 'inspect' | 'all' | 'rooms';
@@ -46,6 +49,16 @@ export default function HousekeepingPage() {
   const [floorFilter, setFloorFilter] = useState<'ALL' | number>('ALL');
   const [q, setQ] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  useScreenActions('Housekeeping', [
+    { label: 'New cleaning task', icon: SI.Plus, key: 'n', onSelect: () => setCreateOpen(true) },
+    { label: 'Find a room', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'My tasks', icon: SI.UserRoundCheck, key: 'm', onSelect: () => setFilter('mine') },
+    { label: 'Open tasks', icon: SI.ListTodo, key: 'o', onSelect: () => setFilter('open') },
+    { label: 'Ready to inspect', icon: SI.CheckCheck, key: 'i', onSelect: () => setFilter('inspect') },
+    { label: 'All rooms', icon: SI.LayoutGrid, key: 'a', onSelect: () => setFilter('rooms') },
+    { label: 'Every task', icon: SI.List, onSelect: () => setFilter('all') },
+  ]);
   const [preselectedRoomId, setPreselectedRoomId] = useState<string>('');
   const [editNoteTask, setEditNoteTask] = useState<HkTaskDTO | null>(null);
   const [noteDraft, setNoteDraft] = useState('');

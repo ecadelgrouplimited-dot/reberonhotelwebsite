@@ -36,6 +36,9 @@ import { ExportMenu, PrintButton } from '@/components/ui/export-menu';
 import { Button } from '@/components/ui/button';
 import type { BriefInsightsDTO } from '@reberon/contracts';
 import { AttentionList, BriefKpis, Forecast30, MtdCompare, TodayRails } from '@/components/reports/brief-insights';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { Empty, PageHeader, Pill, Section, Skeleton, Status } from '@/components/ui/bits';
 
 type BriefGuestItem = {
@@ -202,6 +205,14 @@ export default function BriefPage() {
   const can = useCan();
   const today = kampalaToday();
   const [date, setDate] = useState(today);
+  const screenNav = useNavRouter();
+  useScreenActions('Owner Brief', [
+    { label: 'Previous day', icon: SI.ChevronLeft, key: 'j', onSelect: () => setDate((d) => shiftDate(d, -1)) },
+    { label: 'Next day', icon: SI.ChevronRight, key: 'k', onSelect: () => setDate((d) => shiftDate(d, 1)) },
+    { label: 'Back to today', icon: SI.CalendarCheck, key: 't', onSelect: () => setDate(today) },
+    { kind: 'separator' },
+    { label: 'Financial reports', icon: SI.ChartColumnBig, key: 'f', onSelect: () => screenNav.push('/reports') },
+  ]);
   const [arrivalView, setArrivalView] = useState<'today' | 'tomorrow'>('today');
 
   const { data: b, isLoading } = useQuery({

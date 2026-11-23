@@ -74,6 +74,9 @@ import { BillCard, KitchenBoard } from '@/components/pos/boards';
 import { SettleDialog } from '@/components/pos/settle-dialog';
 import { CategoryDialog, MenuItemDialog, type PosStockItem } from '@/components/pos/menu-dialogs';
 import { ShiftDialog } from '@/components/pos/shift-dialog';
+import { Armchair as _Armchair, ChefHat as _ChefHat, Store as _Store, Wallet as _Wallet } from 'lucide-react';
+import { useScreenActions } from '@/components/os/screen-actions';
+import type { MenuItem } from '@/components/os/context-menu';
 import { FloorView, TableChips } from '@/components/pos/floor';
 
 interface CartLine {
@@ -249,6 +252,23 @@ export default function PosPage() {
     ? openTabs.find((o) => o.id === pickedTable.openBills[0]!.id) ?? null
     : null;
   const ticketLocked = !!(editingOpenOrder || targetOpenOrder);
+
+  // ── Right-click & keys on this screen ──
+  useScreenActions('Point of Sale', [
+    { label: 'New bill', icon: Plus, key: 'n', onSelect: () => { resetTicket(); setView('SELL'); setTimeout(() => searchRef.current?.focus(), 50); } },
+    { label: 'Search the menu', icon: Search, hint: '/', onSelect: () => { setView('SELL'); setTimeout(() => searchRef.current?.focus(), 50); } },
+    { kind: 'separator' },
+    { label: 'Sell', icon: ShoppingBag, key: 's', onSelect: () => setView('SELL') },
+    { label: 'Tables', icon: _Armchair, key: 't', onSelect: () => setView('TABLES') },
+    { label: 'Open bills', icon: Receipt, key: 'b', onSelect: () => { setView('BILLS'); setBillFilter('OPEN'); } },
+    { label: 'Kitchen & bar tickets', icon: _ChefHat, key: 'k', onSelect: () => setView('KITCHEN') },
+    { label: 'Paid today', icon: _Wallet, onSelect: () => { setView('BILLS'); setBillFilter('PAID'); } },
+    { kind: 'separator' },
+    ...((outlets ?? []).slice(0, 4).map((o, i) => ({ label: `Outlet: ${o.name}`, icon: _Store, key: String(i + 1), onSelect: () => { setOutletCode(o.code); setView('SELL'); } })) as MenuItem[]),
+    { kind: 'separator' },
+    { label: manage ? 'Done editing the menu' : 'Manage the menu', icon: Settings2, key: 'm', onSelect: () => { setView('SELL'); setManage((v) => !v); } },
+    { label: 'Shift report & handover', icon: BarChart3, key: 'h', onSelect: () => setShiftOpen(true) },
+  ]);
 
   // ── Keyboard: "/" jumps to search wherever focus is not already in a field ──
   useEffect(() => {
@@ -998,7 +1018,7 @@ export default function PosPage() {
 
           {/* ── Ticket ── */}
           <div ref={ticketRef} className="scroll-mt-16 lg:sticky lg:top-16 lg:self-start">
-            <section className="card flex flex-col overflow-hidden lg:max-h-[calc(100dvh-5rem)]">
+            <section className="card flex flex-col overflow-hidden lg:max-h-[calc(100dvh-5rem-var(--dock-space,0px))]">
               <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
                 <div className="min-w-0">
                   <h2 className="truncate text-[13.5px] font-bold">

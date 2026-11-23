@@ -53,6 +53,9 @@ import { Empty, PageHeader, Skeleton, Tabs } from '@/components/ui/bits';
 import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { m } from '@/lib/export';
 import { ExportMenu } from '@/components/ui/export-menu';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import {
   AdjustPayrollModal,
   AssignSystemRoleModal,
@@ -137,6 +140,17 @@ export default function HrPage() {
 
   const [createShiftOpen, setCreateShiftOpen] = useState(false);
   const [bulkShiftOpen, setBulkShiftOpen] = useState(false);
+  useScreenActions('People & HR', [
+    { label: 'Add a staff member', icon: SI.UserPlus, key: 'n', onSelect: () => { setActiveTab('STAFF'); setCreateStaffOpen(true); } },
+    { label: 'Add a shift', icon: SI.CalendarPlus, key: 's', onSelect: () => { setActiveTab('ROSTER'); setCreateShiftOpen(true); } },
+    { label: 'Find a person', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'Staff', icon: SI.Users, key: '1', onSelect: () => setActiveTab('STAFF') },
+    { label: 'Rosters', icon: SI.Clock, key: '2', onSelect: () => setActiveTab('ROSTER') },
+    { label: 'Leave', icon: SI.CalendarDays, key: '3', onSelect: () => setActiveTab('LEAVE') },
+    { label: 'Payroll', icon: SI.DollarSign, key: '4', onSelect: () => setActiveTab('PAYROLL') },
+    { label: 'Analytics', icon: SI.ChartColumnBig, key: '5', onSelect: () => setActiveTab('ANALYTICS') },
+  ]);
   const [createLeaveOpen, setCreateLeaveOpen] = useState(false);
   const [reviewingLeave, setReviewingLeave] = useState<StaffLeaveRequestDTO | null>(null);
 

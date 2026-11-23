@@ -121,8 +121,26 @@ const DEFAULT_PINS: Partial<Record<Role, string[]>> = {
   ACCOUNTANT: ['/receipts', '/reports', '/brief', '/quotations'],
 };
 
-export function defaultPins(role: Role, permissions: string[]): string[] {
+/** The job behind a title like “Bar Attendant” or “Head Chef” (titles say more than the base role). */
+const JOB_HINTS: [RegExp, Role][] = [
+  [/chef|kitchen|cook/i, 'KITCHEN'],
+  [/bar|waiter|waitress|server|mixolog|restaurant|f&b|food and beverage/i, 'BAR'],
+  [/gym|spa|fitness|instructor|therap|wellness/i, 'GYM'],
+  [/housekeep|clean|laundry|room attendant|linen/i, 'HOUSEKEEPING'],
+  [/account|cashier|finance|bookkeep/i, 'ACCOUNTANT'],
+  [/\bhr\b|human resources|people/i, 'HR'],
+  [/manager|supervisor/i, 'MANAGER'],
+  [/reception|front desk|concierge|guest relations/i, 'DESK'],
+];
+
+export function defaultPins(role: Role, permissions: string[], jobTitle?: string | null, customRoleName?: string | null): string[] {
   const allowed = new Set(appsFor(permissions).map((a) => a.href));
-  const pins = (DEFAULT_PINS[role] ?? ['/today', '/desk', '/reservations', '/inbox']).filter((h) => allowed.has(h));
-  return pins.length ? pins : [...allowed].slice(0, 5);
+  const words = `${customRoleName ?? ''} ${jobTitle ?? ''}`;
+  const job = JOB_HINTS.find(([re]) => re.test(words))?.[1];
+  for (const r of [job, role]) {
+    const pins = (r ? (DEFAULT_PINS[r] ?? []) : []).filter((h) => allowed.has(h));
+    if (pins.length) return pins;
+  }
+  const fallback = ['/today', '/desk', '/reservations', '/inbox'].filter((h) => allowed.has(h));
+  return fallback.length ? fallback : [...allowed].slice(0, 5);
 }

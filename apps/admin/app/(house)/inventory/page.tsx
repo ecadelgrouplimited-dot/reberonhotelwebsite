@@ -50,6 +50,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { DeleteConfirmDialog } from '@/components/ui/delete-dialog';
 import { m } from '@/lib/export';
 import { ExportMenu } from '@/components/ui/export-menu';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { SelectInput, TextInput } from '@/components/ui/field';
 
 const CATEGORY_SHORT: Record<InventoryCategory, string> = {
@@ -98,6 +101,14 @@ export default function InventoryPage() {
   const [moveItem, setMoveItem] = useState<InventoryItemDTO | null>(null);
   const [deletingItem, setDeletingItem] = useState<InventoryItemDTO | null>(null);
   const [newSkuOpen, setNewSkuOpen] = useState(false);
+  useScreenActions('Inventory', [
+    { label: 'New stock item', icon: SI.Plus, key: 'n', onSelect: () => setNewSkuOpen(true) },
+    { label: 'Find an item', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'Below par level', icon: SI.TriangleAlert, key: 'l', onSelect: () => { setTab('ALL'); setStockStatusFilter('LOW'); } },
+    { label: 'All items', icon: SI.Boxes, key: 'a', onSelect: () => { setTab('ALL'); setStockStatusFilter('ALL'); setDeptFilter('ALL'); setSearch(''); } },
+    { label: 'Stock movements', icon: SI.ArrowLeftRight, key: 'm', onSelect: () => setTab('MOVEMENTS') },
+  ]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['inventory'],

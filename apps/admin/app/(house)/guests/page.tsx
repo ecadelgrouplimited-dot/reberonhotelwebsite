@@ -26,6 +26,9 @@ import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Section, Skeleton } from '@/components/ui/bits';
 import { useContextMenu } from '@/components/os/context-menu';
 import { contactItems } from '@/components/os/record-menus';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { Dialog } from '@/components/ui/dialog';
 
 interface AuditRow {
@@ -55,6 +58,14 @@ export default function GuestsPage() {
 
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('');
+  useScreenActions('Guests', [
+    { label: 'Find a guest', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { label: 'New booking', icon: SI.Plus, key: 'n', onSelect: () => router.push('/reservations/new') },
+    { kind: 'separator' },
+    { label: 'All guests', icon: SI.Users, key: 'a', onSelect: () => setFilter('') },
+    { label: 'VIP guests', icon: SI.Star, key: 'v', onSelect: () => setFilter('vip') },
+    { label: 'Returning guests', icon: SI.Repeat, onSelect: () => setFilter('returning') },
+  ]);
   const [showAuditLog, setShowAuditLog] = useState(false);
 
   // Quick Edit Guest Modal State

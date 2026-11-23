@@ -42,6 +42,9 @@ import { useConfirm } from '@/components/ui/confirm';
 import { undoToast } from '@/lib/undo';
 
 const HK_WORD: Record<string, string> = { VACANT_CLEAN: 'clean', INSPECTED: 'inspected and ready', VACANT_DIRTY: 'dirty', OCCUPIED: 'occupied', BLOCKED: 'blocked', OUT_OF_ORDER: 'out of order' };
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { BLOCK_REASON, HK, HkBadge, RackGrid, TASK_KIND } from '@/components/house/hk';
 
 type Block = { id: string; room: { id: string; number: string }; fromDate: string; toDate: string; reason: string; note: string | null };
@@ -74,6 +77,18 @@ function Rack() {
   const [view, setView] = useState<'grid' | 'table' | 'manage'>('grid');
   const [q, setQ] = useState('');
   const [addRoomOpen, setAddRoomOpen] = useState(false);
+  useScreenActions('Room Rack', [
+    { label: 'Find a room or guest', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { label: 'Back to today', icon: SI.CalendarCheck, key: 't', onSelect: () => setSelectedDate(today) },
+    { kind: 'separator' },
+    { label: 'Grid view', icon: SI.LayoutGrid, key: 'v', onSelect: () => setView('grid') },
+    { label: 'Table view', icon: SI.Table, onSelect: () => setView('table') },
+    { kind: 'separator' },
+    { label: 'Show dirty rooms', icon: SI.SprayCan, key: 'd', onSelect: () => setStatusFilter('VACANT_DIRTY') },
+    { label: 'Show ready rooms', icon: SI.CheckCheck, key: 'c', onSelect: () => setStatusFilter('VACANT_CLEAN') },
+    { label: 'Show occupied rooms', icon: SI.BedDouble, key: 'o', onSelect: () => setStatusFilter('OCCUPIED') },
+    { label: 'Show all rooms', icon: SI.FilterX, key: 'a', onSelect: () => { setStatusFilter('ALL'); setFloorFilter('ALL'); setTypeFilter('ALL'); setQ(''); } },
+  ]);
 
   const rack = useQuery({
     queryKey: ['rack', selectedDate],

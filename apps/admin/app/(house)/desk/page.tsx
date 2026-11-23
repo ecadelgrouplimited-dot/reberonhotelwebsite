@@ -40,6 +40,9 @@ import { useConfirm } from '@/components/ui/confirm';
 import { RackGrid, RackLegend } from '@/components/house/hk';
 import { useContextMenu, type MenuItem } from '@/components/os/context-menu';
 import { bookingItems, contactItems } from '@/components/os/record-menus';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import {
   AssignRoomDialog,
   CheckInDialog,
@@ -83,6 +86,21 @@ export default function DeskPage() {
   }, []);
   const [q, setQ] = useState('');
   const [balFilter, setBalFilter] = useState<BalanceFilter>('all');
+  const screenNav = useNavRouter();
+  useScreenActions('Front Desk', [
+    { label: 'Walk-in check-in', icon: SI.UserRoundPlus, key: 'w', onSelect: () => screenNav.push('/reservations/new?walkin=1') },
+    { label: 'New booking', icon: SI.Plus, key: 'n', onSelect: () => screenNav.push('/reservations/new') },
+    { label: 'Find a guest', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'Arrivals', icon: SI.LogIn, key: 'a', onSelect: () => setTab('arrivals') },
+    { label: 'In house', icon: SI.BedDouble, key: 'i', onSelect: () => setTab('inHouse') },
+    { label: 'Departures', icon: SI.LogOut, key: 'd', onSelect: () => setTab('departures') },
+    { label: 'Overdue arrivals', icon: SI.AlarmClock, key: 'o', onSelect: () => setTab('late') },
+    { kind: 'separator' },
+    { label: 'Back to today', icon: SI.CalendarCheck, key: 't', onSelect: () => setDate(today) },
+    { label: 'Balance due only', icon: SI.Wallet, onSelect: () => setBalFilter('due' as BalanceFilter) },
+    { label: 'Room rack', icon: SI.LayoutGrid, onSelect: () => screenNav.push('/rack') },
+  ]);
   const [dialog, setDialog] = useState<{
     kind: 'in' | 'out' | 'assign' | 'move' | 'charge';
     stay: StayRef;

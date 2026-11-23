@@ -16,6 +16,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { Switch, TextArea, TextInput } from '@/components/ui/field';
 import { useConfirm } from '@/components/ui/confirm';
 import { MediaPicker, useUpload } from '@/components/media/media-picker';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { post } from '@/lib/api';
 
 type Page = { data: AdminMediaDTO[]; nextCursor: string | null; total: number; folders: { name: string | null; count: number }[] };
@@ -29,6 +32,13 @@ function MediaInner() {
   const [rendering, setRendering] = useState(params.get('rendering') ?? '');
   const [openId, setOpenId] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
+  useScreenActions('Media library', [
+    { label: 'Upload photos', icon: SI.Upload, key: 'u', onSelect: () => document.querySelector<HTMLInputElement>('main input[type="file"]')?.click() },
+    { label: 'Find a photo', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'All photos', icon: SI.Images, key: 'a', onSelect: () => { setFolder(''); setRendering(''); setQ(''); } },
+    { label: 'Drawings still to replace', icon: SI.PencilRuler, key: 'd', onSelect: () => setRendering('true') },
+  ]);
   const input = useRef<HTMLInputElement>(null);
   const { upload, busy } = useUpload(folder || undefined);
   useEffect(() => {

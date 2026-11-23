@@ -18,6 +18,9 @@ import { PageHeader, Pill, Section, Skeleton } from '@/components/ui/bits';
 import { TextInput } from '@/components/ui/field';
 import { BarList, ColumnChart } from '@/components/charts/charts';
 import { ExpensesPanel } from '@/components/reports/expenses-panel';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { DataTable, Delta, Kpi, RevenueTrend, ShareBars, big, fmtDay, fmtMonth, mm } from '@/components/reports/finance-ui';
 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kampala' }).format(new Date());
@@ -70,6 +73,23 @@ function Reports() {
   const [custom, setCustom] = useState({ from: plus(today(), -30), to: today() });
   const [compare, setCompare] = useState<'prev' | 'yoy'>('prev');
   const [expenseOpen, setExpenseOpen] = useState(false);
+  useScreenActions('Financial reports', [
+    ...(can('expenses:manage') || can('requisitions:approve') ? [{ label: 'Record an expense', icon: SI.Plus, key: 'n', onSelect: () => { setTab('EXPENSES'); setExpenseOpen(true); } }] : []),
+    { kind: 'separator' },
+    { label: 'Overview & P&L', icon: SI.ChartColumnBig, key: '1', onSelect: () => setTab('OVERVIEW') },
+    { label: 'Rooms', icon: SI.BedDouble, key: '2', onSelect: () => setTab('ROOMS') },
+    { label: 'Departments & POS', icon: SI.UtensilsCrossed, key: '3', onSelect: () => setTab('OUTLETS') },
+    { label: 'Cash & rails', icon: SI.Wallet, key: '4', onSelect: () => setTab('CASH') },
+    { label: 'Owed & deposits', icon: SI.HandCoins, key: '5', onSelect: () => setTab('RECEIVABLES') },
+    { label: 'Discounts & refunds', icon: SI.Percent, key: '6', onSelect: () => setTab('ADJUSTMENTS') },
+    { label: 'Expenses', icon: SI.Receipt, key: '7', onSelect: () => setTab('EXPENSES') },
+    { kind: 'separator' },
+    { label: 'Today', icon: SI.CalendarCheck, key: 't', onSelect: () => setPeriod('today') },
+    { label: 'Month to date', icon: SI.CalendarRange, key: 'm', onSelect: () => setPeriod('month') },
+    { label: 'Last month', icon: SI.CalendarMinus, key: 'l', onSelect: () => setPeriod('lastMonth') },
+    { label: 'Year to date', icon: SI.CalendarDays, key: 'y', onSelect: () => setPeriod('ytd') },
+    { label: compare === 'prev' ? 'Compare with last year' : 'Compare with the previous period', icon: SI.ArrowLeftRight, key: 'c', onSelect: () => setCompare(compare === 'prev' ? 'yoy' : 'prev') },
+  ]);
   const [from, to] = period === 'custom' ? [custom.from, custom.to] : PERIODS[period].range();
   const canManageExpenses = can('expenses:manage') || can('requisitions:approve');
 

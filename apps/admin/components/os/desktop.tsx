@@ -13,6 +13,7 @@ import { printScreen } from '@/lib/print';
 import { Dialog } from '@/components/ui/dialog';
 import { APP_BY_HREF } from './apps';
 import { useContextMenu, type MenuItem } from './context-menu';
+import { currentScreen, RESERVED_KEYS } from './screen-actions';
 import { mod, shellAction, toggleTheme } from './actions';
 
 /** `g` then a letter jumps to an app (only apps the person may open). */
@@ -101,6 +102,23 @@ export function DesktopHandlers() {
       { label: 'Keyboard shortcuts', icon: Keyboard, hint: '?', onSelect: () => shellAction('shortcuts') },
     ];
 
+    /** When the screen has its own actions, the House keeps to a short tail. */
+    const compactHouse = (): MenuItem[] => [
+      { label: 'Search or jump to…', icon: Search, hint: `${mod()} K`, onSelect: () => shellAction('palette') },
+      { label: 'Home', icon: Home, hint: 'G H', onSelect: () => router.push('/') },
+      {
+        label: 'Refresh',
+        icon: RefreshCw,
+        hint: 'R',
+        onSelect: () => {
+          qc.invalidateQueries();
+          toast.success('Up to date', { id: 'rb-refresh', duration: 1200 });
+        },
+      },
+      { label: 'Print this screen', icon: Printer, hint: `${mod()} P`, onSelect: () => void printScreen() },
+      { label: 'Keyboard shortcuts', icon: Keyboard, hint: '?', onSelect: () => shellAction('shortcuts') },
+    ];
+
     const onMenu = (e: MouseEvent) => {
       if (e.shiftKey || e.defaultPrevented || isTyping(e.target)) return;
       const target = e.target as Element | null;
@@ -122,13 +140,14 @@ export function DesktopHandlers() {
               ? ([p.isPinned(href) ? { label: 'Unpin from the dock', icon: PinOff, onSelect: () => p.unpin(href) } : { label: 'Pin to the dock', icon: Pin, onSelect: () => p.pin(href) }] as MenuItem[])
               : []),
             { kind: 'separator' },
-            ...houseItems(),
+            ...(currentScreen() ? compactHouse() : houseItems()),
           ],
           app?.fullName ?? (a?.textContent?.trim().slice(0, 40) || 'Link'),
         );
         return;
       }
       if (url) return; // outside links keep the browser's menu
+      const screen = currentScreen();
       menu.open(
         e,
         [
@@ -138,9 +157,9 @@ export function DesktopHandlers() {
                 { kind: 'separator' },
               ] as MenuItem[])
             : []),
-          ...houseItems(),
+          ...(screen ? [...screen.items, { kind: 'separator' } as MenuItem, ...compactHouse()] : houseItems()),
         ],
-        'The House',
+        screen?.title ?? 'The House',
       );
     };
     document.addEventListener('contextmenu', onMenu);
@@ -183,6 +202,15 @@ export function DesktopHandlers() {
           router.push(g.href);
         }
         return;
+      }
+      // A screen's own single-key shortcuts.
+      if (!e.shiftKey && e.key.length === 1 && !RESERVED_KEYS.has(e.key.toLowerCase()) && !document.querySelector('dialog[open]')) {
+        const hit = currentScreen()?.items.find((it) => (it.kind ?? 'item') === 'item' && (it as { key?: string }).key === e.key.toLowerCase() && !(it as { disabled?: boolean }).disabled);
+        if (hit) {
+          e.preventDefault();
+          (hit as { onSelect: () => void }).onSelect();
+          return;
+        }
       }
       if (e.key === 'g') {
         goMode = true;
@@ -235,9 +263,24 @@ function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void
     ['Esc', 'Close a menu or dialog'],
   ];
   const go = GO_KEYS.filter((g) => g.href === '/' || prefs.apps.some((a) => a.href === g.href));
+  const screen = open ? currentScreen() : null;
+  const screenKeys = (screen?.items ?? []).filter((it) => (it.kind ?? 'item') === 'item' && (it as { key?: string }).key) as { label: string; key: string }[];
   return (
-    <Dialog open={open} onClose={onClose} size="lg" title="Keyboard shortcuts" description="Everything works with a mouse too — right-click anywhere for a menu, and Shift + right-click for the browser's own.">
-      <div className="grid gap-6 sm:grid-cols-2">
+    <Dialog open={open} onClose={onClose} size="xl" title="Keyboard shortcuts" description="Everything works with a mouse too — right-click anywhere for a menu, and Shift + right-click for the browser's own.">
+      <div className={screenKeys.length ? 'grid gap-6 sm:grid-cols-3' : 'grid gap-6 sm:grid-cols-2'}>
+        {screenKeys.length > 0 && (
+          <section>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-accent">On this screen · {screen!.title}</p>
+            <ul className="grid gap-2 text-[13px]">
+              {screenKeys.map((it) => (
+                <li key={it.key} className="flex items-center justify-between gap-3">
+                  <span>{it.label}</span>
+                  <Keys k={it.key.toUpperCase()} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">Everywhere</p>
           <ul className="grid gap-2 text-[13px]">

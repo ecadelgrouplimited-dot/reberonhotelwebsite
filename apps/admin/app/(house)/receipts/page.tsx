@@ -14,6 +14,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { ExportMenu } from '@/components/ui/export-menu';
 import { m } from '@/lib/export';
 import { SelectInput, TextInput } from '@/components/ui/field';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { DocumentRow, printDocument } from '@/components/documents/documents-panel';
 
 const kampala = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kampala' }).format(d);
@@ -33,6 +36,16 @@ export default function ReceiptsPage() {
   const [to, setTo] = useState(kampala());
   const [q, setQ] = useState('');
   const [issueOpen, setIssueOpen] = useState(false);
+  useScreenActions('Receipts & Invoices', [
+    { label: 'Issue a receipt or invoice', icon: SI.Plus, key: 'n', onSelect: () => setIssueOpen(true) },
+    { label: 'Find a document', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'All documents', icon: SI.Files, key: 'a', onSelect: () => setKind('') },
+    { label: 'Receipts', icon: SI.Receipt, key: 'e', onSelect: () => setKind('RECEIPT') },
+    { label: 'Invoices', icon: SI.FileText, key: 'i', onSelect: () => setKind('INVOICE') },
+    { label: 'Refund notes', icon: SI.Undo2, onSelect: () => setKind('REFUND') },
+    { label: 'This month', icon: SI.CalendarRange, key: 'm', onSelect: () => { setFrom(monthStart()); setTo(kampala()); } },
+  ]);
   const term = useDeferredValue(q);
   const qs = new URLSearchParams({ ...(kind ? { kind } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}), ...(term ? { q: term } : {}) });
   const { data, isLoading } = useQuery({

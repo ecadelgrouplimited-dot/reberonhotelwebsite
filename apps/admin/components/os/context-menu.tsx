@@ -13,7 +13,7 @@ import { cn } from '@/lib/cn';
  * browser's own menu.
  */
 export type MenuItem =
-  | { kind?: 'item'; label: string; icon?: LucideIcon; hint?: string; danger?: boolean; disabled?: boolean; onSelect: () => void }
+  | { kind?: 'item'; label: string; icon?: LucideIcon; hint?: string; danger?: boolean; disabled?: boolean; onSelect: () => void; /** single-key shortcut on its screen */ key?: string }
   | { kind: 'separator' }
   | { kind: 'label'; label: string };
 
@@ -146,7 +146,7 @@ function Menu({ state, onClose }: { state: NonNullable<MenuState>; onClose: () =
           >
             {Icon ? <Icon className="size-4 shrink-0 opacity-80" /> : <span className="size-4 shrink-0" />}
             <span className="flex-1 truncate">{it.label}</span>
-            {it.hint && <kbd className={cn('font-sans text-[11px]', active === i ? 'opacity-80' : 'text-fg-subtle')}>{it.hint}</kbd>}
+            {(it.hint ?? it.key) && <kbd className={cn('font-sans text-[11px]', active === i ? 'opacity-80' : 'text-fg-subtle')}>{it.hint ?? it.key!.toUpperCase()}</kbd>}
           </button>
         );
       })}

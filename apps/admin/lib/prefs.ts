@@ -33,7 +33,7 @@ export function usePrefs() {
   const allowed = useMemo(() => new Set(apps.map((a) => a.href)), [apps]);
   const pinned: HouseApp[] = useMemo(() => {
     if (!me) return [];
-    const hrefs = prefs.pinned ?? defaultPins(me.role, me.permissions);
+    const hrefs = prefs.pinned ?? defaultPins(me.role, me.permissions, me.jobTitle, me.customRoleName);
     return hrefs.filter((h) => allowed.has(h)).map((h) => APP_BY_HREF.get(h)!).filter(Boolean);
   }, [me, prefs.pinned, allowed]);
   const hidden = useMemo(() => new Set(prefs.hidden ?? []), [prefs.hidden]);
@@ -60,7 +60,7 @@ export function usePrefs() {
     toast.success(`${APP_BY_HREF.get(href)?.name ?? 'App'} hidden from Home — find it with search or “Show hidden apps”`);
   };
   const unhideAll = () => set({ hidden: [] });
-  const resetLayout = () => set({ pinned: me ? defaultPins(me.role, me.permissions) : [], hidden: [], largeIcons: false, dock: true });
+  const resetLayout = () => set({ pinned: me ? defaultPins(me.role, me.permissions, me.jobTitle, me.customRoleName) : [], hidden: [], largeIcons: false, dock: true });
 
   return {
     ready: !!me,

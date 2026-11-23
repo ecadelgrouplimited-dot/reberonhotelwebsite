@@ -21,6 +21,9 @@ import { Clock, Copy, ExternalLink, RotateCcw, UserRoundCheck } from 'lucide-rea
 import { useContextMenu, type MenuItem } from '@/components/os/context-menu';
 import { contactItems } from '@/components/os/record-menus';
 import { undoToast } from '@/lib/undo';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { NewConversation } from './new-conversation';
 
 const CHANNEL: Record<string, { label: string; icon: typeof Globe }> = {
@@ -48,6 +51,19 @@ export function Inbox({ selectedId }: { selectedId: string | null }) {
   const [q, setQ] = useState(initialQ);
   const [debounced, setDebounced] = useState(initialQ);
   const [creating, setCreating] = useState(false);
+  const screenNav = useNavRouter();
+  useScreenActions('Inbox', [
+    { label: 'Log a chat or call', icon: SI.Plus, key: 'n', onSelect: () => setCreating(true) },
+    { label: 'Search conversations', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'Active', icon: SI.Inbox, key: 'a', onSelect: () => setStatus('active') },
+    { label: 'New only', icon: SI.Sparkles, key: 'e', onSelect: () => setStatus('NEW') },
+    { label: 'Done', icon: SI.CheckCheck, key: 'd', onSelect: () => setStatus('DONE') },
+    { label: 'Spam', icon: SI.ShieldAlert, onSelect: () => setStatus('SPAM') },
+    { kind: 'separator' },
+    { label: 'Sent messages', icon: SI.Send, onSelect: () => screenNav.push('/messages') },
+    { label: 'First-stay waitlist', icon: SI.ListChecks, onSelect: () => screenNav.push('/waitlist') },
+  ]);
   const can = useCan();
   const qc = useQueryClient();
   const confirm = useConfirm();

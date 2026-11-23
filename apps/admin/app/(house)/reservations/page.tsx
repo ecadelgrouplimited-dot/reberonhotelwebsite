@@ -32,6 +32,9 @@ import { Button } from '@/components/ui/button';
 import { Empty, PageHeader, Pill, Section, Skeleton, Status } from '@/components/ui/bits';
 import { useContextMenu } from '@/components/os/context-menu';
 import { bookingItems, contactItems } from '@/components/os/record-menus';
+import { useRouter as useNavRouter } from 'next/navigation';
+import * as SI from 'lucide-react';
+import { focusSearch, useScreenActions } from '@/components/os/screen-actions';
 import { Dialog } from '@/components/ui/dialog';
 
 const SOURCE: Record<string, string> = {
@@ -72,6 +75,19 @@ export default function ReservationsPage() {
   const [sourceFilter, setSourceFilter] = useState<string>('ALL');
   const [balanceFilter, setBalanceFilter] = useState<string>('ALL');
   const [q, setQ] = useState('');
+  useScreenActions('Bookings', [
+    { label: 'New booking', icon: SI.Plus, key: 'n', onSelect: () => router.push('/reservations/new') },
+    { label: 'Walk-in', icon: SI.UserRoundPlus, key: 'w', onSelect: () => router.push('/reservations/new?walkin=1') },
+    { label: 'Find a booking', icon: SI.Search, key: 'f', onSelect: focusSearch },
+    { kind: 'separator' },
+    { label: 'Upcoming', icon: SI.CalendarClock, key: 'u', onSelect: () => { setStatus('upcoming'); setSort('arrival_asc'); } },
+    { label: 'Arriving today', icon: SI.LogIn, key: 'a', onSelect: () => { setStatus('all'); setWindowFilter('today_arrivals'); } },
+    { label: 'Leaving today', icon: SI.LogOut, key: 'd', onSelect: () => { setStatus('all'); setWindowFilter('today_departures'); } },
+    { label: 'In house', icon: SI.BedDouble, key: 'i', onSelect: () => setStatus('IN_HOUSE') },
+    { label: 'With a balance due', icon: SI.Wallet, key: 'b', onSelect: () => setBalanceFilter('UNPAID') },
+    { label: 'Newest first', icon: SI.ArrowDownWideNarrow, onSelect: () => { setStatus('all'); setSort('latest'); } },
+    { label: 'Clear filters', icon: SI.FilterX, key: 'c', onSelect: () => { setWindowFilter('all'); setSourceFilter('ALL'); setBalanceFilter('ALL'); setQ(''); } },
+  ]);
   const [showAuditLog, setShowAuditLog] = useState(false);
 
   // Super Admin deletion modal state
