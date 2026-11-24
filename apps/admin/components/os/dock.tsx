@@ -2,7 +2,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, EyeOff, ExternalLink, Home, LayoutGrid, PinOff, Search } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Compass, EyeOff, ExternalLink, LayoutGrid, PinOff, Search } from 'lucide-react';
+import { previousStep, USAGE_EVENT, type TrailStep } from '@/lib/usage';
+import { useRecents } from '@/lib/recents';
+import { appForPath } from './navigator';
 import { useMeQuery } from '@/lib/providers';
 import { usePrefs } from '@/lib/prefs';
 import { cn } from '@/lib/cn';
@@ -36,7 +39,16 @@ export function Dock() {
   const [peek, setPeek] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState(false);
+  const [back, setBack] = useState<TrailStep | null>(null);
+  const recents = useRecents();
+  useEffect(() => {
+    const read = () => setBack(previousStep());
+    read();
+    window.addEventListener(USAGE_EVENT, read);
+    return () => window.removeEventListener(USAGE_EVENT, read);
+  }, [pathname, search]);
   if (!show) return <DockSpace px={0} />;
+  const backLabel = back ? (back.path === '/' ? 'Home' : (recents.find((r) => r.href === back.path && r.kind !== 'app')?.label ?? appForPath(back.path)?.fullName ?? 'the last screen')) : '';
 
   const current = pathname + (search.get('tab') ? `?tab=${search.get('tab')}` : search.get('view') ? `?view=${search.get('view')}` : '');
   const activeHref = prefs.pinned.find((a) => a.href === current)?.href ?? prefs.pinned.find((a) => !a.href.includes('?') && a.href !== '/' && (pathname === a.href || pathname.startsWith(`${a.href}/`)))?.href;
@@ -93,9 +105,21 @@ export function Dock() {
           over && 'ring-2 ring-[var(--accent)]',
         )}
       >
+        {back && pathname !== '/' && (
+          <DockButton label={`Back to ${backLabel}`} hint="Alt ←" onClick={() => (window.history.length > 1 ? router.back() : router.push(back.path))}>
+            <span className="grid size-11 place-items-center rounded-xl border border-line bg-surface text-fg shadow-sm sm:size-12">
+              <ArrowLeft className="size-5" />
+            </span>
+          </DockButton>
+        )}
         <DockButton label="Home" hint="G H" active={pathname === '/'} onClick={() => router.push('/')}>
           <span className="grid size-11 place-items-center rounded-xl bg-[var(--sidebar)] text-white shadow-inner sm:size-12">
             <LayoutGrid className="size-5" />
+          </span>
+        </DockButton>
+        <DockButton label="Navigator — back, suggestions and every app" hint={'\\'} onClick={() => shellAction('navigator')}>
+          <span className="grid size-11 place-items-center rounded-xl bg-gradient-to-br from-[#D76E1B] to-[#A8520F] text-white shadow-inner sm:size-12">
+            <Compass className="size-5" />
           </span>
         </DockButton>
         <span aria-hidden className="mx-0.5 mb-2 h-8 w-px self-center bg-line" />

@@ -4,10 +4,10 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Copy, ExternalLink, Home, Keyboard, LayoutGrid, Moon, PanelLeft, Pin, PinOff, Plus, Printer, RefreshCw, Search, UserRoundPlus,
-} from 'lucide-react';
+  ArrowLeft, Copy, ExternalLink, Home, Keyboard, LayoutGrid, Moon, PanelLeft, Pin, PinOff, Plus, Printer, RefreshCw, Search, UserRoundPlus, Compass } from 'lucide-react';
 import { useMeQuery } from '@/lib/providers';
 import { addRecent } from '@/lib/recents';
+import { recordAppUse, stepTrail } from '@/lib/usage';
 import { usePrefs } from '@/lib/prefs';
 import { printScreen } from '@/lib/print';
 import { Dialog } from '@/components/ui/dialog';
@@ -62,7 +62,12 @@ export function DesktopHandlers() {
   useEffect(() => {
     const tab = search.get('tab') ?? search.get('view');
     const app = APP_BY_HREF.get(tab ? `${pathname}?${search.get('tab') ? 'tab' : 'view'}=${tab}` : pathname) ?? APP_BY_HREF.get(pathname);
-    if (app) addRecent({ href: app.href, label: app.fullName, detail: app.group, kind: 'app' });
+    if (app) {
+      addRecent({ href: app.href, label: app.fullName, detail: app.group, kind: 'app' });
+      recordAppUse(app.href);
+    }
+    // The trail behind “Back to …” in the Navigator and the dock.
+    stepTrail(pathname + (search.toString() ? `?${search.toString()}` : ''));
   }, [pathname, search]);
 
   useEffect(() => {
@@ -76,6 +81,7 @@ export function DesktopHandlers() {
     const houseItems = (): MenuItem[] => [
       { label: 'Home', icon: Home, hint: 'G H', onSelect: () => router.push('/') },
       { label: 'Search or jump to…', icon: Search, hint: `${mod()} K`, onSelect: () => shellAction('palette') },
+      { label: 'Navigator', icon: Compass, hint: '\\', onSelect: () => shellAction('navigator') },
       ...(can('bookings:write')
         ? ([
             { kind: 'separator' },
@@ -223,6 +229,9 @@ export function DesktopHandlers() {
       } else if (e.key === '/') {
         e.preventDefault();
         shellAction('palette');
+      } else if (e.key === '\\') {
+        e.preventDefault();
+        shellAction('navigator');
       } else if (e.key === 'r' && who) {
         qc.invalidateQueries();
         toast.success('Up to date', { id: 'rb-refresh', duration: 1200 });
@@ -257,6 +266,7 @@ function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void
     ['?', 'This list'],
     ['R', 'Refresh the screen'],
     [`${m} P`, 'Print this screen (clean A4)'],
+    ['\\', 'Navigator: back, suggestions and every app'],
     [`${m} B`, 'Show or hide the sidebar'],
     ['Alt 1…9', 'Open the app in that dock position'],
     ['Shift F10', 'Right-click the focused item (or the Menu key)'],

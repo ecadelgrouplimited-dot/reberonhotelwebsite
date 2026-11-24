@@ -92,7 +92,7 @@ function Row({ icon, title, detail, right }: { icon: ReactNode; title: ReactNode
  * Search everything, do anything: guests, bookings, rooms, conversations, apps,
  * website pages and actions in one box. ↵ opens, Ctrl/⌘+↵ opens in a new tab.
  */
-export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function CommandPalette({ open, onClose, initialQuery = '' }: { open: boolean; onClose: () => void; initialQuery?: string }) {
   const router = useRouter();
   const qc = useQueryClient();
   const { data: me } = useMeQuery();
@@ -132,6 +132,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   useEffect(() => {
     if (!open) setQ('');
+    else if (initialQuery) setQ(initialQuery);
   }, [open]);
   // When records arrive after typing, highlight the best one (not an action picked meanwhile).
   const firstHit = bookings.data?.data[0] ? `${q} booking ${bookings.data.data[0].code} ${bookings.data.data[0].guest.name} ${bookings.data.data[0].guest.phone ?? ''}` : guests.data?.data[0] ? `${q} guest ${guests.data.data[0].name} ${guests.data.data[0].phone ?? ''} ${guests.data.data[0].email ?? ''}` : '';

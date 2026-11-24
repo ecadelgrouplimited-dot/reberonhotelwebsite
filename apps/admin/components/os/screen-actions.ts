@@ -14,7 +14,7 @@ type Entry = { id: number; title: string; get: () => ScreenItem[] };
 
 const stack: Entry[] = [];
 let seq = 0;
-export const RESERVED_KEYS = new Set(['g', 'r', '/', '?']);
+export const RESERVED_KEYS = new Set(['g', 'r', '/', '?', '\\']);
 
 export function useScreenActions(title: string, items: ScreenItem[]) {
   const ref = useRef(items);

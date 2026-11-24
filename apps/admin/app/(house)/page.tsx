@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { BedDouble, Contact, History, Inbox as InboxIcon, Trash2, ChevronRight, Check, Eye, EyeOff, ExternalLink, Keyboard, LayoutGrid, Pin, PinOff, Plus, RotateCcw, Search, ShoppingBag, UserRoundPlus, X } from 'lucide-react';
 import { useCan, useMe } from '@/lib/providers';
 import { usePrefs } from '@/lib/prefs';
@@ -37,9 +37,10 @@ export default function HomeScreen() {
   const [showHidden, setShowHidden] = useState(false);
   const [folder, setFolder] = useState<string | null>(null);
   const recents = useRecents().filter((r) => r.kind !== 'app').slice(0, 6);
+  const wantsCustomise = useSearchParams().get('customise');
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('customise')) setCustomise(true);
-  }, []);
+    if (wantsCustomise) setCustomise(true);
+  }, [wantsCustomise]);
 
   const hour = Number(kampala(now, { hour: 'numeric', hour12: false }));
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';

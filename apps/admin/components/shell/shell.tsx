@@ -40,6 +40,7 @@ import { CloudOff } from 'lucide-react';
 export { computeBadges, useAdminPulse, type BadgeInfo } from './badges';
 import { ContextMenuProvider } from '@/components/os/context-menu';
 import { DesktopHandlers } from '@/components/os/desktop';
+import { Navigator } from '@/components/os/navigator';
 import { Dock, useDockVisible } from '@/components/os/dock';
 import { computeBadges, useAdminPulse, type BadgeInfo } from './badges';
 
@@ -508,6 +509,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const { data: me, isError, error } = useMeQuery();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const router = useRouter();
 
@@ -541,7 +543,10 @@ export function Shell({ children }: { children: ReactNode }) {
 
   // Menus, shortcuts and the dock ask the shell to open search or toggle the sidebar.
   useEffect(() => {
-    const palette = () => setPaletteOpen(true);
+    const palette = (e: Event) => {
+      setPaletteQuery((e as CustomEvent<{ q?: string } | undefined>).detail?.q ?? '');
+      setPaletteOpen(true);
+    };
     const sidebar = () => toggleSidebar();
     window.addEventListener('rb:palette', palette);
     window.addEventListener('rb:sidebar', sidebar);
@@ -677,7 +682,7 @@ export function Shell({ children }: { children: ReactNode }) {
           )}
         </main>
       </div>
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CommandPalette open={paletteOpen} initialQuery={paletteQuery} onClose={() => { setPaletteOpen(false); setPaletteQuery(''); }} />
       <ConfirmProvider>
         <SyncCenter />
       </ConfirmProvider>
@@ -687,6 +692,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <Suspense>
           <DesktopHandlers />
           <Dock />
+          <Navigator />
         </Suspense>
       )}
     </div>
