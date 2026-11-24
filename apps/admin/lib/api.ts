@@ -24,6 +24,9 @@ export class OfflineQueuedError extends ApiError {
   }
 }
 
+/** While the screen is locked there is no session: calls stop here instead of bouncing to the sign-in page. */
+export const lockState = { locked: false };
+
 let refreshing: Promise<boolean> | null = null;
 
 async function refresh() {
@@ -58,6 +61,7 @@ const uuid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? cr
 export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
   const isForm = opts.body instanceof FormData;
   const method = opts.method ?? 'GET';
+  if (lockState.locked && !path.startsWith('/auth/')) throw new ApiError(401, 'LOCKED', 'The screen is locked.', []);
   const canQueue = queueable(method, path);
   const idemKey = canQueue ? (opts.headers?.['idempotency-key'] ?? uuid()) : undefined;
   const run = () =>
@@ -84,7 +88,7 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
     if (canQueue) return queue();
     throw new ApiError(0, 'OFFLINE', method === 'GET' ? 'You are offline and this has not been saved on this device yet.' : 'You are offline — this action needs a connection.', []);
   }
-  if (res.status === 401 && !path.startsWith('/auth/login')) {
+  if (res.status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/unlock') && !lockState.locked) {
     refreshing ??= refresh().finally(() => (refreshing = null));
     if (await refreshing) res = await run();
     else if (typeof window !== 'undefined' && !location.pathname.startsWith('/login')) {

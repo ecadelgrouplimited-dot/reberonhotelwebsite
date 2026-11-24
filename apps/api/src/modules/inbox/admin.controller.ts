@@ -336,9 +336,25 @@ export class DashboardController {
     ).length;
     const publishedPages = pagesList.filter((p) => p.status === 'PUBLISHED').length;
 
+    // Close the day: which earlier days (up to a week, counted from the first close ever) were never signed off.
+    let dayClose: AdminPulseDTO['dayClose'];
+    if (has(user, 'day:close')) {
+      const closes = await this.prisma.dayClose.findMany({ where: { date: { gte: new Date(`${addDays(todayStr, -8)}T00:00:00.000Z`) } }, select: { date: true } });
+      const first = await this.prisma.dayClose.findFirst({ orderBy: { date: 'asc' }, select: { date: true } });
+      const last = await this.prisma.dayClose.findFirst({ orderBy: { date: 'desc' }, select: { date: true } });
+      const done = new Set(closes.map((c) => c.date.toISOString().slice(0, 10)));
+      const unclosed: string[] = [];
+      if (first) {
+        const from = [first.date.toISOString().slice(0, 10), addDays(todayStr, -7)].sort().pop()!;
+        for (let d = from; d < todayStr; d = addDays(d, 1)) if (!done.has(d)) unclosed.push(d);
+      }
+      dayClose = { unclosed, todayClosed: done.has(todayStr), lastClosed: last ? last.date.toISOString().slice(0, 10) : null };
+    }
+
     return {
       generatedAt: new Date().toISOString(),
       hotelDate: todayStr,
+      dayClose,
       inbox: {
         newCount: inboxNew,
         openCount: inboxOpen,

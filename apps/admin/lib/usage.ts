@@ -15,8 +15,10 @@ interface AppUse {
   total: number;
 }
 
-const USAGE_KEY = 'rb-usage';
-const TRAIL_KEY = 'rb-trail';
+import { ownKey } from './owner';
+
+const usageKey = () => ownKey('rb-usage');
+const trailKey = () => ownKey('rb-trail');
 const HALF_LIFE = 7 * 24 * 3600_000;
 const EVENT = 'rb:usage';
 
@@ -24,7 +26,7 @@ const decayed = (u: AppUse, now = Date.now()) => u.score * Math.pow(0.5, (now - 
 
 export function readUsage(): Record<string, AppUse> {
   try {
-    const raw = JSON.parse(localStorage.getItem(USAGE_KEY) ?? '{}') as Record<string, AppUse>;
+    const raw = JSON.parse(localStorage.getItem(usageKey()) ?? '{}') as Record<string, AppUse>;
     return raw && typeof raw === 'object' ? raw : {};
   } catch {
     return {};
@@ -45,7 +47,7 @@ export function recordAppUse(href: string) {
     const kept = Object.entries(all)
       .sort((a, b) => decayed(b[1], now) - decayed(a[1], now))
       .slice(0, 60);
-    localStorage.setItem(USAGE_KEY, JSON.stringify(Object.fromEntries(kept)));
+    localStorage.setItem(usageKey(), JSON.stringify(Object.fromEntries(kept)));
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch {
     /* private mode */
@@ -54,7 +56,7 @@ export function recordAppUse(href: string) {
 
 export function forgetUsage() {
   try {
-    localStorage.removeItem(USAGE_KEY);
+    localStorage.removeItem(usageKey());
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch {
     /* private mode */
@@ -128,7 +130,7 @@ export interface TrailStep {
 
 export function readTrail(): TrailStep[] {
   try {
-    return JSON.parse(sessionStorage.getItem(TRAIL_KEY) ?? '[]') as TrailStep[];
+    return JSON.parse(sessionStorage.getItem(trailKey()) ?? '[]') as TrailStep[];
   } catch {
     return [];
   }
@@ -142,7 +144,7 @@ export function stepTrail(path: string) {
     if (last?.path === path) return;
     if (trail[trail.length - 2]?.path === path) trail.pop();
     else trail.push({ path, at: Date.now() });
-    sessionStorage.setItem(TRAIL_KEY, JSON.stringify(trail.slice(-30)));
+    sessionStorage.setItem(trailKey(), JSON.stringify(trail.slice(-30)));
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch {
     /* private mode */

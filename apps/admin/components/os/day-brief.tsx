@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { AlarmClock, BrushCleaning, LogIn, LogOut, MessageSquareWarning, Sun, X } from 'lucide-react';
+import { AlarmClock, BrushCleaning, LogIn, LogOut, MessageSquareWarning, MoonStar, Sun, X } from 'lucide-react';
 import type { AdminPulseDTO, HkBoardDTO } from '@reberon/contracts';
 import { get } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
@@ -29,7 +29,7 @@ export function DayBrief({ pulse }: { pulse?: AdminPulseDTO }) {
   const rooms = can('rooms:status');
   const { data: hk } = useQuery({ queryKey: ['hk-board-today'], queryFn: () => get<HkBoardDTO>('/housekeeping'), enabled: rooms && !dismissed, staleTime: 30_000 });
 
-  if (dismissed || !pulse || (!desk && !rooms)) return null;
+  if (dismissed || !pulse || (!desk && !rooms && !can('day:close'))) return null;
   const notReady = (hk?.rooms ?? []).filter((r) => r.isActive && r.arriving && !['VACANT_CLEAN', 'INSPECTED', 'OCCUPIED'].includes(r.hkStatus));
   const lines: { icon: typeof Sun; text: string; href: string; tone?: 'red' | 'amber' }[] = [];
   if (desk) {
@@ -44,6 +44,10 @@ export function DayBrief({ pulse }: { pulse?: AdminPulseDTO }) {
     lines.push({ icon: BrushCleaning, text: `Not ready for today’s arrivals: room ${notReady.map((r) => r.number).join(', ')}`, href: '/housekeeping', tone: 'red' });
   } else if (rooms && pulse.rooms.vacantDirty > 0) {
     lines.push({ icon: BrushCleaning, text: `${pulse.rooms.vacantDirty} room${pulse.rooms.vacantDirty > 1 ? 's' : ''} to clean`, href: '/housekeeping', tone: 'amber' });
+  }
+  if (can('day:close') && pulse.dayClose) {
+    const n = pulse.dayClose.unclosed.length;
+    if (n > 0) lines.push({ icon: MoonStar, text: `${n === 1 ? new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${pulse.dayClose.unclosed[0]}T00:00:00Z`)) + ' was' : `${n} earlier days were`} never closed — close ${n === 1 ? 'it' : 'them'} now`, href: `/day-close?date=${pulse.dayClose.unclosed[0]}`, tone: 'amber' });
   }
   if (!lines.length) return null;
 

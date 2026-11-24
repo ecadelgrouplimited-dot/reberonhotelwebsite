@@ -47,6 +47,7 @@ export const PERMISSIONS = [
   'expenses:manage',
   'hr:manage',
   'pos:manage',
+  'day:close',
   'records:delete',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -65,7 +66,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'dashboard:view', 'reports:read', 'payments:record', 'payments:refund',
     'receipts:read', 'receipts:issue', 'receipts:void', 'quotations:manage',
     'expenses:manage', 'requisitions:request', 'requisitions:approve',
-    'inventory:manage', 'rates:read', 'bookings:read', 'hr:manage',
+    'inventory:manage', 'rates:read', 'bookings:read', 'hr:manage', 'day:close',
   ],
   DESK: [
     'dashboard:view', 'media:read', 'media:upload', 'inbox:read', 'inbox:write',
@@ -73,6 +74,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'rates:read', 'payments:record', 'desk:operate', 'rooms:inspect', 'guests:read',
     'guests:write', 'messages:read', 'receipts:read', 'receipts:issue',
     'pos:operate', 'healthclub:operate', 'quotations:manage', 'requisitions:request',
+    'day:close',
   ],
   KITCHEN: [
     'dashboard:view', 'pos:operate', 'inventory:manage', 'requisitions:request',
@@ -151,6 +153,7 @@ export const PERMISSION_INFO: PermissionInfo[] = [
   { key: 'receipts:read', group: 'Money', label: 'See receipts', description: 'Receipts, refund notes and invoices, and the register.', money: true },
   { key: 'receipts:issue', group: 'Money', label: 'Print and send receipts', description: 'Print, reprint and send documents to guests.', money: true },
   { key: 'receipts:void', group: 'Money', label: 'Void receipts', description: 'Cancel a wrong document and issue a corrected one.', money: true },
+  { key: 'day:close', group: 'Money', label: 'Close the day', description: 'Run the end-of-day check (night audit), settle loose ends and sign off the day’s figures.', money: true },
   { key: 'reports:read', group: 'Money', label: 'Reports', description: 'Occupancy, rates, revenue and where bookings come from.', money: true },
 
   { key: 'pos:operate', group: 'Operations & POS', label: 'Kitchen & Bar POS', description: 'Take dining and beverage orders, charge to room folios or settle bills.', money: true },

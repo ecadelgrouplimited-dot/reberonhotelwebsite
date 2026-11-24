@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { ownKey } from './owner';
 
 /**
  * What this person opened recently on this device (apps, bookings, guests,
@@ -14,13 +15,14 @@ export interface RecentItem {
   at: number;
 }
 
-const KEY = 'rb-recents';
+const BASE = 'rb-recents';
+const key = () => ownKey(BASE);
 const MAX = 16;
 const EVENT = 'rb:recents';
 
 export function readRecents(): RecentItem[] {
   try {
-    return (JSON.parse(localStorage.getItem(KEY) ?? '[]') as RecentItem[]).filter((r) => r && r.href && r.label);
+    return (JSON.parse(localStorage.getItem(key()) ?? '[]') as RecentItem[]).filter((r) => r && r.href && r.label);
   } catch {
     return [];
   }
@@ -29,7 +31,7 @@ export function readRecents(): RecentItem[] {
 export function addRecent(item: Omit<RecentItem, 'at'>) {
   try {
     const list = [{ ...item, at: Date.now() }, ...readRecents().filter((r) => r.href !== item.href)].slice(0, MAX);
-    localStorage.setItem(KEY, JSON.stringify(list));
+    localStorage.setItem(key(), JSON.stringify(list));
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch {
     /* private mode */
@@ -38,7 +40,7 @@ export function addRecent(item: Omit<RecentItem, 'at'>) {
 
 export function forgetRecent(href: string) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(readRecents().filter((r) => r.href !== href)));
+    localStorage.setItem(key(), JSON.stringify(readRecents().filter((r) => r.href !== href)));
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch {
     /* private mode */
@@ -47,7 +49,7 @@ export function forgetRecent(href: string) {
 
 export function clearRecents() {
   try {
-    localStorage.removeItem(KEY);
+    localStorage.removeItem(key());
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch {
     /* private mode */

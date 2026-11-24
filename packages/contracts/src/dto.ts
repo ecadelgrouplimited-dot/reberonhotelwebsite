@@ -224,6 +224,20 @@ export interface MeDTO {
   permissions: string[];
   /** Personal House layout (pins, hidden apps, dock). */
   preferences?: HousePrefs;
+  /** Has a quick-switch PIN for shared terminals. */
+  hasPin?: boolean;
+}
+
+/** Someone who has signed in with their password on this device, shown on the lock screen. */
+export interface TerminalPersonDTO {
+  id: string;
+  name: string;
+  jobTitle: string | null;
+  avatarUrl: string | null;
+  /** Can unlock with a PIN; otherwise they use their password. */
+  hasPin: boolean;
+  /** Too many wrong PINs: password only until they sign in with it. */
+  pinBlocked: boolean;
 }
 
 export interface RoleDefinitionDTO {
@@ -284,6 +298,8 @@ export interface UserDTO {
   permissions: string[];
   hasPassword: boolean;
   activeSessions: number;
+  /** Has a quick-switch PIN for shared terminals. */
+  hasPin?: boolean;
   lastLoginAt: string | null;
   createdAt: string;
 }
@@ -418,6 +434,8 @@ export interface DashboardDTO {
 export interface AdminPulseDTO {
   generatedAt: string;
   hotelDate: string;
+  /** Close the day: earlier days never closed (since the first close), and whether today is closed. Only for people who may close. */
+  dayClose?: { unclosed: string[]; todayClosed: boolean; lastClosed: string | null };
   inbox: {
     newCount: number;
     openCount: number;

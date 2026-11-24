@@ -74,6 +74,18 @@ export const zLoginInput = z.object({
 export const zPasswordSchema = z.string().min(12, 'At least 12 characters').max(200);
 export const zForgotInput = z.object({ email: z.string().trim().toLowerCase().email() });
 export const zResetInput = z.object({ token: z.string().min(20), password: zPasswordSchema });
+/** 4–6 digits, not one digit repeated and not a straight run (1234, 9876). */
+export const zPin = z
+  .string()
+  .regex(/^\d{4,6}$/, 'Use 4 to 6 digits')
+  .refine((p) => !/^(\d)\1+$/.test(p), 'Too easy to guess — avoid one digit repeated')
+  .refine((p) => !'01234567890'.includes(p) && !'09876543210'.includes(p), 'Too easy to guess — avoid a straight run');
+export const zSetPinInput = z.object({ password: z.string().min(1).max(200), pin: zPin });
+export const zUnlockInput = z.union([
+  z.object({ userId: z.string().uuid(), pin: z.string().regex(/^\d{4,6}$/, 'Use 4 to 6 digits') }),
+  z.object({ userId: z.string().uuid(), password: z.string().min(1).max(200) }),
+]);
+export const zForgetTerminalInput = z.object({ userId: z.string().uuid() });
 export const zChangePasswordInput = z.object({ currentPassword: z.string().min(1), newPassword: zPasswordSchema });
 
 export const zInviteInput = z.object({

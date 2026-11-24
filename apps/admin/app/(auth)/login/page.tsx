@@ -2,8 +2,11 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useQueryClient } from '@tanstack/react-query';
-import { ApiError, post } from '@/lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { MeDTO, TerminalPersonDTO } from '@reberon/contracts';
+import { ApiError, get, post } from '@/lib/api';
+import { LockBackdrop, QuickSignIn } from '@/components/os/lock-screen';
+import { ReberonHorizontalLogo } from '@/components/shell/brand-logo';
 import { Button } from '@/components/ui/button';
 import { TextInput } from '@/components/ui/field';
 
@@ -16,6 +19,14 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(params.get('expired') ? 'Your session ended. Please sign in again.' : null);
   const [loading, setLoading] = useState(false);
 
+  // A shared terminal that remembers people opens on “Who’s working?” (PIN), with email one tap away.
+  const { data: people } = useQuery({ queryKey: ['terminal-people'], queryFn: () => get<TerminalPersonDTO[]>('/auth/terminal'), staleTime: 0, retry: false });
+  const [emailForm, setEmailForm] = useState(false);
+  const goNext = () => {
+    const next = params.get('next');
+    router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/');
+  };
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -23,12 +34,30 @@ function LoginForm() {
     try {
       const me = await post('/auth/login', { email, password });
       qc.setQueryData(['me'], me);
-      const next = params.get('next');
-      router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/');
+      goNext();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
       setLoading(false);
     }
+  }
+
+  if (people?.length && !emailForm) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        <LockBackdrop>
+          <ReberonHorizontalLogo className="h-9 w-auto opacity-90" wordmarkColor="#FFFFFF" copperColor="#D76E1B" />
+          <h1 className="display text-[2.2rem] text-white">Welcome back</h1>
+          {error && <p className="rounded-xl bg-white/10 px-3 py-2 text-[12.5px] text-white/80">{error}</p>}
+          <QuickSignIn
+            onDone={(me: MeDTO) => {
+              qc.setQueryData(['me'], me);
+              goNext();
+            }}
+            onUseEmail={() => setEmailForm(true)}
+          />
+        </LockBackdrop>
+      </div>
+    );
   }
 
   return (
@@ -55,6 +84,11 @@ function LoginForm() {
       <Button type="submit" variant="primary" size="lg" loading={loading} className="w-full">
         Sign in
       </Button>
+      {!!people?.length && (
+        <button type="button" onClick={() => setEmailForm(false)} className="justify-self-center text-[12.5px] text-fg-muted hover:text-fg">
+          Back to quick sign-in with PIN
+        </button>
+      )}
     </form>
   );
 }

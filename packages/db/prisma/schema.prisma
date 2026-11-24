@@ -73,6 +73,11 @@ model User {
   lastLoginAt     DateTime?
   failedLogins    Int        @default(0)
   lockedUntil     DateTime?
+  /// Quick-switch PIN (argon2) for shared terminals; only works on a device where they signed in with their password
+  pinHash         String?
+  pinSetAt        DateTime?
+  /// Wrong PINs in a row; at 5 the PIN stops working until they sign in with their password
+  failedPins      Int        @default(0)
   isSeed          Boolean    @default(false)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -2181,4 +2186,18 @@ model PushSubscription {
   updatedAt     DateTime  @updatedAt
 
   @@index([userId])
+}
+
+/// Close the day (night audit): one sign-off per business date, with what was checked and the day's figures as they stood.
+model DayClose {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  date         DateTime @unique @db.Date
+  closedById   String?  @db.Uuid
+  closedByName String
+  closedAt     DateTime @default(now())
+  notes        String?
+  /// Closed while some “must” checks were still open (the notes explain why).
+  overridden   Boolean  @default(false)
+  /// { checks, figures } at the moment of closing.
+  snapshot     Json
 }

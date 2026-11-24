@@ -191,6 +191,15 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
     },
   });
 
+  const clearPin = useMutation({
+    mutationFn: () => del<{ ok: boolean }>(`/users/${id}/pin`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['user', id] });
+      toast.success('PIN cleared', { description: 'They sign in with their password and can set a new PIN under Your account.' });
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not clear the PIN'),
+  });
+
   if (!u || !f) return <Skeleton className="h-96" />;
   const dirty = JSON.stringify(f) !== JSON.stringify(toForm(u)) || newPassword.trim().length >= 12;
   const set = (p: Partial<Form>) => setF({ ...f, ...p });
@@ -523,6 +532,24 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
                   ))}
                 </ul>
               )}
+              <div className="flex items-center justify-between gap-2 border-t border-line pt-2.5">
+                <span>
+                  <span className="block font-medium">Quick PIN</span>
+                  <span className="text-[11px] text-fg-muted">{u.hasPin ? 'Set — unlocks shared terminals they have signed in on' : 'Not set — they use their password on the lock screen'}</span>
+                </span>
+                {u.hasPin && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={clearPin.isPending}
+                    onClick={async () => {
+                      if (await confirm({ title: `Clear ${u.name}'s PIN?`, body: 'Use this if they forgot it or someone else knows it. Their password keeps working.', confirm: 'Clear PIN' })) clearPin.mutate();
+                    }}
+                  >
+                    Clear PIN
+                  </Button>
+                )}
+              </div>
               <Link href={`/settings/audit?q=${encodeURIComponent(u.name)}`} className="text-xs font-medium text-brand hover:underline">
                 View user activity in Audit Log →
               </Link>

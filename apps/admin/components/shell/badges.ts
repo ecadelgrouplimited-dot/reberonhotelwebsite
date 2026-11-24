@@ -194,6 +194,14 @@ export function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey
     };
   }
 
+  // Close the day: earlier days never signed off; after 21:00, today too.
+  if (pulse.dayClose) {
+    const late = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Africa/Kampala' }).format(new Date())) >= 21;
+    const n = pulse.dayClose.unclosed.length;
+    if (n > 0) map.dayclose = { count: n, tone: 'amber', tooltip: `${n} earlier day${n > 1 ? 's' : ''} not closed` };
+    else if (late && !pulse.dayClose.todayClosed) map.dayclose = { count: 1, tone: 'neutral', tooltip: 'Today is not closed yet' };
+  }
+
   return map;
 }
 

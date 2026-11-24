@@ -157,6 +157,7 @@ export class UsersController implements OnModuleInit {
       revokes: u.revokes,
       permissions: permissionsOf(u),
       hasPassword: !!u.passwordHash,
+      hasPin: !!u.pinHash,
       activeSessions: live.filter((s) => s.userId === u.id).length,
       lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
       createdAt: u.createdAt.toISOString(),
@@ -867,6 +868,18 @@ export class UsersController implements OnModuleInit {
     const r = await this.prisma.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
     await this.audit.record({ actor: me, action: 'user.sign_out', entityType: 'User', entityId: id, summary: `Signed ${user.name} out everywhere (${r.count} session${r.count === 1 ? '' : 's'})`, req });
     return { ended: r.count };
+  }
+
+  /** Clear their quick-switch PIN (forgotten, or shared with someone). They sign in with their password and set a new one. */
+  @Delete(':id/pin')
+  @HttpCode(200)
+  @Requires('users:manage')
+  async clearPin(@Param('id') id: string, @CurrentUser() me: AuthUser, @Req() req: Request) {
+    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null } });
+    if (!user) throw notFound('Person');
+    await this.prisma.user.update({ where: { id }, data: { pinHash: null, pinSetAt: null, failedPins: 0 } });
+    await this.audit.record({ actor: me, action: 'user.pin_clear', entityType: 'User', entityId: id, summary: `Cleared ${user.name}'s PIN`, req });
+    return { ok: true };
   }
 
   /** Delete staff account. Only available to the owner. */

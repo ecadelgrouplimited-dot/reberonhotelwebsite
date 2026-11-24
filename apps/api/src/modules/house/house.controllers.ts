@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import {
   zAssignRoomsInput, zCheckInInput, zCheckOutInput, zFeedbackInput, zFolioChargeInput, zGuestMergeInput, zGuestPatch,
   zHkStatusInput, zHkTaskCreateInput, zHkTaskPatch, zMoveRoomInput, zNoShowInput, zReportQuery, zFinanceQuery, zBriefQuery, zRoomBlockInput,
-  zRoomCreateInput, zRoomUpdateInput,
+  zRoomCreateInput, zRoomUpdateInput, zDayCloseInput,
 } from '@reberon/contracts';
 import { hotelToday } from '@reberon/utils';
 import { CurrentUser, Requires, type AuthUser } from '../../common/auth.js';
@@ -16,6 +17,8 @@ import { RackService } from './rack.service.js';
 import { GuestsService } from './guests.service.js';
 import { ReportsService } from './reports.service.js';
 import { FinanceService } from './finance.service.js';
+import { DayCloseService } from './day-close.service.js';
+import { sendDocument } from '../documents/letterhead.js';
 
 const dateParam = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : hotelToday());
 
@@ -284,5 +287,41 @@ export class PublicFeedbackController {
   submit(@Param('code') code: string, @Body(new ZodPipe(zFeedbackInput)) body: z.infer<typeof zFeedbackInput>) {
     if (!this.booking.verifyAccess(code, body.t)) throw notFound('Booking');
     return this.guests.submitFeedback(code, body);
+  }
+}
+
+/** Close the day (night audit): the checks, the figures, the sign-off and its printed report. */
+@Controller('v1/admin/day-close')
+export class DayCloseController {
+  constructor(private readonly days: DayCloseService) {}
+
+  @Get()
+  @Requires('day:close')
+  get(@Query('date') date?: string) {
+    return this.days.get(dateParam(date));
+  }
+
+  @Get('history')
+  @Requires('day:close')
+  history(@Query('days') days?: string) {
+    return this.days.history(Number(days) || 14);
+  }
+
+  @Post()
+  @Requires('day:close')
+  close(@Body(new ZodPipe(zDayCloseInput)) body: z.infer<typeof zDayCloseInput>, @CurrentUser() user: AuthUser) {
+    return this.days.close(body, user);
+  }
+
+  @Delete(':date')
+  @Requires('day:close', 'records:delete')
+  reopen(@Param('date') date: string, @CurrentUser() user: AuthUser) {
+    return this.days.reopen(date, user);
+  }
+
+  @Get(':date/print')
+  @Requires('day:close')
+  async print(@Param('date') date: string, @Query('autoprint') autoprint: string | undefined, @Res() res: Response) {
+    sendDocument(res, await this.days.print(date, { autoprint: autoprint === '1' }));
   }
 }

@@ -447,3 +447,77 @@ export interface BriefInsightsDTO {
   receivables: { total: MoneyByCurrency; overdue: MoneyByCurrency; overdueCount: number; advanceDeposits: MoneyByCurrency };
   attention: { tone: 'bad' | 'warn' | 'info'; title: string; detail: string; href?: string }[];
 }
+
+
+/* ───────── Close the day (night audit) ───────── */
+
+export type DayCheckKey = 'arrivals' | 'departures' | 'openBills' | 'balances' | 'unassigned' | 'rooms' | 'references';
+
+export interface DayCheckItemDTO {
+  id: string;
+  label: string;
+  detail: string;
+  href: string;
+  /** Booking id when the item is a stay (for no-show / check-out actions). */
+  reservationId?: string;
+}
+
+export interface DayCheckDTO {
+  key: DayCheckKey;
+  /** must: settle or explain before closing; should: worth a look; ok: nothing to do. */
+  level: 'must' | 'should' | 'ok';
+  title: string;
+  hint: string;
+  count: number;
+  items: DayCheckItemDTO[];
+}
+
+export interface DayFiguresDTO {
+  roomRevenue: MoneyByCurrency;
+  fnbRevenue: MoneyByCurrency;
+  otherRevenue: MoneyByCurrency;
+  grossRevenue: MoneyByCurrency;
+  collected: MoneyByCurrency;
+  refunds: MoneyByCurrency;
+  expenses: MoneyByCurrency;
+  occupancy: number;
+  roomNightsSold: number;
+  roomNightsAvailable: number;
+  adr: MoneyByCurrency;
+  revpar: MoneyByCurrency;
+  arrivals: number;
+  departures: number;
+  inHouse: number;
+  noShows: number;
+  posOrders: number;
+  rails: { method: string; label: string; count: number; amount: MoneyByCurrency }[];
+}
+
+export interface DayCloseRecordDTO {
+  date: string;
+  closedAt: string;
+  closedByName: string;
+  notes: string | null;
+  overridden: boolean;
+}
+
+export interface DayCloseDTO {
+  date: string;
+  today: string;
+  checks: DayCheckDTO[];
+  figures: DayFiguresDTO;
+  closed: (DayCloseRecordDTO & { checks: DayCheckDTO[]; figures: DayFiguresDTO }) | null;
+  /** Earlier days that were never closed (oldest first), at most a week back. */
+  unclosed: string[];
+}
+
+export interface DayCloseHistoryDTO {
+  days: { date: string; closed: DayCloseRecordDTO | null }[];
+}
+
+export const zDayCloseInput = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  notes: z.string().trim().max(2000).optional(),
+  /** Close even though some “must” checks are still open — needs notes. */
+  override: z.boolean().optional(),
+});

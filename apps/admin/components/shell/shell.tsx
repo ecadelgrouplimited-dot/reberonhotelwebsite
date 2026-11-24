@@ -10,6 +10,7 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   ExternalLink,
+  Lock,
   LogOut,
   Menu,
   Moon,
@@ -22,7 +23,8 @@ import {
   X,
 } from 'lucide-react';
 import { ROLE_LABELS, type AdminPulseDTO } from '@reberon/contracts';
-import { get, post, WEB_URL } from '@/lib/api';
+import { get, lockState, post, WEB_URL } from '@/lib/api';
+import { setStorageOwner } from '@/lib/owner';
 import { MeProvider, useMeQuery } from '@/lib/providers';
 import { cn } from '@/lib/cn';
 import { ConfirmProvider } from '@/components/ui/confirm';
@@ -41,6 +43,8 @@ export { computeBadges, useAdminPulse, type BadgeInfo } from './badges';
 import { ContextMenuProvider } from '@/components/os/context-menu';
 import { DesktopHandlers } from '@/components/os/desktop';
 import { Navigator } from '@/components/os/navigator';
+import { LockScreen, lockShortcut } from '@/components/os/lock-screen';
+import { shellAction } from '@/components/os/actions';
 import { Dock, useDockVisible } from '@/components/os/dock';
 import { computeBadges, useAdminPulse, type BadgeInfo } from './badges';
 
@@ -448,6 +452,15 @@ function AccountMenu() {
       <LiveAlertCenterButton />
       <button
         type="button"
+        onClick={() => shellAction('lock')}
+        className="inline-flex size-8 items-center justify-center rounded-lg border border-line-strong bg-surface text-fg hover:bg-surface-2"
+        title={`Lock the screen (${lockShortcut()}) — the next person signs in with their PIN`}
+        aria-label="Lock the screen"
+      >
+        <Lock className="size-3.5" />
+      </button>
+      <button
+        type="button"
         onClick={toggleTheme}
         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 text-[12px] font-semibold text-fg hover:bg-surface-2"
         title={dark ? 'Switch to Light theme' : 'Switch to Dark theme'}
@@ -483,6 +496,17 @@ function AccountMenu() {
                 onClick={toggleTheme}
               >
                 {dark ? <Sun className="size-4" /> : <Moon className="size-4" />} {dark ? 'Light mode' : 'Dark mode'}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium hover:bg-surface-2"
+                onClick={() => {
+                  setOpen(false);
+                  shellAction('lock');
+                }}
+              >
+                <Lock className="size-4" /> Lock screen
+                <span className="ml-auto text-[11px] text-fg-subtle">{lockShortcut()}</span>
               </button>
               <button
                 type="button"
@@ -560,11 +584,12 @@ export function Shell({ children }: { children: ReactNode }) {
   // Offline with nothing saved yet is not a signed-out session — only the server can say that.
   const offlineNoMe = isError && !(error instanceof ApiError && (error.status === 401 || error.status === 403));
   useEffect(() => {
-    if (isError && !offlineNoMe) router.replace('/login?expired=1');
+    if (isError && !offlineNoMe && !lockState.locked) router.replace('/login?expired=1');
   }, [isError, offlineNoMe, router]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (lockState.locked) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPaletteOpen((v) => !v);
@@ -586,6 +611,8 @@ export function Shell({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => setDocumentAuthor(me?.name ?? null), [me?.name]);
+  // Recents and learned suggestions on this device belong to whoever is signed in.
+  if (me) setStorageOwner(me.id);
 
   return (
     <ContextMenuProvider>
@@ -693,6 +720,9 @@ export function Shell({ children }: { children: ReactNode }) {
           <DesktopHandlers />
           <Dock />
           <Navigator />
+          <MeProvider me={me}>
+            <LockScreen />
+          </MeProvider>
         </Suspense>
       )}
     </div>

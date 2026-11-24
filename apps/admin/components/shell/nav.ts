@@ -26,6 +26,7 @@ import {
   LayoutGrid,
   ListChecks,
   Map,
+  MoonStar,
   MessageCircleHeart,
   MessagesSquare,
   Navigation,
@@ -70,7 +71,8 @@ export type NavBadgeKey =
   | 'shifts'
   | 'leave'
   | 'payroll'
-  | 'publishing';
+  | 'publishing'
+  | 'dayclose';
 
 export interface NavItem {
   label: string;
@@ -129,6 +131,7 @@ export const NAV: NavGroup[] = [
       { label: 'Calendar & Rates', href: '/calendar', icon: CalendarRange, perm: 'rates:read' },
       { label: 'Extras & Packages', href: '/sellables', icon: Gift, perm: 'rates:read' },
       { label: 'Financial Reports', href: '/reports', icon: ChartColumnBig, perm: 'reports:read' },
+      { label: 'Close the Day', href: '/day-close', icon: MoonStar, perm: 'day:close', badge: 'dayclose' },
     ],
   },
   {

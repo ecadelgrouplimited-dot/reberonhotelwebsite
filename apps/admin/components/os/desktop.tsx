@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Copy, ExternalLink, Home, Keyboard, LayoutGrid, Moon, PanelLeft, Pin, PinOff, Plus, Printer, RefreshCw, Search, UserRoundPlus, Compass } from 'lucide-react';
+  ArrowLeft, Copy, ExternalLink, Home, Keyboard, LayoutGrid, Moon, PanelLeft, Pin, PinOff, Plus, Printer, RefreshCw, Search, UserRoundPlus, Compass, Lock } from 'lucide-react';
 import { useMeQuery } from '@/lib/providers';
 import { addRecent } from '@/lib/recents';
 import { recordAppUse, stepTrail } from '@/lib/usage';
@@ -15,6 +15,8 @@ import { APP_BY_HREF } from './apps';
 import { useContextMenu, type MenuItem } from './context-menu';
 import { currentScreen, RESERVED_KEYS } from './screen-actions';
 import { mod, shellAction, toggleTheme } from './actions';
+import { lockShortcut } from './lock-screen';
+import { lockState } from '@/lib/api';
 
 /** `g` then a letter jumps to an app (only apps the person may open). */
 export const GO_KEYS: { key: string; href: string; label: string }[] = [
@@ -106,6 +108,8 @@ export function DesktopHandlers() {
       { label: 'Show / hide sidebar', icon: PanelLeft, hint: `${mod()} B`, onSelect: () => shellAction('sidebar') },
       { label: 'Customise Home', icon: LayoutGrid, onSelect: () => router.push('/?customise=1') },
       { label: 'Keyboard shortcuts', icon: Keyboard, hint: '?', onSelect: () => shellAction('shortcuts') },
+      { kind: 'separator' },
+      { label: 'Lock screen', icon: Lock, hint: lockShortcut(), onSelect: () => shellAction('lock') },
     ];
 
     /** When the screen has its own actions, the House keeps to a short tail. */
@@ -123,6 +127,7 @@ export function DesktopHandlers() {
       },
       { label: 'Print this screen', icon: Printer, hint: `${mod()} P`, onSelect: () => void printScreen() },
       { label: 'Keyboard shortcuts', icon: Keyboard, hint: '?', onSelect: () => shellAction('shortcuts') },
+      { label: 'Lock screen', icon: Lock, hint: lockShortcut(), onSelect: () => shellAction('lock') },
     ];
 
     const onMenu = (e: MouseEvent) => {
@@ -178,6 +183,7 @@ export function DesktopHandlers() {
     let pending: ReturnType<typeof setTimeout> | null = null;
     let goMode = false;
     const onKey = (e: KeyboardEvent) => {
+      if (lockState.locked) return;
       // Menu key / Shift+F10: right-click whatever has focus.
       if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
         const el = (document.activeElement as HTMLElement | null) ?? document.body;
@@ -268,6 +274,7 @@ function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void
     [`${m} P`, 'Print this screen (clean A4)'],
     ['\\', 'Navigator: back, suggestions and every app'],
     [`${m} B`, 'Show or hide the sidebar'],
+    [lockShortcut(), 'Lock the screen (the next person uses their PIN)'],
     ['Alt 1…9', 'Open the app in that dock position'],
     ['Shift F10', 'Right-click the focused item (or the Menu key)'],
     ['Esc', 'Close a menu or dialog'],

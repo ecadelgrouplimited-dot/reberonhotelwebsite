@@ -1,7 +1,7 @@
-import { Body, Controller, Get, HttpCode, Patch, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Patch, Post, Put, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
-import { zLoginInput, zForgotInput, zResetInput, zAcceptInviteInput, zChangePasswordInput, zHousePrefs } from '@reberon/contracts';
+import { zLoginInput, zForgotInput, zResetInput, zAcceptInviteInput, zChangePasswordInput, zHousePrefs, zSetPinInput, zUnlockInput, zForgetTerminalInput } from '@reberon/contracts';
 import type { z } from 'zod';
 import { PrismaService } from '../../common/prisma.service.js';
 import { CurrentUser, Public, REFRESH_COOKIE, type AuthUser } from '../../common/auth.js';
@@ -60,6 +60,48 @@ export class AuthController {
   async acceptInvite(@Body(new ZodPipe(zAcceptInviteInput)) body: z.infer<typeof zAcceptInviteInput>, @Req() req: Request) {
     await this.auth.consumeToken(body.token, 'INVITE', body.password, req);
     return { ok: true };
+  }
+
+  /** Shared terminals: who can come back on this device with a PIN. */
+  @Public()
+  @Get('terminal')
+  terminal(@Req() req: Request) {
+    return this.auth.terminalPeople(req);
+  }
+
+  @Public()
+  @Post('unlock')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 12, ttl: 15 * 60_000 } })
+  unlock(@Body(new ZodPipe(zUnlockInput)) body: z.infer<typeof zUnlockInput>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.auth.unlock(body, req, res);
+  }
+
+  @Public()
+  @Post('terminal/forget')
+  @HttpCode(204)
+  async forget(@Body(new ZodPipe(zForgetTerminalInput)) body: z.infer<typeof zForgetTerminalInput>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.auth.forgetOnTerminal(body.userId, req, res);
+  }
+
+  @Post('lock')
+  @HttpCode(204)
+  async lock(@CurrentUser() user: AuthUser, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.auth.lock(user, req, res);
+  }
+
+  @Put('me/pin')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 8, ttl: 15 * 60_000 } })
+  async setPin(@Body(new ZodPipe(zSetPinInput)) body: z.infer<typeof zSetPinInput>, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    await this.auth.setPin(user.id, body.password, body.pin, req);
+    return { ok: true };
+  }
+
+  @Delete('me/pin')
+  @HttpCode(204)
+  async removePin(@CurrentUser() user: AuthUser, @Req() req: Request) {
+    await this.auth.removePin(user.id, req);
   }
 
   @Get('me')
