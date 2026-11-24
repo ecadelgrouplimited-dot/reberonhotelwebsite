@@ -49,7 +49,8 @@ if (typeof window !== 'undefined' && !(toast as unknown as { __rbPatched?: boole
 const MeCtx = createContext<MeDTO | null>(null);
 
 export function useMeQuery() {
-  return useQuery({ queryKey: ['me'], queryFn: () => get<MeDTO>('/auth/me'), staleTime: 5 * 60_000 });
+  // Fresh within a minute: changes made elsewhere (HR, People & Access, another device) show up quickly.
+  return useQuery({ queryKey: ['me'], queryFn: () => get<MeDTO>('/auth/me'), staleTime: 60_000 });
 }
 
 export function MeProvider({ me, children }: { me: MeDTO; children: ReactNode }) {

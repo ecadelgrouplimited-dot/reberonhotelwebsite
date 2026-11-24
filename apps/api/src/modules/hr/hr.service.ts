@@ -32,6 +32,7 @@ import {
 } from '@reberon/contracts';
 import type { User } from '@reberon/db';
 import { normalizePhone } from '@reberon/utils';
+import { syncAccountFromStaff } from '../../common/staff-sync.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
 import { type AuthUser, has } from '../../common/auth.js';
@@ -881,17 +882,21 @@ export class HrService {
     if (input.avatarUrl !== undefined) data.avatarUrl = input.avatarUrl || null;
     if (input.notes !== undefined) data.notes = input.notes?.trim() || null;
 
-    const updated = await this.prisma.staffProfile.update({
+    let updated = await this.prisma.staffProfile.update({
       where: { id },
       data,
     });
+
+    // Same person in the House: name, phone, job title and email follow the HR record.
+    const sync = await syncAccountFromStaff(this.prisma, updated);
+    if (sync.user && updated.userId !== sync.user.id) updated = { ...updated, userId: sync.user.id };
 
     await this.audit.record({
       actor,
       action: 'staff.update',
       entityType: 'StaffProfile',
       entityId: updated.id,
-      summary: `Updated staff profile ${updated.firstName} ${updated.lastName} (${updated.employeeNumber})`,
+      summary: `Updated staff profile ${updated.firstName} ${updated.lastName} (${updated.employeeNumber})${sync.changed.length ? ` — also updated their House account (${sync.changed.join(', ')})` : ''}${sync.emailSkipped ? ` — email not copied to the account: ${sync.emailSkipped} already signs in someone else` : ''}`,
     });
 
     return {

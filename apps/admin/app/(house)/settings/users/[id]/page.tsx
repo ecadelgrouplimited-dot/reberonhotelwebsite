@@ -130,6 +130,10 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: ['user-roles'] });
       qc.invalidateQueries({ queryKey: ['user-sessions', id] });
+      // Their HR profile follows the account (and it may be you).
+      qc.invalidateQueries({ queryKey: ['me'] });
+      qc.invalidateQueries({ queryKey: ['hr-staff'] });
+      qc.invalidateQueries({ queryKey: ['hr-overview'] });
       if (newPassword.trim().length >= 12) {
         setNewPassword('');
         toast.success(sendCredsEmail && d.email ? `Saved changes & emailed credentials to ${d.email}` : 'Saved changes & updated password');

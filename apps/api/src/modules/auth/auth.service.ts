@@ -15,6 +15,8 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { hashToken, newToken } from './tokens.js';
 
 const REFRESH_TTL_MS = 30 * 86_400_000;
+/** A replaced refresh token presented again this soon is a race between tabs, not theft. */
+const REUSE_GRACE_MS = 30_000;
 const MAX_FAILED = 5;
 const LOCK_MS = 15 * 60_000;
 /** Remembers who signed in on this device with a password, so they may come back with a PIN. */
@@ -203,8 +205,7 @@ export class AuthService {
 
   /** Lock: end this session but keep the device's list, so the next person can come in with a PIN. */
   async lock(actor: AuthUser, req: Request, res: Response) {
-    const token = req.cookies?.[REFRESH_COOKIE];
-    if (token) await this.prisma.session.updateMany({ where: { refreshTokenHash: hashToken(token) }, data: { revokedAt: new Date() } });
+    await this.endFamily(req.cookies?.[REFRESH_COOKIE]);
     this.clear(res);
     await this.audit.record({ actor, action: 'auth.lock', entityType: 'User', entityId: actor.id, summary: 'Locked the screen', req });
   }
@@ -387,6 +388,16 @@ export class AuthService {
     if (!token) throw unauthorized();
     const session = await this.prisma.session.findUnique({ where: { refreshTokenHash: hashToken(token) }, include: { user: true } });
     if (!session) throw unauthorized();
+    if (session.revokedAt && Date.now() - session.revokedAt.getTime() < REUSE_GRACE_MS && !accessProblem(session.user) && session.expiresAt > new Date()) {
+      // Two tabs (or a reload during an app update) renewed at the same moment: the second one
+      // arrives with the token the first just replaced. Not theft — carry on in the same family,
+      // unless the family was ended on purpose (sign-out, lock, password change).
+      const live = await this.prisma.session.count({ where: { family: session.family, revokedAt: null, expiresAt: { gt: new Date() } } });
+      if (live > 0) {
+        await this.issue(session.user, res, req, session.family);
+        return this.me(session.user);
+      }
+    }
     if (session.revokedAt) {
       // A rotated token was used again: assume theft, end the whole family.
       await this.prisma.session.updateMany({ where: { family: session.family, revokedAt: null }, data: { revokedAt: new Date() } });
@@ -404,8 +415,15 @@ export class AuthService {
     return this.me(session.user);
   }
 
+  /** End this sign-in on this browser — every tab's renewed session with it. */
+  private async endFamily(token: string | undefined) {
+    if (!token) return;
+    const s = await this.prisma.session.findUnique({ where: { refreshTokenHash: hashToken(token) }, select: { family: true } });
+    if (s) await this.prisma.session.updateMany({ where: { family: s.family, revokedAt: null }, data: { revokedAt: new Date() } });
+  }
+
   async logout(token: string | undefined, res: Response) {
-    if (token) await this.prisma.session.updateMany({ where: { refreshTokenHash: hashToken(token) }, data: { revokedAt: new Date() } });
+    await this.endFamily(token);
     this.clear(res);
   }
 

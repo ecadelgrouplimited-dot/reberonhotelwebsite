@@ -296,9 +296,13 @@ export default function HrPage() {
   const updateStaffMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => patch<StaffProfileDTO>(`/hr/staff/${id}`, data),
     onSuccess: () => {
-      toast.success('Employee profile updated');
+      toast.success('Employee profile updated', { description: 'Their House account shows the same name, phone, job title and email.' });
       qc.invalidateQueries({ queryKey: ['hr-staff'] });
       qc.invalidateQueries({ queryKey: ['hr-overview'] });
+      // The same person's House account follows the HR record (and it may be you).
+      qc.invalidateQueries({ queryKey: ['me'] });
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['user'] });
       setEditingStaff(null);
     },
     onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to update employee'),

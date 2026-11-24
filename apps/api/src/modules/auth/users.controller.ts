@@ -24,6 +24,7 @@ import {
 import type { z } from 'zod';
 import type { User } from '@reberon/db';
 import { normalizePhone } from '@reberon/utils';
+import { syncStaffFromAccount } from '../../common/staff-sync.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { AuditService } from '../../common/audit.service.js';
 import { CurrentUser, Requires, type AuthUser } from '../../common/auth.js';
@@ -820,6 +821,8 @@ export class UsersController implements OnModuleInit {
       ...(passwordHash ? { passwordHash, status: 'ACTIVE' as const, failedLogins: 0, lockedUntil: null } : {}),
     };
     const user = await this.prisma.user.update({ where: { id }, data });
+    // Same person in HR: name, phone, job title and email follow the account.
+    const staffSync = await syncStaffFromAccount(this.prisma, user);
 
     if (password && sendCredentials && user.email) {
       await this.sendCredentialsEmail(user, password, me);
@@ -844,7 +847,7 @@ export class UsersController implements OnModuleInit {
       body.accessExpiresAt !== undefined ? (body.accessExpiresAt ? `access ends ${body.accessExpiresAt.slice(0, 10)}` : 'no end date') : '',
       password ? (sendCredentials && user.email ? `password set & emailed to ${user.email}` : 'password set') : '',
     ].filter(Boolean);
-    await this.audit.record({ actor: me, action: 'user.update', entityType: 'User', entityId: id, summary: `${user.name}: ${bits.join('; ') || 'details updated'}`, before: { role: before.role, customRoleKey: before.customRoleKey, grants: before.grants, revokes: before.revokes, status: before.status }, after: restBody, req });
+    await this.audit.record({ actor: me, action: 'user.update', entityType: 'User', entityId: id, summary: `${user.name}: ${bits.join('; ') || 'details updated'}${staffSync.changed.length ? ` — HR profile also updated (${staffSync.changed.join(', ')})` : ''}`, before: { role: before.role, customRoleKey: before.customRoleKey, grants: before.grants, revokes: before.revokes, status: before.status }, after: restBody, req });
     return (await this.dto([user]))[0];
   }
 
