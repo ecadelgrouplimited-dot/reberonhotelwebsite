@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import type {
   HrDashboardDTO,
   Permission,
@@ -39,11 +39,40 @@ import { type AuthUser, has } from '../../common/auth.js';
 import { badRequest, forbidden, notFound } from '../../common/errors.js';
 
 @Injectable()
-export class HrService {
+export class HrService implements OnApplicationBootstrap {
+  private readonly log = new Logger('HrService');
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * On every start, line up each House account with its HR profile (name, phone, job title,
+   * email — HR wins), so records edited before the two were kept in sync catch up without
+   * anyone re-saving them. Linked by stored link or exact email only; idempotent.
+   */
+  async onApplicationBootstrap() {
+    try {
+      const profiles = await this.prisma.staffProfile.findMany({ where: { status: { not: 'TERMINATED' } } });
+      let n = 0;
+      for (const p of profiles) {
+        const r = await syncAccountFromStaff(this.prisma, p, { byPhone: false });
+        if (r.user && r.changed.length) {
+          n++;
+          await this.audit.record({
+            actorType: 'SYSTEM',
+            action: 'staff.account_sync',
+            entityType: 'User',
+            entityId: r.user.id,
+            summary: `House account brought in line with HR profile ${p.employeeNumber} (${r.changed.join(', ')})`,
+          });
+        }
+      }
+      if (n) this.log.log(`Brought ${n} House account(s) in line with their HR profiles`);
+    } catch (e) {
+      this.log.warn(`HR → account alignment skipped: ${(e as Error).message}`);
+    }
+  }
 
   private async generateEmployeeNumber(): Promise<string> {
     const count = await this.prisma.staffProfile.count();

@@ -13,7 +13,7 @@ const phoneKey = (p: string | null | undefined) => (p ? (normalizePhone(p) ?? p)
 const fullName = (s: Pick<StaffProfile, 'firstName' | 'lastName' | 'otherNames'>) => [s.firstName, s.lastName, s.otherNames].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 
 /** The account a staff profile belongs to: its stored link, else the same email, else the same phone. */
-async function accountFor(prisma: PrismaService, s: StaffProfile): Promise<User | null> {
+async function accountFor(prisma: PrismaService, s: StaffProfile, byPhone = true): Promise<User | null> {
   if (s.userId) {
     const u = await prisma.user.findFirst({ where: { id: s.userId, deletedAt: null } });
     if (u) return u;
@@ -22,7 +22,7 @@ async function accountFor(prisma: PrismaService, s: StaffProfile): Promise<User 
     const u = await prisma.user.findFirst({ where: { email: { equals: s.email, mode: 'insensitive' }, deletedAt: null } });
     if (u) return u;
   }
-  const key = phoneKey(s.phone);
+  const key = byPhone ? phoneKey(s.phone) : null;
   if (key) {
     const candidates = await prisma.user.findMany({ where: { deletedAt: null, phone: { not: null } }, select: { id: true, phone: true } });
     const hit = candidates.find((c) => phoneKey(c.phone) === key);
@@ -32,8 +32,8 @@ async function accountFor(prisma: PrismaService, s: StaffProfile): Promise<User 
 }
 
 /** After an HR edit: carry name, phone, job title and email to the linked account. Returns what changed there. */
-export async function syncAccountFromStaff(prisma: PrismaService, staff: StaffProfile): Promise<{ user: User | null; changed: string[]; emailSkipped?: string }> {
-  const user = await accountFor(prisma, staff);
+export async function syncAccountFromStaff(prisma: PrismaService, staff: StaffProfile, opts: { byPhone?: boolean } = {}): Promise<{ user: User | null; changed: string[]; emailSkipped?: string }> {
+  const user = await accountFor(prisma, staff, opts.byPhone ?? true);
   if (!user) return { user: null, changed: [] };
   const data: Partial<Pick<User, 'name' | 'phone' | 'jobTitle' | 'email'>> = {};
   const changed: string[] = [];
