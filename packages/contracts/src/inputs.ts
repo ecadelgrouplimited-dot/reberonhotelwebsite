@@ -74,15 +74,37 @@ export const zLoginInput = z.object({
 export const zPasswordSchema = z.string().min(12, 'At least 12 characters').max(200);
 export const zForgotInput = z.object({ email: z.string().trim().toLowerCase().email() });
 export const zResetInput = z.object({ token: z.string().min(20), password: zPasswordSchema });
-/** 4–6 digits, not one digit repeated and not a straight run (1234, 9876). */
+/**
+ * Quick-switch PIN rules, shared by the House (live checks while typing) and the API.
+ * Exactly 4 digits and not one of the guesses people try first. Uniqueness across the
+ * hotel is checked by the API (only it can see other people's PINs).
+ */
+export function pinWeakness(pin: string): string | null {
+  if (!/^\d{4}$/.test(pin)) return null;
+  if (/^(\d)\1{3}$/.test(pin)) return 'One digit repeated (like 1111)';
+  if ('0123456789'.includes(pin) || '9876543210'.includes(pin)) return 'A straight run (like 1234 or 4321)';
+  if (pin[0] === pin[2] && pin[1] === pin[3]) return 'A repeated pair (like 1212)';
+  if (pin[0] === pin[1] && pin[2] === pin[3]) return 'Two doubled digits (like 1122)';
+  if (['2580', '0852', '1004', '6969', '1313', '1221'].includes(pin)) return 'One of the most-guessed PINs';
+  const n = Number(pin);
+  if (n >= 1940 && n <= 2039) return 'Looks like a year (birth years are guessed first)';
+  return null;
+}
+export const PIN_LENGTH = 4;
 export const zPin = z
   .string()
-  .regex(/^\d{4,6}$/, 'Use 4 to 6 digits')
-  .refine((p) => !/^(\d)\1+$/.test(p), 'Too easy to guess — avoid one digit repeated')
-  .refine((p) => !'01234567890'.includes(p) && !'09876543210'.includes(p), 'Too easy to guess — avoid a straight run');
+  .regex(/^\d{4}$/, 'Use exactly 4 digits')
+  .superRefine((p, ctx) => {
+    const weak = pinWeakness(p);
+    if (weak) ctx.addIssue({ code: 'custom', message: `Too easy to guess — ${weak.charAt(0).toLowerCase()}${weak.slice(1)}` });
+  });
+const zPinDigits = z.string().regex(/^\d{4}$/, 'Use exactly 4 digits');
 export const zSetPinInput = z.object({ password: z.string().min(1).max(200), pin: zPin });
+export const zPinCheckInput = z.object({ pin: zPinDigits, token: z.string().min(20).max(200).optional() });
+export const zPinResetInput = z.object({ token: z.string().min(20).max(200), pin: zPin });
+export const zPinForgotInput = z.object({ userId: z.string().uuid() });
 export const zUnlockInput = z.union([
-  z.object({ userId: z.string().uuid(), pin: z.string().regex(/^\d{4,6}$/, 'Use 4 to 6 digits') }),
+  z.object({ userId: z.string().uuid(), pin: zPinDigits }),
   z.object({ userId: z.string().uuid(), password: z.string().min(1).max(200) }),
 ]);
 export const zForgetTerminalInput = z.object({ userId: z.string().uuid() });

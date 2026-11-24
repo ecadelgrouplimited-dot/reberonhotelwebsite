@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC = ['/login', '/forgot-password', '/reset-password', '/accept-invite'];
+const PUBLIC = ['/login', '/forgot-password', '/reset-password', '/reset-pin', '/accept-invite'];
 
 /** Route guard: no session hint → sign in. The API still checks every request. */
 export function proxy(req: NextRequest) {

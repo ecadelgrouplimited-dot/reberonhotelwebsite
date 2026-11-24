@@ -73,8 +73,9 @@ model User {
   lastLoginAt     DateTime?
   failedLogins    Int        @default(0)
   lockedUntil     DateTime?
-  /// Quick-switch PIN (argon2) for shared terminals; only works on a device where they signed in with their password
-  pinHash         String?
+  /// Quick-switch PIN for shared terminals: keyed HMAC (server-held key), unique so no two people share a PIN.
+  /// Only works on a device where they signed in with their password; reset by email link or by the owner.
+  pinDigest       String?    @unique
   pinSetAt        DateTime?
   /// Wrong PINs in a row; at 5 the PIN stops working until they sign in with their password
   failedPins      Int        @default(0)
@@ -115,6 +116,7 @@ model Session {
 enum UserTokenKind {
   INVITE
   PASSWORD_RESET
+  PIN_RESET
 }
 
 model UserToken {

@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Delete, KeyRound, Lock, LogIn, UserRoundX } from 'lucide-react';
+import { ArrowLeft, Delete, KeyRound, Lock, LogIn, MailQuestion, UserRoundX } from 'lucide-react';
 import { toast } from 'sonner';
 import type { MeDTO, TerminalPersonDTO } from '@reberon/contracts';
 import { ApiError, get, lockState, post } from '@/lib/api';
@@ -73,15 +73,18 @@ function PinPad({ busy, error, onSubmit }: { busy: boolean; error: string | null
     return () => clearTimeout(t);
   }, [error]);
 
+  // Exactly 4 digits: the fourth one unlocks, no Enter needed.
   const press = useCallback(
     (k: string) => {
       if (busy) return;
       if (k === 'back') return setPin((p) => p.slice(0, -1));
-      if (k === 'ok') {
-        if (pinRef.current.length >= 4) onSubmit(pinRef.current);
-        return;
-      }
-      setPin((p) => (p.length < 6 ? p + k : p));
+      if (k === 'clear') return setPin('');
+      const cur = pinRef.current;
+      if (cur.length >= 4) return;
+      const next = cur + k;
+      pinRef.current = next;
+      setPin(next);
+      if (next.length === 4) onSubmit(next);
     },
     [busy, onSubmit],
   );
@@ -91,7 +94,7 @@ function PinPad({ busy, error, onSubmit }: { busy: boolean; error: string | null
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (/^\d$/.test(e.key)) press(e.key);
       else if (e.key === 'Backspace') press('back');
-      else if (e.key === 'Enter') press('ok');
+      else if (e.key === 'Escape') press('clear');
       else return;
       e.preventDefault();
     };
@@ -99,13 +102,14 @@ function PinPad({ busy, error, onSubmit }: { busy: boolean; error: string | null
     return () => window.removeEventListener('keydown', onKey);
   }, [press]);
 
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'back', '0', 'ok'];
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'];
   return (
     <div className="grid justify-items-center gap-5">
       <div className={cn('flex h-4 items-center gap-3', shake && 'rb-shake')} aria-label={`${pin.length} digits entered`} role="status">
-        {Array.from({ length: Math.max(4, pin.length) }, (_, i) => (
-          <span key={i} className={cn('size-3 rounded-full border border-white/60 transition-colors', i < pin.length ? 'bg-white' : 'bg-transparent')} />
+        {Array.from({ length: 4 }, (_, i) => (
+          <span key={i} className={cn('size-3.5 rounded-full border-2 border-white/70 transition-all duration-150', i < pin.length ? 'scale-110 bg-white' : 'bg-transparent')} />
         ))}
+        {busy && <span className="sr-only">Checking</span>}
       </div>
       <div className="grid grid-cols-3 gap-3">
         {keys.map((k) => (
@@ -113,14 +117,14 @@ function PinPad({ busy, error, onSubmit }: { busy: boolean; error: string | null
             key={k}
             type="button"
             onClick={() => press(k)}
-            disabled={busy || (k === 'ok' && pin.length < 4)}
-            aria-label={k === 'back' ? 'Delete' : k === 'ok' ? 'Unlock' : k}
+            disabled={busy || (k === 'clear' && !pin)}
+            aria-label={k === 'back' ? 'Delete' : k === 'clear' ? 'Clear' : k}
             className={cn(
-              'grid size-16 place-items-center rounded-full text-[22px] font-medium text-white transition active:scale-95 disabled:opacity-35',
-              k === 'ok' ? 'bg-[#D76E1B] hover:bg-[#E88432]' : k === 'back' ? 'hover:bg-white/10' : 'bg-white/10 hover:bg-white/20',
+              'grid size-16 place-items-center rounded-full transition active:scale-95 disabled:opacity-30',
+              k === 'back' || k === 'clear' ? 'text-[13px] font-semibold text-white/80 hover:bg-white/10' : 'bg-white/10 text-[22px] font-medium text-white hover:bg-white/20',
             )}
           >
-            {k === 'back' ? <Delete className="size-5" /> : k === 'ok' ? <LogIn className="size-5" /> : k}
+            {k === 'back' ? <Delete className="size-5" /> : k === 'clear' ? 'Clear' : k}
           </button>
         ))}
       </div>
@@ -155,6 +159,7 @@ export function QuickSignIn({ onDone, preselect, onUseEmail }: { onDone: (me: Me
     setUsePassword(false);
     setPassword('');
     setError(null);
+    setResetSent(null);
   };
 
   const unlock = async (body: { pin: string } | { password: string }) => {
@@ -169,6 +174,22 @@ export function QuickSignIn({ onDone, preselect, onUseEmail }: { onDone: (me: Me
       setError(msg);
       setErrorTick((n) => n + 1);
       if (e instanceof ApiError && /password/i.test(e.message) && 'pin' in body) void qc.invalidateQueries({ queryKey: ['terminal-people'] });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const [resetSent, setResetSent] = useState<string | null>(null);
+  const forgotPin = async () => {
+    if (!person) return;
+    setBusy(true);
+    try {
+      const r = await post<{ sentTo: string }>('/auth/pin/forgot', { userId: person.id });
+      setResetSent(r.sentTo);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not send the email.');
+      setErrorTick((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -218,9 +239,14 @@ export function QuickSignIn({ onDone, preselect, onUseEmail }: { onDone: (me: Me
         <Avatar p={person} size="lg" />
         <p className="text-[18px] font-semibold text-white">{person.name}</p>
         <p className="text-[12.5px] text-white/60">
-          {pinMode ? 'Enter your PIN' : person.pinBlocked ? 'Too many wrong PINs — use your password this time' : person.hasPin ? 'Enter your password' : 'Enter your password (set a PIN under Your account to make this quicker)'}
+          {pinMode ? 'Type your 4-digit PIN' : person.pinBlocked ? 'Too many wrong PINs — use your password this time' : person.hasPin ? 'Enter your password' : 'Enter your password (set a PIN under Your account to make this quicker)'}
         </p>
       </div>
+      {resetSent && (
+        <p role="status" className="max-w-xs rounded-xl bg-emerald-500/20 px-3 py-2 text-center text-[12.5px] text-emerald-50">
+          We emailed a link to choose a new PIN to <b>{resetSent}</b>. It works for one hour — meanwhile, use your password.
+        </p>
+      )}
       {error && (
         <p role="alert" className="max-w-xs rounded-xl bg-rose-500/20 px-3 py-2 text-center text-[12.5px] text-rose-100">
           {error}
@@ -258,6 +284,11 @@ export function QuickSignIn({ onDone, preselect, onUseEmail }: { onDone: (me: Me
         {person.hasPin && !person.pinBlocked && (
           <button type="button" onClick={() => setUsePassword((v) => !v)} className="inline-flex items-center gap-1 hover:text-white">
             <KeyRound className="size-3.5" /> {usePassword ? 'Use PIN' : 'Use password'}
+          </button>
+        )}
+        {!resetSent && (
+          <button type="button" onClick={() => void forgotPin()} disabled={busy} className="inline-flex items-center gap-1 hover:text-white">
+            <MailQuestion className="size-3.5" /> {person.hasPin ? 'Forgot PIN?' : 'Set a PIN by email'}
           </button>
         )}
         <button type="button" onClick={() => void forget()} className="inline-flex items-center gap-1 hover:text-white" title="Take them off this device’s lock screen">

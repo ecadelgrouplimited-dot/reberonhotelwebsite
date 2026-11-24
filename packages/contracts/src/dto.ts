@@ -226,6 +226,23 @@ export interface MeDTO {
   preferences?: HousePrefs;
   /** Has a quick-switch PIN for shared terminals. */
   hasPin?: boolean;
+  pinSetAt?: string | null;
+}
+
+/** Live check of a PIN being chosen. */
+export interface PinCheckDTO {
+  /** Exactly 4 digits. */
+  digits: boolean;
+  /** Why it is easy to guess, or null. */
+  weak: string | null;
+  /**
+   * Can be used (null when not checked: wrong length or too easy). Deliberately does not
+   * say why not: a colleague's PIN and a PIN the hotel holds back look the same.
+   */
+  available: boolean | null;
+  /** It is already your PIN. */
+  same: boolean;
+  ok: boolean;
 }
 
 /** Someone who has signed in with their password on this device, shown on the lock screen. */
@@ -300,6 +317,7 @@ export interface UserDTO {
   activeSessions: number;
   /** Has a quick-switch PIN for shared terminals. */
   hasPin?: boolean;
+  pinSetAt?: string | null;
   lastLoginAt: string | null;
   createdAt: string;
 }

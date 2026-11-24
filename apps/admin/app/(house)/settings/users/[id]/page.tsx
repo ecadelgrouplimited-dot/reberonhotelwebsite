@@ -200,6 +200,12 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not clear the PIN'),
   });
 
+  const pinReset = useMutation({
+    mutationFn: () => post<{ sentTo: string }>(`/users/${id}/pin-reset`),
+    onSuccess: (r) => toast.success('PIN reset link emailed', { description: `Sent to ${r.sentTo}. It works for one hour.` }),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not send the link'),
+  });
+
   if (!u || !f) return <Skeleton className="h-96" />;
   const dirty = JSON.stringify(f) !== JSON.stringify(toForm(u)) || newPassword.trim().length >= 12;
   const set = (p: Partial<Form>) => setF({ ...f, ...p });
@@ -535,8 +541,18 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
               <div className="flex items-center justify-between gap-2 border-t border-line pt-2.5">
                 <span>
                   <span className="block font-medium">Quick PIN</span>
-                  <span className="text-[11px] text-fg-muted">{u.hasPin ? 'Set — unlocks shared terminals they have signed in on' : 'Not set — they use their password on the lock screen'}</span>
+                  <span className="text-[11px] text-fg-muted">
+                    {u.hasPin
+                      ? `Set${u.pinSetAt ? ` ${dateTime(u.pinSetAt)}` : ''} — unlocks shared computers they have signed in on`
+                      : 'Not set — they use their password on the lock screen'}
+                  </span>
                 </span>
+                <span className="flex shrink-0 gap-1.5">
+                {!!u.email && (
+                  <Button size="sm" variant="ghost" loading={pinReset.isPending} onClick={() => pinReset.mutate()} title={`Email ${u.email} a link to choose a new PIN`}>
+                    Email reset link
+                  </Button>
+                )}
                 {u.hasPin && (
                   <Button
                     size="sm"
@@ -549,6 +565,7 @@ export default function PersonPage({ params }: { params: Promise<{ id: string }>
                     Clear PIN
                   </Button>
                 )}
+                </span>
               </div>
               <Link href={`/settings/audit?q=${encodeURIComponent(u.name)}`} className="text-xs font-medium text-brand hover:underline">
                 View user activity in Audit Log →

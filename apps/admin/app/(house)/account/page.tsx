@@ -1,9 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Grid3x3, KeyRound, Lock, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { zPin } from '@reberon/contracts';
+import type { PinCheckDTO } from '@reberon/contracts';
+import { PinSetter } from '@/components/forms/pin-setter';
+import { useConfirm } from '@/components/ui/confirm';
 import { ApiError, del, post, put } from '@/lib/api';
 import { AUTOLOCK_CHOICES, lockShortcut, readAutoLock, writeAutoLock } from '@/components/os/lock-screen';
 import { shellAction } from '@/components/os/actions';
@@ -97,23 +99,8 @@ export default function AccountPage() {
 function PinSection() {
   const me = useMe();
   const qc = useQueryClient();
-  const [f, setF] = useState({ pin: '', again: '', password: '' });
-  const [err, setErr] = useState<Record<string, string>>({});
+  const confirm = useConfirm();
   const [editing, setEditing] = useState(false);
-  const save = useMutation({
-    mutationFn: () => put('/auth/me/pin', { pin: f.pin, password: f.password }),
-    onSuccess: () => {
-      toast.success(me.hasPin ? 'PIN changed' : 'PIN set', { description: 'On devices you have signed in on, tap your name on the lock screen and enter it.' });
-      setF({ pin: '', again: '', password: '' });
-      setErr({});
-      setEditing(false);
-      void qc.invalidateQueries({ queryKey: ['me'] });
-    },
-    onError: (e) => {
-      if (e instanceof ApiError) setErr(e.fieldErrors());
-      toast.error(e instanceof ApiError ? e.message : 'Could not save the PIN');
-    },
-  });
   const remove = useMutation({
     mutationFn: () => del('/auth/me/pin'),
     onSuccess: () => {
@@ -121,50 +108,59 @@ function PinSection() {
       void qc.invalidateQueries({ queryKey: ['me'] });
     },
   });
-  const digits = (v: string) => v.replace(/\D/g, '').slice(0, 6);
+  const check = useCallback((pin: string) => post<PinCheckDTO>('/auth/me/pin/check', { pin }), []);
 
   return (
     <Section
       title="Quick PIN"
-      description="For shared front-desk and bar computers: lock the screen when you step away, and come back — or hand over — with a 4–6 digit PIN instead of your full password. A PIN only works on a device where you have signed in with your password."
-      actions={me.hasPin ? <Pill tone="green" dot>PIN set</Pill> : <Pill>No PIN</Pill>}
+      description="A 4-digit PIN of your own for the shared front-desk and bar computers: lock the screen when you step away, and come back — or hand over — without typing your full password. Your PIN belongs to your account, is yours alone, and only works on computers where you have signed in with your password. Some PINs are held back by the hotel — if one is not available, just pick another."
+      actions={me.hasPin ? <Pill tone="green" dot>PIN set</Pill> : <Pill>No PIN yet</Pill>}
     >
-      {!editing ? (
-        <div className="flex flex-wrap gap-2">
-          <Button variant={me.hasPin ? 'secondary' : 'primary'} icon={<Grid3x3 className="size-3.5" />} onClick={() => setEditing(true)}>
-            {me.hasPin ? 'Change PIN' : 'Set a PIN'}
-          </Button>
-          {me.hasPin && (
-            <Button variant="ghost" loading={remove.isPending} onClick={() => remove.mutate()}>
-              Remove PIN
-            </Button>
-          )}
-        </div>
-      ) : (
-        <form
-          className="grid gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const ok = zPin.safeParse(f.pin);
-            if (!ok.success) return setErr({ pin: ok.error.issues[0]?.message ?? 'Use 4 to 6 digits' });
-            if (f.pin !== f.again) return setErr({ again: 'The PINs do not match' });
-            save.mutate();
+      {editing ? (
+        <PinSetter
+          needPassword
+          check={check}
+          submitLabel={me.hasPin ? 'Change PIN' : 'Save PIN'}
+          onCancel={() => setEditing(false)}
+          onSubmit={async (pin, password) => {
+            await put('/auth/me/pin', { pin, password });
+            toast.success(me.hasPin ? 'PIN changed' : 'PIN saved', { description: 'On the lock screen, tap your name and type your 4 digits.' });
+            setEditing(false);
+            await qc.invalidateQueries({ queryKey: ['me'] });
           }}
-        >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextInput label="New PIN" inputMode="numeric" type="password" autoComplete="off" autoFocus value={f.pin} onChange={(e) => setF({ ...f, pin: digits(e.target.value) })} error={err.pin} hint="4–6 digits, not 1234 or 0000" />
-            <TextInput label="Repeat PIN" inputMode="numeric" type="password" autoComplete="off" value={f.again} onChange={(e) => setF({ ...f, again: digits(e.target.value) })} error={err.again} />
+        />
+      ) : (
+        <div className="grid gap-3">
+          <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2/60 p-3">
+            <span className={me.hasPin ? 'grid size-9 place-items-center rounded-full bg-emerald-500/15 text-emerald-600' : 'grid size-9 place-items-center rounded-full bg-surface-2 text-fg-subtle'}>
+              <Grid3x3 className="size-4" />
+            </span>
+            <div className="text-[13px] leading-snug">
+              <p className="font-semibold">{me.hasPin ? 'Your PIN is ready' : 'You have no PIN yet'}</p>
+              <p className="text-fg-muted">
+                {me.hasPin
+                  ? `Set ${me.pinSetAt ? new Date(me.pinSetAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Kampala' }) : 'earlier'}. Forgot it? Choose a new one here, or tap “Forgot PIN?” on the lock screen for an email link.`
+                  : 'Until you set one, the lock screen asks for your password.'}
+              </p>
+            </div>
           </div>
-          <TextInput label="Your password" type="password" autoComplete="current-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} error={err.password} hint="To prove it is you" />
-          <div className="flex gap-2">
-            <Button type="submit" variant="primary" loading={save.isPending} icon={<Grid3x3 className="size-3.5" />}>
-              Save PIN
+          <div className="flex flex-wrap gap-2">
+            <Button variant={me.hasPin ? 'secondary' : 'primary'} icon={<Grid3x3 className="size-3.5" />} onClick={() => setEditing(true)}>
+              {me.hasPin ? 'Choose a new PIN' : 'Set your PIN'}
             </Button>
-            <Button type="button" variant="ghost" onClick={() => { setEditing(false); setErr({}); }}>
-              Cancel
-            </Button>
+            {me.hasPin && (
+              <Button
+                variant="ghost"
+                loading={remove.isPending}
+                onClick={async () => {
+                  if (await confirm({ title: 'Remove your PIN?', body: 'You will sign in with your password on the lock screen until you set a new PIN.', confirm: 'Remove PIN' })) remove.mutate();
+                }}
+              >
+                Remove PIN
+              </Button>
+            )}
           </div>
-        </form>
+        </div>
       )}
     </Section>
   );
