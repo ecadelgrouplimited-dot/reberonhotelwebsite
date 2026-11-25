@@ -454,6 +454,10 @@ export interface AdminPulseDTO {
   hotelDate: string;
   /** Close the day: earlier days never closed (since the first close), and whether today is closed. Only for people who may close. */
   dayClose?: { unclosed: string[]; todayClosed: boolean; lastClosed: string | null };
+  /** Open work orders (for people who report faults). */
+  maintenance?: { open: number; urgent: number; overdue: number; mine: number; outOfService: number };
+  /** Lost and found: items stored, and those past their hold. */
+  lostFound?: { stored: number; due: number };
   inbox: {
     newCount: number;
     openCount: number;

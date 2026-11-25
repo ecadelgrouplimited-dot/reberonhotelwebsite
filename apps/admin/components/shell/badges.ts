@@ -194,6 +194,20 @@ export function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey
     };
   }
 
+  // Maintenance: urgent or overdue faults first; otherwise jobs given to you; otherwise how many are open.
+  if (pulse.maintenance && pulse.maintenance.open > 0) {
+    const m = pulse.maintenance;
+    if (m.urgent > 0) map.maintenance = { count: m.urgent, tone: 'red', tooltip: `${m.urgent} urgent fault${m.urgent > 1 ? 's' : ''}${m.overdue ? ` · ${m.overdue} overdue` : ''}` };
+    else if (m.overdue > 0) map.maintenance = { count: m.overdue, tone: 'amber', tooltip: `${m.overdue} job${m.overdue > 1 ? 's' : ''} past their target time` };
+    else if (m.mine > 0) map.maintenance = { count: m.mine, tone: 'amber', tooltip: `${m.mine} job${m.mine > 1 ? 's' : ''} assigned to you` };
+    else map.maintenance = { count: m.open, tone: 'neutral', tooltip: `${m.open} open job${m.open > 1 ? 's' : ''}${m.outOfService ? ` · ${m.outOfService} room${m.outOfService > 1 ? 's' : ''} out of service` : ''}` };
+  }
+  // Lost and found: items whose hold has ended (decide: dispose or keep), else how many are stored.
+  if (pulse.lostFound && pulse.lostFound.stored > 0) {
+    const l = pulse.lostFound;
+    map.lostfound = l.due > 0 ? { count: l.due, tone: 'amber', tooltip: `${l.due} item${l.due > 1 ? 's' : ''} past the hold period` } : { count: l.stored, tone: 'neutral', tooltip: `${l.stored} item${l.stored > 1 ? 's' : ''} in lost and found` };
+  }
+
   // Close the day: earlier days never signed off; after 21:00, today too.
   if (pulse.dayClose) {
     const late = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Africa/Kampala' }).format(new Date())) >= 21;

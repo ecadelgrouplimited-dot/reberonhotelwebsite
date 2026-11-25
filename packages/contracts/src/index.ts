@@ -11,6 +11,7 @@ export * from './messaging.js';
 export * from './tours.js';
 export * from './documents.js';
 export * from './operations.js';
+export * from './upkeep.js';
 export * from './hr.js';
 export * from './concierge.js';
 export * from './typography.js';

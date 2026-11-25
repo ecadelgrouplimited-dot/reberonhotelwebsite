@@ -351,10 +351,33 @@ export class DashboardController {
       dayClose = { unclosed, todayClosed: done.has(todayStr), lastClosed: last ? last.date.toISOString().slice(0, 10) : null };
     }
 
+    let maintenance: AdminPulseDTO['maintenance'];
+    if (has(user, 'maintenance:report')) {
+      const open = await this.prisma.workOrder.findMany({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] } }, select: { priority: true, status: true, dueAt: true, assignedToId: true, blockId: true } });
+      const now = new Date();
+      maintenance = {
+        open: open.length,
+        urgent: open.filter((w) => w.priority === 'URGENT').length,
+        overdue: open.filter((w) => w.status !== 'ON_HOLD' && w.dueAt && w.dueAt < now).length,
+        mine: open.filter((w) => w.assignedToId === user.id).length,
+        outOfService: open.filter((w) => w.blockId).length,
+      };
+    }
+    let lostFound: AdminPulseDTO['lostFound'];
+    if (has(user, 'lostfound:manage')) {
+      const [stored, due] = await Promise.all([
+        this.prisma.lostItem.count({ where: { status: 'STORED' } }),
+        this.prisma.lostItem.count({ where: { status: 'STORED', holdUntil: { lte: new Date(`${todayStr}T00:00:00.000Z`) } } }),
+      ]);
+      lostFound = { stored, due };
+    }
+
     return {
       generatedAt: new Date().toISOString(),
       hotelDate: todayStr,
       dayClose,
+      maintenance,
+      lostFound,
       inbox: {
         newCount: inboxNew,
         openCount: inboxOpen,

@@ -104,6 +104,20 @@ export function defaultNotificationRules() {
         emailEnabled: true,
       },
       {
+        id: 'MAINTENANCE_FAULT',
+        label: 'Urgent Fault or Room Out of Service',
+        description: 'Fires when someone reports an urgent fault, or a room is taken out of service for repairs.',
+        category: 'HOUSEKEEPING',
+        urgency: 'HIGH',
+        roles: ['MANAGER', 'OWNER', 'DESK'],
+        recipientUserIds: [] as string[],
+        customEmails: [] as string[],
+        popupEnabled: true,
+        soundEnabled: true,
+        soundTone: 'urgent',
+        emailEnabled: false,
+      },
+      {
         id: 'GUEST_INQUIRY_FEEDBACK',
         label: 'New Guest Enquiry, Waitlist or Stay Issue',
         description: 'Alerts Front Desk and Management when a guest submits a website inquiry or stay issue.',
@@ -143,6 +157,9 @@ export async function loadNotificationRules(prisma: Pick<PrismaClient, 'setting'
 
 /** Which rule an audited action belongs to. */
 export function ruleIdForAction(action: string): string | null {
+  if (/^maintenance\.(report_urgent|out_of_service)$/.test(action)) return 'MAINTENANCE_FAULT';
+  // Routine maintenance and lost-and-found updates are not alerts (assignees get their own push).
+  if (action.startsWith('maintenance.') || action.startsWith('lostfound.')) return null;
   if (action.includes('check_out')) return 'GUEST_CHECK_OUT';
   if (action.includes('check_in')) return 'GUEST_CHECK_IN';
   if (action.includes('reservation') || action.includes('booking')) return 'NEW_BOOKING';
@@ -158,6 +175,7 @@ export function ruleIdForAction(action: string): string | null {
 /** Where tapping an alert should land. */
 export function hrefForAction(action: string, entityType: string | null, entityId: string | null): string {
   if (entityType === 'Reservation' && entityId) return `/reservations/${entityId}`;
+  if (entityType === 'WorkOrder' && entityId) return `/maintenance?open=${entityId}`;
   if (action.includes('check_out') || action.includes('housekeeping') || action.includes('hk')) return '/housekeeping';
   if (action.includes('desk') || action.includes('check_in')) return '/desk';
   if (action.includes('pos')) return '/pos';

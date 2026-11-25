@@ -47,9 +47,13 @@ import {
   UtensilsCrossed,
   Wallet,
   type LucideIcon,
+  PackageSearch,
+  Wrench,
 } from 'lucide-react';
 
 export type NavBadgeKey =
+  | 'maintenance'
+  | 'lostfound'
   | 'today'
   | 'inbox'
   | 'waitlist'
@@ -117,6 +121,7 @@ export const NAV: NavGroup[] = [
       { label: 'Housekeeping', href: '/housekeeping', icon: SprayCan, perm: 'rooms:status', badge: 'housekeeping' },
       { label: 'Guests & Profiles', href: '/guests', icon: Contact, perm: 'guests:read' },
       { label: 'Guest Feedback', href: '/feedback', icon: MessageCircleHeart, perm: 'guests:read', badge: 'feedback' },
+      { label: 'Lost & Found', href: '/lost-found', icon: PackageSearch, perm: 'lostfound:manage', badge: 'lostfound' },
     ],
   },
   {
@@ -146,6 +151,7 @@ export const NAV: NavGroup[] = [
       { label: 'Inventory & Linen', href: '/inventory', icon: Boxes, perm: 'inventory:manage', badge: 'inventory' },
       { label: 'Item Categories', href: '/inventory/categories', icon: Tags, perm: 'inventory:manage' },
       { label: 'Requisitions & Comms', href: '/requisitions', icon: ClipboardCheck, perm: 'requisitions:request', badge: 'requisitions' },
+      { label: 'Maintenance', href: '/maintenance', icon: Wrench, perm: 'maintenance:report', badge: 'maintenance' },
     ],
   },
   {

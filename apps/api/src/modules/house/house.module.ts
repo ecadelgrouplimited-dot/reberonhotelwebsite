@@ -8,13 +8,15 @@ import { GuestsService } from './guests.service.js';
 import { ReportsService } from './reports.service.js';
 import { FinanceService } from './finance.service.js';
 import { DayCloseService } from './day-close.service.js';
-import { DayCloseController, DeskController, GuestsController, PublicFeedbackController, RoomsHouseController } from './house.controllers.js';
+import { DayCloseController, DeskController, GuestsController, LostFoundController, MaintenanceController, PublicFeedbackController, RoomsHouseController } from './house.controllers.js';
+import { UpkeepService } from './upkeep.service.js';
+import { PushModule } from '../push/push.module.js';
 
 /** Movement IV — the House. */
 @Module({
-  imports: [NotificationsModule, BookingModule, DocumentsModule],
-  controllers: [DayCloseController, DeskController, RoomsHouseController, GuestsController, PublicFeedbackController],
-  providers: [DeskService, RackService, GuestsService, ReportsService, FinanceService, DayCloseService],
-  exports: [DayCloseService],
+  imports: [NotificationsModule, BookingModule, DocumentsModule, PushModule],
+  controllers: [DayCloseController, DeskController, RoomsHouseController, GuestsController, PublicFeedbackController, MaintenanceController, LostFoundController],
+  providers: [DeskService, RackService, GuestsService, ReportsService, FinanceService, DayCloseService, UpkeepService],
+  exports: [DayCloseService, UpkeepService],
 })
 export class HouseModule {}

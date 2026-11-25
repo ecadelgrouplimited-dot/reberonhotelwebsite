@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
@@ -6,6 +6,8 @@ import {
   zAssignRoomsInput, zCheckInInput, zCheckOutInput, zFeedbackInput, zFolioChargeInput, zGuestMergeInput, zGuestPatch,
   zHkStatusInput, zHkTaskCreateInput, zHkTaskPatch, zMoveRoomInput, zNoShowInput, zReportQuery, zFinanceQuery, zBriefQuery, zRoomBlockInput,
   zRoomCreateInput, zRoomUpdateInput, zDayCloseInput,
+  zLostItemCreate, zLostItemDispose, zLostItemPatch, zLostItemReturn,
+  zWorkOrderCreate, zWorkOrderNote, zWorkOrderOutOfService, zWorkOrderPatch, zWorkOrderStatus,
 } from '@reberon/contracts';
 import { hotelToday } from '@reberon/utils';
 import { CurrentUser, Requires, type AuthUser } from '../../common/auth.js';
@@ -18,6 +20,7 @@ import { GuestsService } from './guests.service.js';
 import { ReportsService } from './reports.service.js';
 import { FinanceService } from './finance.service.js';
 import { DayCloseService } from './day-close.service.js';
+import { UpkeepService } from './upkeep.service.js';
 import { sendDocument } from '../documents/letterhead.js';
 
 const dateParam = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : hotelToday());
@@ -323,5 +326,106 @@ export class DayCloseController {
   @Requires('day:close')
   async print(@Param('date') date: string, @Query('autoprint') autoprint: string | undefined, @Res() res: Response) {
     sendDocument(res, await this.days.print(date, { autoprint: autoprint === '1' }));
+  }
+}
+
+/** Maintenance: anyone may report and follow a fault; managing it needs maintenance:manage (checked per action in the service). */
+@Controller('v1/admin/maintenance')
+export class MaintenanceController {
+  constructor(private readonly upkeep: UpkeepService) {}
+
+  @Get()
+  @Requires('maintenance:report')
+  list(@CurrentUser() user: AuthUser) {
+    return this.upkeep.listWorkOrders(user);
+  }
+
+  @Get(':id')
+  @Requires('maintenance:report')
+  one(@Param('id', ParseUUIDPipe) id: string) {
+    return this.upkeep.getWorkOrder(id);
+  }
+
+  @Post()
+  @Requires('maintenance:report')
+  create(@Body(new ZodPipe(zWorkOrderCreate)) body: z.infer<typeof zWorkOrderCreate>, @CurrentUser() user: AuthUser) {
+    return this.upkeep.createWorkOrder(body, user);
+  }
+
+  @Patch(':id')
+  @Requires('maintenance:report')
+  patch(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(zWorkOrderPatch)) body: z.infer<typeof zWorkOrderPatch>, @CurrentUser() user: AuthUser) {
+    return this.upkeep.patchWorkOrder(id, body, user);
+  }
+
+  @Post(':id/status')
+  @Requires('maintenance:report')
+  status(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(zWorkOrderStatus)) body: z.infer<typeof zWorkOrderStatus>, @CurrentUser() user: AuthUser) {
+    return this.upkeep.setWorkOrderStatus(id, body, user);
+  }
+
+  @Post(':id/notes')
+  @Requires('maintenance:report')
+  note(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(zWorkOrderNote)) body: z.infer<typeof zWorkOrderNote>, @CurrentUser() user: AuthUser) {
+    return this.upkeep.addWorkOrderNote(id, body.body, user);
+  }
+
+  @Post(':id/out-of-service')
+  @Requires('maintenance:manage')
+  outOfService(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(zWorkOrderOutOfService)) body: z.infer<typeof zWorkOrderOutOfService>, @CurrentUser() user: AuthUser) {
+    return this.upkeep.outOfService(id, body, user);
+  }
+
+  @Delete(':id/out-of-service')
+  @Requires('maintenance:manage')
+  backInService(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.upkeep.backInService(id, user);
+  }
+}
+
+@Controller('v1/admin/lost-found')
+export class LostFoundController {
+  constructor(private readonly upkeep: UpkeepService) {}
+
+  @Get()
+  @Requires('lostfound:manage')
+  list() {
+    return this.upkeep.listLost();
+  }
+
+  @Get('likely-owners')
+  @Requires('lostfound:manage')
+  likely(@Query('roomId', ParseUUIDPipe) roomId: string, @Query('date') date: string) {
+    return this.upkeep.likelyOwners(roomId, date);
+  }
+
+  @Post()
+  @Requires('lostfound:manage')
+  create(@Body(new ZodPipe(zLostItemCreate)) body: z.infer<typeof zLostItemCreate>, @CurrentUser() user: AuthUser) {
+    return this.upkeep.createLost(body, user);
+  }
+
+  @Patch(':id')
+  @Requires('lostfound:manage')
+  patch(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(zLostItemPatch)) body: z.infer<typeof zLostItemPatch>, @CurrentUser() user: AuthUser) {
+    return this.upkeep.patchLost(id, body, user);
+  }
+
+  @Post(':id/return')
+  @Requires('lostfound:manage')
+  giveBack(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(zLostItemReturn)) body: z.infer<typeof zLostItemReturn>, @CurrentUser() user: AuthUser) {
+    return this.upkeep.returnLost(id, body, user);
+  }
+
+  @Post(':id/dispose')
+  @Requires('lostfound:manage')
+  dispose(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(zLostItemDispose)) body: z.infer<typeof zLostItemDispose>, @CurrentUser() user: AuthUser) {
+    return this.upkeep.disposeLost(id, body, user);
+  }
+
+  @Get(':id/tag')
+  @Requires('lostfound:manage')
+  async tag(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    sendDocument(res, await this.upkeep.lostTag(id));
   }
 }

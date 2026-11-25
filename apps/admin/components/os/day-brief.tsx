@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { AlarmClock, BrushCleaning, LogIn, LogOut, MessageSquareWarning, MoonStar, Sun, X } from 'lucide-react';
+import { AlarmClock, BrushCleaning, LogIn, LogOut, MessageSquareWarning, MoonStar, PackageSearch, Sun, Wrench, X } from 'lucide-react';
 import type { AdminPulseDTO, HkBoardDTO } from '@reberon/contracts';
 import { get } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
@@ -44,6 +44,14 @@ export function DayBrief({ pulse }: { pulse?: AdminPulseDTO }) {
     lines.push({ icon: BrushCleaning, text: `Not ready for today’s arrivals: room ${notReady.map((r) => r.number).join(', ')}`, href: '/housekeeping', tone: 'red' });
   } else if (rooms && pulse.rooms.vacantDirty > 0) {
     lines.push({ icon: BrushCleaning, text: `${pulse.rooms.vacantDirty} room${pulse.rooms.vacantDirty > 1 ? 's' : ''} to clean`, href: '/housekeeping', tone: 'amber' });
+  }
+  if (pulse.maintenance) {
+    const m = pulse.maintenance;
+    if (m.mine > 0) lines.push({ icon: Wrench, text: `${m.mine} maintenance job${m.mine > 1 ? 's' : ''} assigned to you`, href: '/maintenance', tone: 'amber' });
+    if (can('maintenance:manage') && m.urgent > 0) lines.push({ icon: Wrench, text: `${m.urgent} urgent fault${m.urgent > 1 ? 's' : ''} open${m.overdue ? ` · ${m.overdue} past target` : ''}`, href: '/maintenance', tone: 'red' });
+  }
+  if (pulse.lostFound && pulse.lostFound.due > 0) {
+    lines.push({ icon: PackageSearch, text: `${pulse.lostFound.due} found item${pulse.lostFound.due > 1 ? 's are' : ' is'} past the hold — return, keep or dispose`, href: '/lost-found', tone: 'amber' });
   }
   if (can('day:close') && pulse.dayClose) {
     const n = pulse.dayClose.unclosed.length;

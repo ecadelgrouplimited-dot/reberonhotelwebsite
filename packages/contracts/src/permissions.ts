@@ -48,6 +48,9 @@ export const PERMISSIONS = [
   'hr:manage',
   'pos:manage',
   'day:close',
+  'maintenance:report',
+  'maintenance:manage',
+  'lostfound:manage',
   'records:delete',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -74,18 +77,18 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'rates:read', 'payments:record', 'desk:operate', 'rooms:inspect', 'guests:read',
     'guests:write', 'messages:read', 'receipts:read', 'receipts:issue',
     'pos:operate', 'healthclub:operate', 'quotations:manage', 'requisitions:request',
-    'day:close',
+    'day:close', 'maintenance:report', 'lostfound:manage',
   ],
   KITCHEN: [
-    'dashboard:view', 'pos:operate', 'inventory:manage', 'requisitions:request',
+    'dashboard:view', 'pos:operate', 'inventory:manage', 'requisitions:request', 'maintenance:report',
   ],
   BAR: [
-    'dashboard:view', 'pos:operate', 'inventory:manage', 'requisitions:request',
+    'dashboard:view', 'pos:operate', 'inventory:manage', 'requisitions:request', 'maintenance:report',
   ],
   GYM: [
-    'dashboard:view', 'healthclub:operate', 'pos:operate', 'inventory:manage', 'requisitions:request',
+    'dashboard:view', 'healthclub:operate', 'pos:operate', 'inventory:manage', 'requisitions:request', 'maintenance:report',
   ],
-  HOUSEKEEPING: ['dashboard:view', 'rooms:status', 'requisitions:request'],
+  HOUSEKEEPING: ['dashboard:view', 'rooms:status', 'requisitions:request', 'maintenance:report', 'lostfound:manage'],
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -160,6 +163,9 @@ export const PERMISSION_INFO: PermissionInfo[] = [
   { key: 'healthclub:operate', group: 'Operations & POS', label: 'Health Club & Spa', description: 'Manage gym, steam and sauna passes, memberships and gym towel logs.', money: true },
   { key: 'quotations:manage', group: 'Operations & POS', label: 'Quotations & Events', description: 'Issue pro-forma quotations for conferences, weddings and group stays, and convert to invoices.', money: true },
   { key: 'inventory:manage', group: 'Operations & POS', label: 'Inventory, Linen & Assets', description: 'Track stock in/out, gym vs bathroom towels, consumables and fixed assets.' },
+  { key: 'maintenance:report', group: 'Operations & POS', label: 'Report faults', description: 'Report a broken shower, a dead socket or a leaking roof, and follow it until fixed.' },
+  { key: 'maintenance:manage', group: 'Operations & POS', label: 'Run maintenance', description: 'Assign and close work orders, record costs, and take rooms out of service while they are repaired.' },
+  { key: 'lostfound:manage', group: 'Front desk and rooms', label: 'Lost and found', description: 'Log items found in the hotel, match them to guests, return or dispose of them.' },
   { key: 'requisitions:request', group: 'Operations & POS', label: 'Submit requisitions', description: 'Request departmental stock replenishment, supplies or maintenance.' },
   { key: 'requisitions:approve', group: 'Operations & POS', label: 'Approve & disburse requisitions', description: 'Manager/Director approval and store disbursement for requisitions.', money: true },
   { key: 'expenses:manage', group: 'Operations & POS', label: 'Expense Management & Cost Drivers', description: 'Record, edit, and categorize hotel operational expenses, utility bills, and supplier payments.', money: true },

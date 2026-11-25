@@ -524,6 +524,8 @@ model Room {
   assignments RoomAssignment[]
   tasks       HousekeepingTask[]
   blocks      RoomBlock[]
+  workOrders  WorkOrder[]
+  lostItems   LostItem[]
 }
 
 // ───────────────────────── Destination (M03) ─────────────────────────
@@ -2202,4 +2204,140 @@ model DayClose {
   overridden   Boolean  @default(false)
   /// { checks, figures } at the moment of closing.
   snapshot     Json
+}
+
+// ───────────────────────── Maintenance & lost and found ─────────────────────────
+
+enum WorkOrderStatus {
+  OPEN
+  IN_PROGRESS
+  ON_HOLD
+  DONE
+  CANCELLED
+}
+
+enum WorkOrderPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum WorkOrderCategory {
+  PLUMBING
+  ELECTRICAL
+  HOT_WATER
+  FURNITURE
+  APPLIANCE
+  WIFI_TV
+  DOORS_LOCKS
+  BUILDING
+  GROUNDS
+  OTHER
+}
+
+/// A fault reported anywhere in the hotel, worked until fixed. May take its room out of service.
+model WorkOrder {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  number         String            @unique
+  title          String
+  details        String?
+  category       WorkOrderCategory @default(OTHER)
+  priority       WorkOrderPriority @default(NORMAL)
+  status         WorkOrderStatus   @default(OPEN)
+  roomId         String?           @db.Uuid
+  /// Where, when not a guest room ("Kitchen", "Lobby toilets")
+  location       String?
+  reportedById   String?           @db.Uuid
+  reportedByName String
+  assignedToId   String?           @db.Uuid
+  assignedToName String?
+  /// The room block that keeps the room off sale while it is being fixed
+  blockId        String?           @db.Uuid
+  dueAt          DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  resolution     String?
+  costMinor      BigInt?
+  currency       String?
+  isSeed         Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  room  Room?           @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  notes WorkOrderNote[]
+
+  @@index([status, priority])
+  @@index([roomId])
+  @@index([assignedToId])
+}
+
+model WorkOrderNote {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  workOrderId String   @db.Uuid
+  authorId    String?  @db.Uuid
+  authorName  String
+  body        String
+  /// NOTE written by a person, or EVENT recorded by the House (status, assignment…)
+  kind        String   @default("NOTE")
+  createdAt   DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId, createdAt])
+}
+
+enum LostItemStatus {
+  STORED
+  RETURNED
+  DISPOSED
+}
+
+enum LostItemCategory {
+  ELECTRONICS
+  CLOTHING
+  JEWELLERY
+  DOCUMENTS
+  MONEY
+  KEYS
+  BAG
+  TOILETRIES
+  OTHER
+}
+
+/// Something found in the hotel, kept until it goes back to its owner or its hold period ends.
+model LostItem {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  number         String           @unique
+  description    String
+  category       LostItemCategory @default(OTHER)
+  /// Valuables (money, jewellery, documents, electronics) are kept in the safe and need a manager to release
+  valuable       Boolean          @default(false)
+  foundAt        DateTime
+  foundWhere     String
+  roomId         String?          @db.Uuid
+  foundById      String?          @db.Uuid
+  foundByName    String
+  storedAt       String
+  /// Business date after which it may be disposed of
+  holdUntil      DateTime         @db.Date
+  status         LostItemStatus   @default(STORED)
+  reservationId  String?          @db.Uuid
+  guestName      String?
+  guestContact   String?
+  returnedAt     DateTime?
+  returnedTo     String?
+  returnMethod   String?
+  handledById    String?          @db.Uuid
+  handledByName  String?
+  disposedAt     DateTime?
+  disposalMethod String?
+  notes          String?
+  isSeed         Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  room Room? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@index([status, holdUntil])
 }
