@@ -55,7 +55,9 @@ export default function NavigationPage() {
   };
   const info = MENUS.find((m) => m.value === menu)!;
 
-  const RowEditor = ({ r, path, siblings }: { r: Row; path: number[]; siblings: number }) => (
+  // A plain function, not a component: a component declared in here would be a new type on every
+  // render, so React would rebuild the inputs and drop focus after each letter typed.
+  const rowEditor = (r: Row, path: number[], siblings: number) => (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface p-2">
       {path.length > 1 && <CornerDownRight className="ml-1 size-4 text-fg-subtle" />}
       <input className="input !min-h-9 w-48 flex-1" value={r.label.en ?? ''} placeholder="Label" onChange={(e) => edit(path, (x) => ({ ...x, label: { en: e.target.value } }))} />
@@ -78,10 +80,10 @@ export default function NavigationPage() {
       <fieldset disabled={!can('content:write')} className="grid gap-2">
         {items.map((r, i) => (
           <div key={i} className="grid gap-2">
-            <RowEditor r={r} path={[i]} siblings={items.length} />
+            {rowEditor(r, [i], items.length)}
             {(r.children ?? []).map((c, k) => (
               <div key={k} className="pl-8">
-                <RowEditor r={c} path={[i, k]} siblings={r.children!.length} />
+                {rowEditor(c, [i, k], r.children!.length)}
               </div>
             ))}
           </div>
