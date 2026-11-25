@@ -17,6 +17,8 @@ export type AdminFieldDef =
   | FieldDef
   | { kind: 'money'; name: string; label: string; currency: 'UGX' | 'USD'; help?: string }
   | { kind: 'date'; name: string; label: string; required?: boolean; help?: string }
+  /** Kampala local time, "YYYY-MM-DDTHH:MM". */
+  | { kind: 'datetime'; name: string; label: string; required?: boolean; help?: string }
   | { kind: 'textarea'; name: string; label: string; help?: string }
   | { kind: 'refs'; name: string; label: string; entity: RefEntity | 'amenity'; help?: string }
   | { kind: 'group'; label: string; fields: AdminFieldDef[]; columns?: 2 | 3 }
@@ -125,6 +127,12 @@ function Field({ def, value, onChange, error, errors, path }: { def: Exclude<Adm
       return (
         <FieldShell label={def.label} hint={help} error={error} required={def.required}>
           <input className="input" type="date" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />
+        </FieldShell>
+      );
+    case 'datetime':
+      return (
+        <FieldShell label={def.label} hint={help ?? 'Kampala time'} error={error} required={def.required}>
+          <input className="input" type="datetime-local" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value || null)} />
         </FieldShell>
       );
     case 'boolean':

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { AlarmClock, BrushCleaning, LogIn, LogOut, MessageSquareWarning, MoonStar, PackageSearch, Sun, Wrench, X } from 'lucide-react';
+import { AlarmClock, BrushCleaning, LogIn, LogOut, MessageSquareWarning, MoonStar, PackageSearch, Sun, Wrench, X, BriefcaseBusiness, CalendarHeart } from 'lucide-react';
 import type { AdminPulseDTO, HkBoardDTO } from '@reberon/contracts';
 import { get } from '@/lib/api';
 import { useCan, useMe } from '@/lib/providers';
@@ -49,6 +49,14 @@ export function DayBrief({ pulse }: { pulse?: AdminPulseDTO }) {
     const m = pulse.maintenance;
     if (m.mine > 0) lines.push({ icon: Wrench, text: `${m.mine} maintenance job${m.mine > 1 ? 's' : ''} assigned to you`, href: '/maintenance', tone: 'amber' });
     if (can('maintenance:manage') && m.urgent > 0) lines.push({ icon: Wrench, text: `${m.urgent} urgent fault${m.urgent > 1 ? 's' : ''} open${m.overdue ? ` · ${m.overdue} past target` : ''}`, href: '/maintenance', tone: 'red' });
+  }
+  for (const ev of pulse.eventsToday ?? []) {
+    const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' }).format(new Date(ev.startsAt));
+    lines.push({ icon: CalendarHeart, text: `${ev.title} tonight at ${time} — ${ev.booked} booked`, href: '/website/events', tone: 'amber' });
+  }
+  if (pulse.careers && pulse.careers.newApplications > 0) {
+    const n = pulse.careers.newApplications;
+    lines.push({ icon: BriefcaseBusiness, text: `${n} new job application${n > 1 ? 's' : ''} to read`, href: '/careers' });
   }
   if (pulse.lostFound && pulse.lostFound.due > 0) {
     lines.push({ icon: PackageSearch, text: `${pulse.lostFound.due} found item${pulse.lostFound.due > 1 ? 's are' : ' is'} past the hold — return, keep or dispose`, href: '/lost-found', tone: 'amber' });

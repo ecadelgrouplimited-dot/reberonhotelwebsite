@@ -54,6 +54,7 @@ import type {
 } from '@reberon/contracts';
 import { cn } from '@/lib/cn';
 import { SipiConciergeOrb } from './sipi-concierge-orb';
+import { preferenceStore } from '@/lib/consent';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const IDENTITY_STORAGE_KEY = 'reberon_concierge_identity_v2';
@@ -246,7 +247,7 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
             bookingCode: resolvedIdentity.bookingCode || '',
           });
           try {
-            localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(resolvedIdentity));
+            preferenceStore.set(IDENTITY_STORAGE_KEY, JSON.stringify(resolvedIdentity));
           } catch {}
           if (updateWelcome) {
             setMessages([buildWelcomeMessage(resolvedIdentity, resolvedDossier)]);
@@ -279,7 +280,7 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
       // Fallback if offline
       setIdentity(targetIdentity);
       try {
-        localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(targetIdentity));
+        preferenceStore.set(IDENTITY_STORAGE_KEY, JSON.stringify(targetIdentity));
       } catch {}
       if (updateWelcome) {
         setMessages([buildWelcomeMessage(targetIdentity, null)]);
@@ -305,7 +306,7 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
 
     let savedId: ConciergeGuestIdentityDTO | null = null;
     try {
-      const raw = localStorage.getItem(IDENTITY_STORAGE_KEY);
+      const raw = preferenceStore.get(IDENTITY_STORAGE_KEY);
       if (raw) savedId = JSON.parse(raw);
     } catch {}
 
@@ -389,7 +390,7 @@ export function SipiConciergeWidget({ initialStaffUser }: SipiConciergeWidgetPro
         if (data.identity) {
           setIdentity(data.identity);
           try {
-            localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(data.identity));
+            preferenceStore.set(IDENTITY_STORAGE_KEY, JSON.stringify(data.identity));
           } catch {}
         }
         if (data.dossier) {

@@ -19,6 +19,7 @@ import { HouseModule } from './modules/house/house.module.js';
 import { IntegrationsModule } from './modules/integrations/integrations.module.js';
 import { OperationsModule } from './modules/operations/operations.module.js';
 import { HrModule } from './modules/hr/hr.module.js';
+import { PublicLifeModule } from './modules/public-life/public-life.module.js';
 import { ConciergeModule } from './modules/concierge/concierge.module.js';
 import { HealthController } from './modules/health.controller.js';
 
@@ -40,6 +41,7 @@ import { HealthController } from './modules/health.controller.js';
     OperationsModule,
     HrModule,
     ConciergeModule,
+    PublicLifeModule,
   ],
   controllers: [HealthController],
   providers: [

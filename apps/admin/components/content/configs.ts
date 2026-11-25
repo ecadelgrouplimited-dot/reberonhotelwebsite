@@ -228,3 +228,140 @@ export const progressConfig: EntityConfig = {
     { kind: 'number', name: 'percentComplete', label: 'Percent built', min: 0, max: 100 },
   ],
 };
+
+/* ───────────── Events & careers ───────────── */
+
+const toMajor = (minor: unknown, currency: unknown) => (minor === null || minor === undefined || minor === '' ? undefined : Number(minor) / (currency === 'USD' ? 100 : 1));
+const toMinor = (major: unknown, currency: unknown) => (major === null || major === undefined || major === '' || Number(major) <= 0 ? null : String(Math.round(Number(major) * (currency === 'USD' ? 100 : 1))));
+const orNull = (v: unknown) => (v === undefined || v === '' ? null : v);
+
+export const eventConfig: EntityConfig = {
+  endpoint: '/events',
+  listHref: '/website/events',
+  noun: 'Event',
+  crumbs: [{ label: 'Website' }, { label: 'Events', href: '/website/events' }],
+  title: (v) => en(v.title),
+  viewUrl: (v) => (v.status !== 'DRAFT' && v.slug ? `${WEB_URL}/events/${v.slug}` : null),
+  empty: { title: {}, summary: {}, category: 'MUSIC', galleryIds: [], rsvpEnabled: true, maxPartySize: 6, featured: false, status: 'DRAFT', currency: 'UGX' },
+  toForm: (r) => ({ ...r, ...seoToForm(r), priceMajor: toMajor(r.priceMinor, r.currency), currency: r.currency ?? 'UGX' }),
+  toInput: (v) => {
+    const { seoTitle: _a, seoDescription: _b, cover: _c, gallery: _d, seatsLeft: _e, priceMajor, priceMinor: _p, ...rest } = v;
+    const priceMinor = toMinor(priceMajor, v.currency);
+    return {
+      ...rest,
+      ...seoToInput(v),
+      priceMinor,
+      currency: priceMinor ? (v.currency ?? 'UGX') : null,
+      endsAt: orNull(v.endsAt),
+      rsvpClosesAt: orNull(v.rsvpClosesAt),
+      capacity: orNull(v.capacity),
+      coverId: orNull(v.coverId),
+      venue: orNull(v.venue),
+      venueDetail: orNull(v.venueDetail),
+    };
+  },
+  sections: [
+    {
+      title: 'The event',
+      description: 'Say what it is and why it is worth the drive. The summary shows on cards and in search.',
+      fields: [
+        { kind: 'group', label: '', fields: [{ kind: 'ltext', name: 'title', label: 'Name', required: true }, slugField] },
+        { kind: 'ltext', name: 'summary', label: 'Summary', multiline: true, help: 'One or two lines.' },
+        { kind: 'lrich', name: 'body', label: 'The full story' },
+        { kind: 'select', name: 'category', label: 'Kind', required: true, options: Object.entries({ MUSIC: 'Music & nights', FOOD_DRINK: 'Food & drink', COFFEE: 'Coffee', OUTDOOR: 'Outdoors & hikes', CULTURE: 'Culture', WELLNESS: 'Wellness', FAMILY: 'Family', CONFERENCE: 'Talks & conferences', OTHER: 'Other' }).map(([value, label]) => ({ value, label })) },
+      ],
+    },
+    {
+      title: 'When & where',
+      fields: [
+        { kind: 'group', label: '', fields: [{ kind: 'datetime', name: 'startsAt', label: 'Starts', required: true }, { kind: 'datetime', name: 'endsAt', label: 'Ends' }] },
+        { kind: 'group', label: '', fields: [{ kind: 'text', name: 'venue', label: 'Venue', placeholder: 'e.g. The terrace' }, { kind: 'text', name: 'venueDetail', label: 'Address or directions', help: 'For events away from the hotel' }] },
+        { kind: 'boolean', name: 'offsite', label: 'Away from the hotel' },
+      ],
+    },
+    {
+      title: 'Pictures',
+      fields: [
+        { kind: 'media', name: 'coverId', label: 'Cover image', help: 'Shown on cards and when shared. Landscape works best.' },
+        { kind: 'mediaList', name: 'galleryIds', label: 'More photos' },
+      ],
+    },
+    {
+      title: 'Places & price',
+      description: 'Guests book online. When full, they join a waiting list and are confirmed automatically if places free up.',
+      fields: [
+        { kind: 'group', label: '', columns: 3, fields: [{ kind: 'number', name: 'priceMajor', label: 'Price per person', min: 0, help: 'Empty = free' }, { kind: 'select', name: 'currency', label: 'Currency', options: [{ value: 'UGX', label: 'UGX' }, { value: 'USD', label: 'USD' }] }, { kind: 'number', name: 'capacity', label: 'Places in total', min: 1, help: 'Empty = no limit' }] },
+        { kind: 'ltext', name: 'priceNote', label: 'Price note', help: 'e.g. Includes a glass of wine; children under 12 free' },
+        { kind: 'group', label: '', fields: [{ kind: 'number', name: 'maxPartySize', label: 'Most people per booking', min: 1, max: 50 }, { kind: 'datetime', name: 'rsvpClosesAt', label: 'Stop taking bookings at', help: 'Empty = when it ends' }] },
+        { kind: 'boolean', name: 'rsvpEnabled', label: 'Take bookings online' },
+      ],
+    },
+    seoSection,
+  ],
+  side: [
+    { kind: 'select', name: 'status', label: 'Visibility', required: true, options: [{ value: 'PUBLISHED', label: 'Published' }, { value: 'DRAFT', label: 'Draft (not on the site)' }, { value: 'CANCELLED', label: 'Cancelled (guests are emailed)' }] },
+    { kind: 'boolean', name: 'featured', label: 'Feature it on the home page' },
+  ],
+  deleteWarning: 'An event with live bookings must be cancelled first (guests are emailed). Past events can be deleted; their guest lists go with them.',
+};
+
+export function jobConfig(departments: { code: string; name: string }[]): EntityConfig {
+  return {
+    endpoint: '/careers/jobs',
+    listHref: '/careers',
+    noun: 'Job',
+    writePerm: 'careers:manage',
+    crumbs: [{ label: 'Human Resources' }, { label: 'Careers', href: '/careers' }],
+    title: (v) => en(v.title),
+    viewUrl: (v) => (v.status !== 'DRAFT' && v.slug ? `${WEB_URL}/careers/${v.slug}` : null),
+    empty: { title: {}, summary: {}, employmentType: 'FULL_TIME', location: 'Kapchorwa, Uganda', openings: 1, status: 'DRAFT', questions: [], showSalary: false, currency: 'UGX', salaryPeriod: 'MONTH' },
+    toForm: (r) => ({ ...r, ...seoToForm(r), salaryMinMajor: toMajor(r.salaryMinMinor, r.currency), salaryMaxMajor: toMajor(r.salaryMaxMinor, r.currency), currency: r.currency ?? 'UGX', salaryPeriod: r.salaryPeriod ?? 'MONTH' }),
+    toInput: (v) => {
+      const { seoTitle: _a, seoDescription: _b, cover: _c, salaryMinMajor, salaryMaxMajor, salaryMinMinor: _m, salaryMaxMinor: _x, ...rest } = v;
+      const lo = toMinor(salaryMinMajor, v.currency);
+      const hi = toMinor(salaryMaxMajor, v.currency);
+      const questions = ((v.questions as { id?: string; label?: string; required?: boolean }[]) ?? [])
+        .filter((q) => q.label && q.label.trim().length >= 3)
+        .map((q, i) => ({ id: q.id || `q${i + 1}-${Math.random().toString(36).slice(2, 6)}`, label: q.label!.trim(), required: !!q.required }));
+      return { ...rest, ...seoToInput(v), salaryMinMinor: lo, salaryMaxMinor: hi, currency: lo || hi ? (v.currency ?? 'UGX') : null, questions, closesOn: orNull(v.closesOn), coverId: orNull(v.coverId), departmentCode: orNull(v.departmentCode) };
+    },
+    sections: [
+      {
+        title: 'The role',
+        description: 'Write it the way you would explain it to a friend. Short paragraphs and lists read best on a phone.',
+        fields: [
+          { kind: 'group', label: '', fields: [{ kind: 'ltext', name: 'title', label: 'Job title', required: true }, slugField] },
+          { kind: 'ltext', name: 'summary', label: 'Summary', multiline: true, help: 'One or two lines — shown in the list and when shared.' },
+          { kind: 'lrich', name: 'description', label: 'What you will do' },
+          { kind: 'lrich', name: 'requirements', label: 'What we look for' },
+          { kind: 'lrich', name: 'benefits', label: 'What we offer' },
+        ],
+      },
+      {
+        title: 'Details',
+        fields: [
+          { kind: 'group', label: '', fields: [{ kind: 'select', name: 'departmentCode', label: 'Department', options: departments.map((d) => ({ value: d.code, label: d.name })) }, { kind: 'select', name: 'employmentType', label: 'Type', required: true, options: [{ value: 'FULL_TIME', label: 'Full time' }, { value: 'PART_TIME', label: 'Part time' }, { value: 'CONTRACT', label: 'Contract' }, { value: 'INTERNSHIP', label: 'Internship' }, { value: 'SEASONAL', label: 'Seasonal' }, { value: 'VOLUNTEER', label: 'Volunteer' }] }] },
+          { kind: 'group', label: '', columns: 3, fields: [{ kind: 'text', name: 'location', label: 'Location', required: true }, { kind: 'number', name: 'openings', label: 'Openings', min: 1, max: 100 }, { kind: 'date', name: 'closesOn', label: 'Applications close' }] },
+        ],
+      },
+      {
+        title: 'Pay',
+        description: 'Showing pay gets more and better applications. Hidden unless you switch it on.',
+        fields: [
+          { kind: 'group', label: '', columns: 3, fields: [{ kind: 'number', name: 'salaryMinMajor', label: 'From', min: 0 }, { kind: 'number', name: 'salaryMaxMajor', label: 'To', min: 0 }, { kind: 'select', name: 'currency', label: 'Currency', options: [{ value: 'UGX', label: 'UGX' }, { value: 'USD', label: 'USD' }] }] },
+          { kind: 'select', name: 'salaryPeriod', label: 'Per', options: [{ value: 'MONTH', label: 'Month' }, { value: 'YEAR', label: 'Year' }, { value: 'DAY', label: 'Day' }, { value: 'HOUR', label: 'Hour' }] },
+          { kind: 'boolean', name: 'showSalary', label: 'Show pay on the website' },
+        ],
+      },
+      {
+        title: 'Questions for applicants',
+        description: 'Up to eight. Keep them few and specific — e.g. "Which kitchens have you worked in?"',
+        fields: [{ kind: 'list', name: 'questions', label: 'Questions', itemLabel: 'Question', max: 8, fields: [{ kind: 'text', name: 'label', label: 'Question', required: true }, { kind: 'boolean', name: 'required', label: 'Must be answered' }] }],
+      },
+      { title: 'Picture', fields: [{ kind: 'media', name: 'coverId', label: 'Image (optional)', help: 'Used when the job is shared.' }] },
+      seoSection,
+    ],
+    side: [{ kind: 'select', name: 'status', label: 'Status', required: true, options: [{ value: 'OPEN', label: 'Open — taking applications' }, { value: 'DRAFT', label: 'Draft (not on the site)' }, { value: 'CLOSED', label: 'Closed' }] }],
+    deleteWarning: 'Deleting removes the job from the website. Applications are kept (and deleted after a year).',
+  };
+}

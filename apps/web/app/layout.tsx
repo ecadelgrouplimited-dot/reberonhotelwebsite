@@ -14,6 +14,7 @@ import { PreviewBanner } from '@/components/site/preview-banner';
 import { PreviewBridge } from '@/components/site/preview-bridge';
 import { ComingSoonGate, StaffPreviewBar } from '@/components/site/coming-soon-gate';
 import { SipiConciergeWidget } from '@/components/concierge/sipi-concierge-widget';
+import { CookieConsent } from '@/components/site/cookie-consent';
 import { t, typographyVars, readTypography } from '@reberon/contracts';
 import { FONT_CLASSES } from '@/lib/fonts';
 import './globals.css';
@@ -84,6 +85,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <ComingSoonGate site={site} rooms={rooms} />
           )}
           <SipiConciergeWidget initialStaffUser={staffSession ? { name: staffSession.name, email: staffSession.email } : null} />
+          <CookieConsent />
         </SiteProvider>
       </body>
     </html>

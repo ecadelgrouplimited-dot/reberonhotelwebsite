@@ -372,12 +372,24 @@ export class DashboardController {
       lostFound = { stored, due };
     }
 
+    let careers: AdminPulseDTO['careers'];
+    if (has(user, 'careers:manage')) careers = { newApplications: await this.prisma.jobApplication.count({ where: { status: 'NEW' } }) };
+    let eventsToday: AdminPulseDTO['eventsToday'];
+    if (has(user, 'content:read') || has(user, 'events:manage')) {
+      const dayStart = new Date(`${todayStr}T00:00:00+03:00`);
+      const evs = await this.prisma.event.findMany({ where: { status: 'PUBLISHED', deletedAt: null, startsAt: { gte: dayStart, lt: new Date(dayStart.getTime() + 86_400_000) } }, orderBy: { startsAt: 'asc' } });
+      const seats = evs.length ? await this.prisma.eventRegistration.groupBy({ by: ['eventId'], where: { eventId: { in: evs.map((e) => e.id) }, status: { in: ['CONFIRMED', 'ATTENDED'] } }, _sum: { partySize: true } }) : [];
+      eventsToday = evs.map((e) => ({ title: (e.title as Record<string, string>).en ?? Object.values(e.title as Record<string, string>)[0] ?? 'Event', slug: e.slug, startsAt: e.startsAt.toISOString(), booked: seats.find((s) => s.eventId === e.id)?._sum.partySize ?? 0 }));
+    }
+
     return {
       generatedAt: new Date().toISOString(),
       hotelDate: todayStr,
       dayClose,
       maintenance,
       lostFound,
+      careers,
+      eventsToday,
       inbox: {
         newCount: inboxNew,
         openCount: inboxOpen,

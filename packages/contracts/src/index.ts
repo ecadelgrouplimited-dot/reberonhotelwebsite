@@ -16,3 +16,5 @@ export * from './hr.js';
 export * from './concierge.js';
 export * from './typography.js';
 export * from './prefs.js';
+export * from './consent.js';
+export * from './public-life.js';

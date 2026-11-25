@@ -49,9 +49,13 @@ import {
   type LucideIcon,
   PackageSearch,
   Wrench,
+  BriefcaseBusiness,
+  CalendarHeart,
 } from 'lucide-react';
 
 export type NavBadgeKey =
+  | 'events'
+  | 'careers'
   | 'maintenance'
   | 'lostfound'
   | 'today'
@@ -165,6 +169,7 @@ export const NAV: NavGroup[] = [
       { label: 'Shift Rosters', href: '/hr?tab=ROSTER', icon: Clock, perm: 'hr:manage', badge: 'shifts' },
       { label: 'Leave Requests', href: '/hr?tab=LEAVE', icon: CalendarDays, perm: 'hr:manage', badge: 'leave' },
       { label: 'Payroll & Taxes', href: '/hr?tab=PAYROLL', icon: DollarSign, perm: 'hr:manage', badge: 'payroll' },
+      { label: 'Careers & Hiring', href: '/careers', icon: BriefcaseBusiness, perm: 'careers:manage', badge: 'careers' },
     ],
   },
   {
@@ -179,6 +184,7 @@ export const NAV: NavGroup[] = [
       { label: 'Facilities', href: '/website/facilities', icon: Building2, perm: 'content:read' },
       { label: 'Virtual Tours', href: '/website/tours', icon: Rotate3d, perm: 'content:read' },
       { label: 'Kapchorwa Guide', href: '/website/destinations', icon: Map, perm: 'content:read' },
+      { label: 'Events', href: '/website/events', icon: CalendarHeart, perm: 'content:read', badge: 'events' },
       { label: 'Hotel Rising', href: '/website/rising', icon: Hammer, perm: 'content:read' },
       { label: 'Questions & FAQ', href: '/website/faqs', icon: CircleHelp, perm: 'content:read' },
       { label: 'Navigation', href: '/website/navigation', icon: Navigation, perm: 'content:read' },

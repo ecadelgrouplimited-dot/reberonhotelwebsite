@@ -458,6 +458,10 @@ export interface AdminPulseDTO {
   maintenance?: { open: number; urgent: number; overdue: number; mine: number; outOfService: number };
   /** Lost and found: items stored, and those past their hold. */
   lostFound?: { stored: number; due: number };
+  /** Applications nobody has opened yet (careers:manage). */
+  careers?: { newApplications: number };
+  /** Events happening today and how many people are booked (content:read). */
+  eventsToday?: { title: string; slug: string; startsAt: string; booked: number }[];
   inbox: {
     newCount: number;
     openCount: number;

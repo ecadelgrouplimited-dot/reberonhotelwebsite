@@ -7,12 +7,29 @@ import type { HotspotKind, TourDTO } from '@reberon/contracts';
 import { t } from '@reberon/contracts/text';
 import { cn } from '@/lib/cn';
 
+import { hasConsent } from '@/lib/consent';
+import { ThirdPartyGate } from '@/components/site/third-party-gate';
+
+/** Who serves an embedded tour, named for the consent prompt. */
+function tourProvider(url: string | null | undefined) {
+  try {
+    const h = new URL(url ?? '').hostname;
+    if (h.includes('matterport')) return 'Matterport';
+    if (h.includes('kuula')) return 'Kuula';
+    if (h.includes('youtube')) return 'YouTube';
+    return h.replace(/^www\./, '') || 'another company';
+  } catch {
+    return 'another company';
+  }
+}
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const KIND: Record<HotspotKind, LucideIcon> = { BED: BedDouble, BATH: ShowerHead, VIEW: Mountain, CAPACITY: Users, ACCESS: Accessibility, OTHER: Info };
 type Context = 'ROOM_PAGE' | 'CHECKOUT' | 'PAGE';
 
 /** A random id for this browser, so "walked, then booked" can be counted without knowing who. */
 export function tourSession(): string | undefined {
+  // Counting tour visits is analytics: only with the visitor's yes.
+  if (!hasConsent('analytics')) return undefined;
   try {
     let id = localStorage.getItem('rb_tour_sid');
     if (!id) {
@@ -26,6 +43,7 @@ export function tourSession(): string | undefined {
 }
 /** Only set once a tour was actually opened. */
 export function walkedSession(): string | undefined {
+  if (!hasConsent('analytics')) return undefined;
   try {
     return localStorage.getItem('rb_tour_walked') === '1' ? (localStorage.getItem('rb_tour_sid') ?? undefined) : undefined;
   } catch {
@@ -177,14 +195,16 @@ export function TourPlayer({ tour, context, cta, children }: { tour: TourDTO; co
                     </button>
                   </>
                 ) : (
-                  <iframe
-                    src={tour.embedUrl ?? undefined}
-                    title={t(tour.title)}
-                    className="absolute inset-0 size-full border-0"
-                    allow="fullscreen; xr-spatial-tracking; accelerometer; gyroscope; autoplay; encrypted-media"
-                    allowFullScreen
-                    referrerPolicy="strict-origin-when-cross-origin"
-                  />
+                  <ThirdPartyGate provider={tourProvider(tour.embedUrl)} what="3-D tour">
+                    <iframe
+                      src={tour.embedUrl ?? undefined}
+                      title={t(tour.title)}
+                      className="absolute inset-0 size-full border-0"
+                      allow="fullscreen; xr-spatial-tracking; accelerometer; gyroscope; autoplay; encrypted-media"
+                      allowFullScreen
+                      referrerPolicy="strict-origin-when-cross-origin"
+                    />
+                  </ThirdPartyGate>
                 )}
               </div>
 

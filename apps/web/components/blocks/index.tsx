@@ -12,6 +12,7 @@ import { Voices } from './voices';
 import { TourEmbed } from './tour-embed';
 import { Cards } from './cards';
 import { Video } from './video';
+import { CookieTable, EventList, JobList } from './life';
 import type { BlockProps } from './types';
 
 function Gallery({ block, media }: BlockProps<{ eyebrow?: LText; heading?: LText; media?: string[] }>) {
@@ -51,6 +52,9 @@ const REGISTRY: Record<string, (p: BlockProps<never, never>) => React.ReactNode>
   tourEmbed: TourEmbed as never,
   cards: Cards as never,
   video: Video as never,
+  eventList: EventList as never,
+  jobList: JobList as never,
+  cookieTable: CookieTable as never,
 };
 
 /** Blocks that manage their own vertical rhythm (full-bleed or spacing). */

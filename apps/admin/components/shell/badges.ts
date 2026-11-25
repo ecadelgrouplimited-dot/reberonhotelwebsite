@@ -208,6 +208,15 @@ export function computeBadges(pulse?: AdminPulseDTO): Partial<Record<NavBadgeKey
     map.lostfound = l.due > 0 ? { count: l.due, tone: 'amber', tooltip: `${l.due} item${l.due > 1 ? 's' : ''} past the hold period` } : { count: l.stored, tone: 'neutral', tooltip: `${l.stored} item${l.stored > 1 ? 's' : ''} in lost and found` };
   }
 
+  if (pulse.careers && pulse.careers.newApplications > 0) {
+    const n = pulse.careers.newApplications;
+    map.careers = { count: n, tone: 'amber', tooltip: `${n} new application${n > 1 ? 's' : ''} to read` };
+  }
+  if (pulse.eventsToday?.length) {
+    const booked = pulse.eventsToday.reduce((s, e) => s + e.booked, 0);
+    map.events = { count: pulse.eventsToday.length, tone: 'neutral', tooltip: `Today: ${pulse.eventsToday.map((e) => e.title).join(', ')} — ${booked} booked` };
+  }
+
   // Close the day: earlier days never signed off; after 21:00, today too.
   if (pulse.dayClose) {
     const late = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Africa/Kampala' }).format(new Date())) >= 21;

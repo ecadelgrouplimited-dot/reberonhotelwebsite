@@ -118,6 +118,34 @@ export function defaultNotificationRules() {
         emailEnabled: false,
       },
       {
+        id: 'EVENT_RSVP',
+        label: 'Event Booking from the Website',
+        description: 'Fires when someone books places at an event (or joins its waiting list) on the website.',
+        category: 'FRONT_DESK',
+        urgency: 'NORMAL',
+        roles: ['DESK', 'MANAGER', 'OWNER'],
+        recipientUserIds: [] as string[],
+        customEmails: [] as string[],
+        popupEnabled: true,
+        soundEnabled: true,
+        soundTone: 'soft',
+        emailEnabled: false,
+      },
+      {
+        id: 'NEW_APPLICATION',
+        label: 'New Job Application',
+        description: 'Fires when someone applies for a job on the careers page.',
+        category: 'HR',
+        urgency: 'NORMAL',
+        roles: ['HR', 'MANAGER', 'OWNER'],
+        recipientUserIds: [] as string[],
+        customEmails: [] as string[],
+        popupEnabled: true,
+        soundEnabled: false,
+        soundTone: 'soft',
+        emailEnabled: true,
+      },
+      {
         id: 'GUEST_INQUIRY_FEEDBACK',
         label: 'New Guest Enquiry, Waitlist or Stay Issue',
         description: 'Alerts Front Desk and Management when a guest submits a website inquiry or stay issue.',
@@ -160,6 +188,10 @@ export function ruleIdForAction(action: string): string | null {
   if (/^maintenance\.(report_urgent|out_of_service)$/.test(action)) return 'MAINTENANCE_FAULT';
   // Routine maintenance and lost-and-found updates are not alerts (assignees get their own push).
   if (action.startsWith('maintenance.') || action.startsWith('lostfound.')) return null;
+  if (action === 'event.rsvp') return 'EVENT_RSVP';
+  if (action === 'careers.application') return 'NEW_APPLICATION';
+  // Other event, careers and consent activity is housekeeping, not an alert.
+  if (action.startsWith('event.') || action.startsWith('careers.')) return null;
   if (action.includes('check_out')) return 'GUEST_CHECK_OUT';
   if (action.includes('check_in')) return 'GUEST_CHECK_IN';
   if (action.includes('reservation') || action.includes('booking')) return 'NEW_BOOKING';
@@ -176,6 +208,8 @@ export function ruleIdForAction(action: string): string | null {
 export function hrefForAction(action: string, entityType: string | null, entityId: string | null): string {
   if (entityType === 'Reservation' && entityId) return `/reservations/${entityId}`;
   if (entityType === 'WorkOrder' && entityId) return `/maintenance?open=${entityId}`;
+  if (entityType === 'JobApplication' && entityId) return `/careers?open=${entityId}`;
+  if (entityType === 'Event' && entityId) return `/website/events/${entityId}/guests`;
   if (action.includes('check_out') || action.includes('housekeeping') || action.includes('hk')) return '/housekeeping';
   if (action.includes('desk') || action.includes('check_in')) return '/desk';
   if (action.includes('pos')) return '/pos';

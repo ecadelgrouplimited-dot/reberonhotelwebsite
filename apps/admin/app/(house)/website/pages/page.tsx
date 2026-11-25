@@ -21,7 +21,7 @@ import { SelectInput, TextInput } from '@/components/ui/field';
 
 const KIND_LABEL: Record<PageKind, string> = {
   HOME: 'Home', STANDARD: 'Page', ABOUT: 'About', FACILITIES: 'Facilities', CONTACT: 'Contact', LEGAL: 'Legal', DESTINATION_INDEX: 'Destination index',
-  ROOMS_INDEX: 'Rooms index', PROGRESS: 'Progress', LANDING: 'Landing page', SYSTEM: 'System',
+  ROOMS_INDEX: 'Rooms index', PROGRESS: 'Progress', LANDING: 'Landing page', SYSTEM: 'System', EVENTS: 'Events index', CAREERS: 'Careers index',
 };
 
 function PagesInner() {

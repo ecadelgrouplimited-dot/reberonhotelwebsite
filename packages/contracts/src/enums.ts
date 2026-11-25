@@ -19,7 +19,7 @@ export type UserStatus = (typeof USER_STATUSES)[number];
 
 export const PAGE_KINDS = e(
   'HOME', 'STANDARD', 'ABOUT', 'FACILITIES', 'CONTACT', 'LEGAL',
-  'DESTINATION_INDEX', 'ROOMS_INDEX', 'PROGRESS', 'LANDING', 'SYSTEM',
+  'DESTINATION_INDEX', 'ROOMS_INDEX', 'PROGRESS', 'LANDING', 'SYSTEM', 'EVENTS', 'CAREERS',
 );
 export type PageKind = (typeof PAGE_KINDS)[number];
 

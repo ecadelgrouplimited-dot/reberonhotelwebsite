@@ -31,6 +31,8 @@ export interface EntityConfig {
   viewUrl?: (v: Values) => string | null;
   extraSide?: (record: Values | null) => ReactNode;
   deleteWarning?: string;
+  /** Who may edit (default: website editors). */
+  writePerm?: import('@reberon/contracts').Permission;
 }
 
 export function EntityEditor({ config, id }: { config: EntityConfig; id: string }) {
@@ -41,7 +43,7 @@ export function EntityEditor({ config, id }: { config: EntityConfig; id: string 
   const me = useMe();
   const canDelete = can('records:delete');
   const confirm = useConfirm();
-  const editable = can('content:write');
+  const editable = can(config.writePerm ?? 'content:write');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const key = [config.endpoint, id];
   const { data: record, isLoading } = useQuery({ queryKey: key, queryFn: () => get<Values>(`${config.endpoint}/${id}`), enabled: !isNew });

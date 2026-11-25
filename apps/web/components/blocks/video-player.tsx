@@ -5,6 +5,7 @@ import type { MediaRef } from '@reberon/contracts';
 import { MediaImage } from '@/components/ui/media-image';
 import { cn } from '@/lib/cn';
 import type { VideoSource } from '@/lib/video';
+import { ThirdPartyGate } from '@/components/site/third-party-gate';
 
 export function VideoPlayer({ src, poster, title, rounded = true }: { src: VideoSource; poster: MediaRef | null; title: string; rounded?: boolean }) {
   const [playing, setPlaying] = useState(false);
@@ -26,7 +27,9 @@ export function VideoPlayer({ src, poster, title, rounded = true }: { src: Video
         : `https://player.vimeo.com/video/${src.id}?autoplay=1&dnt=1`;
     return (
       <div className={frame}>
-        <iframe src={embed} title={title} className="absolute inset-0 size-full" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowFullScreen />
+        <ThirdPartyGate provider={src.kind === 'youtube' ? 'YouTube' : 'Vimeo'} what="video">
+          <iframe src={embed} title={title} className="absolute inset-0 size-full" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowFullScreen />
+        </ThirdPartyGate>
       </div>
     );
   }

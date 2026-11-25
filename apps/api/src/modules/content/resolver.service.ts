@@ -3,6 +3,7 @@ import { collectMediaIds, collectRefIds, type Block, type MediaRef, type Resolve
 import { PrismaService } from '../../common/prisma.service.js';
 import { ToursService } from './tours.service.js';
 import { toMediaRef, toRoomCard, toFacility, toProgress, toDestinationCard, toFaqGroup, pick, toAmenity, lr, lt } from './mappers.js';
+import { eventCard, jobCard } from '../public-life/cards.js';
 
 const roomInclude = { hero: true, _count: { select: { rooms: { where: { isActive: true } } } } } as const;
 
@@ -102,6 +103,34 @@ export class ResolverService {
         const rows = await this.prisma.testimonial.findMany({ where: { isPublished: true }, orderBy: { createdAt: 'desc' }, take: limit });
         if (!rows.length) return undefined;
         return { voices: rows.map((v) => ({ id: v.id, author: v.author, origin: v.origin, text: lt(v.text), rating: v.rating })) };
+      }
+      case 'eventList': {
+        const cards = b.data.layout === 'cards';
+        const limit = typeof b.data.limit === 'number' ? b.data.limit : 3;
+        const now = new Date();
+        const rows = await this.prisma.event.findMany({
+          where: { status: { in: ['PUBLISHED', 'CANCELLED'] }, deletedAt: null, startsAt: { gte: new Date(now.getTime() - (b.data.showPast ? 183 : 1) * 86_400_000) } },
+          orderBy: { startsAt: 'asc' },
+          take: 200,
+        });
+        const [seats, media] = await Promise.all([
+          this.prisma.eventRegistration.groupBy({ by: ['eventId'], where: { eventId: { in: rows.map((r) => r.id) }, status: { in: ['CONFIRMED', 'ATTENDED'] } }, _sum: { partySize: true } }),
+          this.mediaMap(rows.map((r) => r.coverId).filter((x): x is string => !!x)),
+        ]);
+        const taken = new Map(seats.map((x) => [x.eventId, x._sum.partySize ?? 0]));
+        const all = rows.map((r) => eventCard(r, taken.get(r.id) ?? 0, media));
+        const upcoming = all.filter((e) => !e.past);
+        // Featured first on the cards layout, then soonest.
+        const shown = cards ? [...upcoming.filter((e) => e.featured && e.status !== 'CANCELLED'), ...upcoming.filter((e) => !e.featured || e.status === 'CANCELLED')].slice(0, limit) : upcoming;
+        return { events: shown, past: b.data.showPast ? all.filter((e) => e.past && e.status !== 'CANCELLED').reverse().slice(0, 12) : [], total: upcoming.length };
+      }
+      case 'jobList': {
+        const [rows, depts] = await Promise.all([
+          this.prisma.jobPosting.findMany({ where: { status: 'OPEN', deletedAt: null }, orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }] }),
+          this.prisma.hotelDepartment.findMany({ select: { code: true, name: true } }),
+        ]);
+        const names = new Map(depts.map((d) => [d.code, d.name]));
+        return { jobs: rows.map((r) => jobCard(r, names)).filter((j) => j.open) };
       }
       default:
         return undefined;

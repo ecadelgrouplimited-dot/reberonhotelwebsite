@@ -1,10 +1,11 @@
 import 'server-only';
 import { draftMode, cookies } from 'next/headers';
 import type {
-  SiteDTO, PageDTO, RoomTypeCardDTO, RoomTypeDetailDTO, DestinationCardDTO, DestinationDetailDTO, FacilityDTO, FacilityDetailDTO, ProgressDTO, Paginated, LText, MeDTO,
+  SiteDTO, PageDTO, RoomTypeCardDTO, RoomTypeDetailDTO, DestinationCardDTO, DestinationDetailDTO, FacilityDTO, FacilityDetailDTO, ProgressDTO, Paginated, LText, MeDTO, EventCardDTO, EventDetailDTO, JobCardDTO, JobDetailDTO,
 } from '@reberon/contracts';
 
 const API = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+export const API_BASE = API;
 
 /** Verify if the current browser request holds an active admin/staff session (rb_at or rb_rt cookie). */
 export async function getStaffSession(): Promise<MeDTO | null> {
@@ -94,7 +95,32 @@ export const api = {
   progressOne: (slug: string) =>
     get<ProgressDTO & { newer: { slug: string; title: LText } | null; older: { slug: string; title: LText } | null }>(`/progress/${encodeURIComponent(slug)}`),
   redirects: () => get<{ fromPath: string; toPath: string; statusCode: number }[]>('/redirects'),
+  events: () => get<{ upcoming: EventCardDTO[]; past: EventCardDTO[] }>('/events'),
+  event: (slug: string) => get<EventDetailDTO>(`/events/${encodeURIComponent(slug)}`),
+  jobs: () => get<JobCardDTO[]>('/careers'),
+  job: (slug: string) => get<JobDetailDTO>(`/careers/${encodeURIComponent(slug)}`),
 };
+
+/** A guest's own event booking, from the link in their email. Never cached. */
+export async function rsvpByToken(token: string) {
+  const res = await fetch(`${API}/v1/public/events/rsvp/${encodeURIComponent(token)}`, { cache: 'no-store' });
+  if (!res.ok) return null;
+  return (await res.json()) as RsvpManageDTO;
+}
+export async function cancelRsvpByToken(token: string) {
+  const res = await fetch(`${API}/v1/public/events/rsvp/${encodeURIComponent(token)}/cancel`, { method: 'POST', cache: 'no-store' });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, json);
+  return json as RsvpManageDTO;
+}
+export interface RsvpManageDTO {
+  code: string;
+  name: string;
+  partySize: number;
+  status: 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED' | 'ATTENDED';
+  event: { slug: string; title: LText; startsAt: string; endsAt: string | null; venue: string | null; status: string };
+  canCancel: boolean;
+}
 
 /** Unauthenticated POST for forms (called from server actions only). */
 export async function post<T>(path: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {

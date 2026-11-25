@@ -29,13 +29,15 @@ export class PublicContentController {
 
   @Get('pages')
   async pageIndex() {
-    return this.cache.wrap('pages:index', ['pages'], TTL, async () => {
-      const [pages, rooms, dests, progress, facilities] = await Promise.all([
+    return this.cache.wrap('pages:index', ['pages', 'events', 'jobs'], TTL, async () => {
+      const [pages, rooms, dests, progress, facilities, events, jobs] = await Promise.all([
         this.prisma.page.findMany({ where: { status: 'PUBLISHED', deletedAt: null, kind: { not: 'SYSTEM' } }, select: { slug: true, updatedAt: true, draftSeo: true } }),
         this.prisma.roomType.findMany({ where: { status: 'PUBLISHED', deletedAt: null }, select: { slug: true, updatedAt: true } }),
         this.prisma.destination.findMany({ where: { status: 'PUBLISHED', deletedAt: null }, select: { slug: true, updatedAt: true } }),
         this.prisma.progressUpdate.findMany({ where: { status: 'PUBLISHED', deletedAt: null }, select: { slug: true, updatedAt: true } }),
         this.prisma.facility.findMany({ where: { status: { not: 'HIDDEN' }, deletedAt: null }, select: { slug: true, updatedAt: true } }),
+        this.prisma.event.findMany({ where: { status: 'PUBLISHED', deletedAt: null, startsAt: { gte: new Date(Date.now() - 183 * 86_400_000) } }, select: { slug: true, updatedAt: true } }),
+        this.prisma.jobPosting.findMany({ where: { status: 'OPEN', deletedAt: null }, select: { slug: true, updatedAt: true, closesOn: true } }),
       ]);
       return [
         ...pages.filter((p) => !toSeo(p.draftSeo).noindex).map((p) => ({ path: `/${p.slug}`, updatedAt: p.updatedAt })),
@@ -43,6 +45,8 @@ export class PublicContentController {
         ...dests.map((d) => ({ path: `/kapchorwa/${d.slug}`, updatedAt: d.updatedAt })),
         ...progress.map((p) => ({ path: `/rising/${p.slug}`, updatedAt: p.updatedAt })),
         ...facilities.map((f) => ({ path: `/facilities/${f.slug}`, updatedAt: f.updatedAt })),
+        ...events.map((e) => ({ path: `/events/${e.slug}`, updatedAt: e.updatedAt })),
+        ...jobs.filter((j) => !j.closesOn || j.closesOn >= new Date(new Date().toISOString().slice(0, 10))).map((j) => ({ path: `/careers/${j.slug}`, updatedAt: j.updatedAt })),
       ];
     });
   }
@@ -53,7 +57,7 @@ export class PublicContentController {
     const slug = rawSlug.replace(/^\/+|\/+$/g, '');
     const preview = verifyPreviewToken(previewToken);
     if (preview) return this.buildPage(slug, true);
-    return this.cache.wrap(`page:${slug}`, [`page:${slug}`, 'pages', 'room-types', 'facilities', 'destinations', 'progress', 'faqs', 'media'], TTL, () => this.buildPage(slug, false));
+    return this.cache.wrap(`page:${slug}`, [`page:${slug}`, 'pages', 'room-types', 'facilities', 'destinations', 'progress', 'faqs', 'media', 'events', 'jobs'], TTL, () => this.buildPage(slug, false));
   }
 
   private async buildPage(slug: string, preview: boolean): Promise<PageDTO> {

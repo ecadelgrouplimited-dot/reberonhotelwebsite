@@ -7,6 +7,8 @@ export interface EmailContent {
   action?: { label: string; url: string };
   footnote?: string;
   replyTo?: string;
+  /** Small text attachments (e.g. a calendar .ics). Kept as strings so queued jobs stay plain JSON. */
+  attachments?: { filename: string; content: string; contentType: string }[];
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);

@@ -20,6 +20,7 @@ When the spec and these documents disagree, the spec wins on **scope**, these do
 | 11 | [Engineering workflow](11-engineering.md) | Conventions, testing, CI, environments, deployment |
 | 12 | [Decisions log](12-decisions-log.md) | ADRs and open questions for Denis / Wilson |
 | 13 | [Deployment and go-live](13-deployment.md) | The server, CI, and what to plug in when keys and data arrive |
+| 14 | [Public site: cookie consent, Events, Careers](14-public-site-events-careers.md) | Genuine consent, events with bookings, jobs and applications |
 
 ## One-paragraph summary
 

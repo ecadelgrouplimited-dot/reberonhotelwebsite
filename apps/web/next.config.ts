@@ -11,6 +11,8 @@ const config: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: resolve(import.meta.dirname, '../..'),
   poweredByHeader: false,
+  // CVs (≤ 5 MB) travel through the careers application action.
+  experimental: { serverActions: { bodySizeLimit: '6mb' } },
   transpilePackages: ['@reberon/contracts', '@reberon/utils'],
   images: {
     loader: 'custom',
@@ -26,7 +28,8 @@ const config: NextConfig = {
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          // The concierge's voice input needs the microphone on this site only (the browser still asks).
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
           // Only the House may frame the site (live preview in the page builder).
           { key: 'Content-Security-Policy', value: `frame-ancestors 'self' ${process.env.ADMIN_URL ?? 'http://localhost:3001'}` },
         ],

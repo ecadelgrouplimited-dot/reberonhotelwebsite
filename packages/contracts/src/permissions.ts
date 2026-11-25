@@ -51,6 +51,8 @@ export const PERMISSIONS = [
   'maintenance:report',
   'maintenance:manage',
   'lostfound:manage',
+  'events:manage',
+  'careers:manage',
   'records:delete',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -63,7 +65,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   MANAGER: ALL.filter((p) => !['settings:features', 'users:manage', 'vault:manage', 'audit:read'].includes(p)),
   HR: [
     'dashboard:view', 'hr:manage', 'requisitions:request', 'requisitions:approve',
-    'expenses:manage', 'inbox:read', 'messages:read', 'reports:read',
+    'expenses:manage', 'inbox:read', 'messages:read', 'reports:read', 'careers:manage',
   ],
   ACCOUNTANT: [
     'dashboard:view', 'reports:read', 'payments:record', 'payments:refund',
@@ -77,7 +79,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'rates:read', 'payments:record', 'desk:operate', 'rooms:inspect', 'guests:read',
     'guests:write', 'messages:read', 'receipts:read', 'receipts:issue',
     'pos:operate', 'healthclub:operate', 'quotations:manage', 'requisitions:request',
-    'day:close', 'maintenance:report', 'lostfound:manage',
+    'day:close', 'maintenance:report', 'lostfound:manage', 'events:manage',
   ],
   KITCHEN: [
     'dashboard:view', 'pos:operate', 'inventory:manage', 'requisitions:request', 'maintenance:report',
@@ -166,6 +168,8 @@ export const PERMISSION_INFO: PermissionInfo[] = [
   { key: 'maintenance:report', group: 'Operations & POS', label: 'Report faults', description: 'Report a broken shower, a dead socket or a leaking roof, and follow it until fixed.' },
   { key: 'maintenance:manage', group: 'Operations & POS', label: 'Run maintenance', description: 'Assign and close work orders, record costs, and take rooms out of service while they are repaired.' },
   { key: 'lostfound:manage', group: 'Front desk and rooms', label: 'Lost and found', description: 'Log items found in the hotel, match them to guests, return or dispose of them.' },
+  { key: 'events:manage', group: 'Website', label: 'Event guest lists', description: 'See who is coming to events, check guests in at the door, add or cancel places.' },
+  { key: 'careers:manage', group: 'Operations & POS', label: 'Careers & applications', description: 'Post jobs, read applications and CVs, move applicants through interviews and hire them.' },
   { key: 'requisitions:request', group: 'Operations & POS', label: 'Submit requisitions', description: 'Request departmental stock replenishment, supplies or maintenance.' },
   { key: 'requisitions:approve', group: 'Operations & POS', label: 'Approve & disburse requisitions', description: 'Manager/Director approval and store disbursement for requisitions.', money: true },
   { key: 'expenses:manage', group: 'Operations & POS', label: 'Expense Management & Cost Drivers', description: 'Record, edit, and categorize hotel operational expenses, utility bills, and supplier payments.', money: true },

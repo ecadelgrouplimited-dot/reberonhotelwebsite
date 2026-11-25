@@ -240,6 +240,8 @@ enum PageKind {
   PROGRESS
   LANDING
   SYSTEM
+  EVENTS
+  CAREERS
 }
 
 enum PageStatus {
@@ -2340,4 +2342,225 @@ model LostItem {
   room Room? @relation(fields: [roomId], references: [id], onDelete: SetNull)
 
   @@index([status, holdUntil])
+}
+
+// ───────────────────────── Cookie consent ─────────────────────────
+
+/// Proof of each consent choice made on the public site (anonymous id, no personal data).
+model ConsentRecord {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  visitorId   String
+  version     Int
+  preferences Boolean
+  analytics   Boolean
+  media       Boolean
+  /// accept_all | reject_all | custom | gpc
+  method      String
+  path        String?
+  /// First three parts of an IPv4 / first four of an IPv6 address — enough to show it was a person, not who
+  ipPrefix    String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([visitorId])
+}
+
+// ───────────────────────── Events ─────────────────────────
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum EventCategory {
+  MUSIC
+  FOOD_DRINK
+  COFFEE
+  OUTDOOR
+  CULTURE
+  WELLNESS
+  FAMILY
+  CONFERENCE
+  OTHER
+}
+
+/// Something happening at (or run by) the hotel that the public can come to.
+model Event {
+  id           String        @id @default(uuid(7)) @db.Uuid
+  slug         String        @unique
+  title        Json
+  summary      Json?
+  body         Json?
+  category     EventCategory @default(OTHER)
+  coverId      String?       @db.Uuid
+  galleryIds   String[]      @default([])
+  startsAt     DateTime
+  endsAt       DateTime?
+  venue        String?
+  /// Address or directions when the event is away from the hotel
+  venueDetail  String?
+  offsite      Boolean       @default(false)
+  /// Per person; null = free
+  priceMinor   BigInt?
+  currency     String?
+  priceNote    Json?
+  /// Seats in total; null = no limit
+  capacity     Int?
+  rsvpEnabled  Boolean       @default(true)
+  rsvpClosesAt DateTime?
+  maxPartySize Int           @default(6)
+  featured     Boolean       @default(false)
+  status       EventStatus   @default(DRAFT)
+  seo          Json          @default("{}")
+  isSeed       Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+
+  registrations EventRegistration[]
+
+  @@index([status, startsAt])
+}
+
+enum RegistrationStatus {
+  CONFIRMED
+  WAITLISTED
+  CANCELLED
+  ATTENDED
+}
+
+model EventRegistration {
+  id              String             @id @default(uuid(7)) @db.Uuid
+  eventId         String             @db.Uuid
+  code            String             @unique
+  name            String
+  email           String?
+  phone           String?
+  partySize       Int                @default(1)
+  notes           String?
+  status          RegistrationStatus @default(CONFIRMED)
+  /// Lets the guest cancel their own place from the confirmation email
+  manageTokenHash String             @unique
+  source          String             @default("web")
+  checkedInAt     DateTime?
+  cancelledAt     DateTime?
+  isSeed          Boolean            @default(false)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, status])
+}
+
+// ───────────────────────── Careers ─────────────────────────
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  SEASONAL
+  VOLUNTEER
+}
+
+model JobPosting {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  slug           String    @unique
+  title          Json
+  summary        Json?
+  description    Json?
+  requirements   Json?
+  benefits       Json?
+  departmentCode String?
+  employmentType JobType   @default(FULL_TIME)
+  location       String    @default("Kapchorwa, Uganda")
+  openings       Int       @default(1)
+  salaryMinMinor BigInt?
+  salaryMaxMinor BigInt?
+  currency       String?
+  /// MONTH | YEAR | DAY | HOUR
+  salaryPeriod   String?
+  showSalary     Boolean   @default(false)
+  closesOn       DateTime? @db.Date
+  status         JobStatus @default(DRAFT)
+  /// Extra questions for applicants: [{ id, label, required }]
+  questions      Json      @default("[]")
+  coverId        String?   @db.Uuid
+  seo            Json      @default("{}")
+  publishedAt    DateTime?
+  isSeed         Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  applications JobApplication[]
+
+  @@index([status, closesOn])
+}
+
+enum ApplicationStatus {
+  NEW
+  REVIEWING
+  SHORTLISTED
+  INTERVIEW
+  OFFERED
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+model JobApplication {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  code           String            @unique
+  /// null = an open application with no particular job
+  jobId          String?           @db.Uuid
+  name           String
+  email          String
+  phone          String
+  location       String?
+  coverLetter    String?
+  answers        Json              @default("[]")
+  /// Private storage key; never under the public media path
+  cvKey          String?
+  cvName         String?
+  cvMime         String?
+  cvSize         Int?
+  consentAt      DateTime
+  status         ApplicationStatus @default(NEW)
+  rating         Int?              @db.SmallInt
+  source         String?
+  staffProfileId String?           @db.Uuid
+  isSeed         Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  job   JobPosting?              @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  notes JobApplicationNote[]
+
+  @@index([jobId, status])
+  @@index([status, createdAt])
+}
+
+model JobApplicationNote {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  applicationId String   @db.Uuid
+  authorId      String?  @db.Uuid
+  authorName    String
+  body          String
+  /// NOTE by a person, or EVENT recorded by the House
+  kind          String   @default("NOTE")
+  createdAt     DateTime @default(now())
+
+  application JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, createdAt])
 }
