@@ -137,7 +137,7 @@ export function CtaBand({ block, media, site, ctx }: BlockProps<{ heading: LText
   const img = block.data.media ? media[block.data.media] : null;
   return (
     <div className="container-x">
-      <div className={cn('grain relative isolate overflow-hidden rounded-[var(--r-xl)] px-6 py-20 text-center text-mist-50 md:px-16 md:py-28', !img && 'bg-moss-900')}>
+      <div className={cn('grain relative isolate overflow-hidden rounded-[var(--r-xl)] px-6 py-20 text-center md:px-16 md:py-28', img ? 'text-mist-50' : 'tone-moss')}>
         {img && (
           <div className="absolute inset-0 -z-10">
             <div className="parallax-slow absolute inset-[-10%_0]">
@@ -147,11 +147,11 @@ export function CtaBand({ block, media, site, ctx }: BlockProps<{ heading: LText
           </div>
         )}
         <h2 className="mx-auto max-w-3xl text-step-5" data-reveal>{t(block.data.heading)}</h2>
-        {t(block.data.sub) && <p className="mx-auto mt-6 max-w-xl text-step-1 text-mist-50/85" data-reveal style={{ ['--i' as string]: 1 }}>{t(block.data.sub)}</p>}
+        {t(block.data.sub) && <p className={cn('mx-auto mt-6 max-w-xl text-step-1', img ? 'text-mist-50/85' : 'text-fg-muted')} data-reveal style={{ ['--i' as string]: 1 }}>{t(block.data.sub)}</p>}
         {!!block.data.ctas?.length && (
           <div className="mt-10 flex flex-wrap justify-center gap-3" data-reveal style={{ ['--i' as string]: 2 }}>
             {block.data.ctas.map((c, i) => (
-              <CtaButton key={i} cta={resolveCta(c, site, ctx)} style={c.style} size="lg" className={c.style === 'secondary' ? 'text-mist-50' : undefined} />
+              <CtaButton key={i} cta={resolveCta(c, site, ctx)} style={c.style} size="lg" className={c.style === 'secondary' && img ? 'text-mist-50' : undefined} />
             ))}
           </div>
         )}

@@ -11,12 +11,12 @@ export function Footer({ site }: { site: SiteDTO }) {
   const year = new Date().getFullYear();
   return (
     <footer className="tone-dark relative overflow-hidden pb-28 pt-20 md:pb-10">
-      <Contour className="absolute inset-x-0 top-0 h-28 opacity-60" lines={9} seed={4} />
+      <Contour className="absolute inset-x-0 top-0 h-28 text-fg-subtle opacity-50" lines={9} seed={4} />
       <div className="container-x relative">
         <div className="grid gap-14 lg:grid-cols-[1.3fr_2fr]">
           <div>
-            <Logo site={site} variant="stacked" className="h-24 w-auto text-white" />
-            <p className="mt-6 max-w-sm font-display text-step-2 leading-snug text-mist-50/90">{t(site.tagline)}</p>
+            <Logo site={site} variant="stacked" className="h-24 w-auto text-fg" />
+            <p className="mt-6 max-w-sm font-display text-step-2 leading-snug text-fg/90">{t(site.tagline)}</p>
             <p className="mt-4 text-sm text-fg-muted">{t(site.openingLabel)}</p>
             <div className="mt-8 flex flex-wrap gap-2">
               {site.contact.whatsapp && (
@@ -38,22 +38,22 @@ export function Footer({ site }: { site: SiteDTO }) {
               <div className="mt-6 flex flex-wrap items-center gap-3 text-xs uppercase tracking-widest text-fg-subtle">
                 <span>Follow @reberonhotel:</span>
                 {site.social.tiktok && (
-                  <a href={site.social.tiktok} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-mist-50 hover:underline">
+                  <a href={site.social.tiktok} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-fg hover:underline">
                     TikTok
                   </a>
                 )}
                 {site.social.instagram && (
-                  <a href={site.social.instagram} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-mist-50 hover:underline">
+                  <a href={site.social.instagram} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-fg hover:underline">
                     Instagram
                   </a>
                 )}
                 {site.social.facebook && (
-                  <a href={site.social.facebook} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-mist-50 hover:underline">
+                  <a href={site.social.facebook} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-fg hover:underline">
                     Facebook
                   </a>
                 )}
                 {site.social.x && (
-                  <a href={site.social.x} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-mist-50 hover:underline">
+                  <a href={site.social.x} target="_blank" rel="noopener noreferrer" className="text-fg-muted underline-offset-4 hover:text-fg hover:underline">
                     X
                   </a>
                 )}
@@ -136,7 +136,7 @@ export function Footer({ site }: { site: SiteDTO }) {
           </div>
         </div>
       </div>
-      <p aria-hidden className="pointer-events-none mt-16 select-none text-center font-display text-[22vw] leading-[0.8] tracking-[-0.04em] text-mist-50/[0.04]">
+      <p aria-hidden className="pointer-events-none mt-16 select-none text-center font-display text-[22vw] leading-[0.8] tracking-[-0.04em] text-fg/[0.05]">
         Reberon
       </p>
     </footer>

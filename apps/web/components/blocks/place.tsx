@@ -3,6 +3,7 @@ import { ArrowRight, Check, Clock } from 'lucide-react';
 import type { DestinationCardDTO, LRich, LText, Milestone, ProgressDTO } from '@reberon/contracts';
 import { t } from '@reberon/contracts';
 import { MediaImage } from '@/components/ui/media-image';
+import { Slider } from '@/components/ui/slider';
 import { RichText } from '@/components/ui/rich-text';
 import { SectionHeading } from '@/components/ui/section-heading';
 import { driveTime, dateLong } from '@/lib/format';
@@ -144,6 +145,18 @@ export function DestinationCards({ block }: BlockProps<H, { destinations: Destin
   const list = block.resolved?.destinations ?? [];
   if (!list.length) return null;
   const [first, ...rest] = list;
+  if (block.variant !== 'grid') {
+    return (
+      <div className="container-x">
+        <SectionHeading eyebrow={block.data.eyebrow} heading={block.data.heading} intro={block.data.intro} className="mb-14" />
+        <Slider label="Destinations" itemClassName="w-[78vw] sm:w-[44vw] lg:w-[30vw] xl:w-[26rem]" autoplayMs={8000}>
+          {list.map((d, i) => (
+            <DestinationCard key={d.id} d={d} i={i} />
+          ))}
+        </Slider>
+      </div>
+    );
+  }
   return (
     <div className="container-x">
       <SectionHeading eyebrow={block.data.eyebrow} heading={block.data.heading} intro={block.data.intro} className="mb-14" />
@@ -246,7 +259,7 @@ export function Journey({ stops, eyebrow, heading, intro }: { stops: Stop[]; eye
       </div>
       <ol className="mt-12 grid gap-px overflow-hidden rounded-[var(--r-lg)] border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
         {pts.map((p, i) => (
-          <li key={i} className="bg-bg p-6 [.tone-dark_&]:bg-basalt-950" data-reveal="fade" style={{ ['--i' as string]: i % 3 }}>
+          <li key={i} className="bg-bg p-6" data-reveal="fade" style={{ ['--i' as string]: i % 3 }}>
             <p className="flex items-baseline justify-between text-sm text-fg-subtle">
               <span className="tabular">{String(i + 1).padStart(2, '0')}</span>
               {i > 0 && <span className="tabular">+{driveTime(p.minutesFromPrev ?? 0)}</span>}

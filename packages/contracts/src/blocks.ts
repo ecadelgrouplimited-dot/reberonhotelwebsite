@@ -164,6 +164,10 @@ export const BLOCKS: BlockDefinition[] = [
     description: 'Room types as cards with from-price.',
     icon: 'bed-double',
     resolves: true,
+    variants: [
+      { value: 'slider', label: 'Slider (swipe / drag)' },
+      { value: 'grid', label: 'Grid' },
+    ],
     fields: [eyebrow, heading(), intro, { kind: 'refs', name: 'roomTypeIds', label: 'Rooms (empty = all published)', entity: 'roomType' }, { kind: 'boolean', name: 'showFromPrice', label: 'Show from-price' }],
   },
   {
@@ -180,6 +184,10 @@ export const BLOCKS: BlockDefinition[] = [
     description: 'Only what exists. Coming-soon items are labelled.',
     icon: 'building',
     resolves: true,
+    variants: [
+      { value: 'slider', label: 'Slider (swipe / drag)' },
+      { value: 'grid', label: 'Grid' },
+    ],
     fields: [eyebrow, heading(), intro, { kind: 'refs', name: 'facilityIds', label: 'Facilities (empty = all visible)', entity: 'facility' }],
   },
   {
@@ -209,6 +217,10 @@ export const BLOCKS: BlockDefinition[] = [
     description: 'Sipi, Elgon, coffee, the road…',
     icon: 'map',
     resolves: true,
+    variants: [
+      { value: 'slider', label: 'Slider (swipe / drag)' },
+      { value: 'grid', label: 'Grid' },
+    ],
     fields: [eyebrow, heading(), intro, { kind: 'refs', name: 'destinationIds', label: 'Destinations (empty = all published)', entity: 'destination' }],
   },
   {

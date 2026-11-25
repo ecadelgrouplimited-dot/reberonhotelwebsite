@@ -12,6 +12,7 @@ import { Price } from '@/components/site/price';
 import { resolveCta } from '@/lib/cta';
 import { cn } from '@/lib/cn';
 import { getFacilityFeatures } from '@/lib/facility-features';
+import { Slider } from '@/components/ui/slider';
 import type { BlockProps } from './types';
 
 type H = { eyebrow?: LText; heading?: LText; intro?: LText };
@@ -139,13 +140,21 @@ export function RoomGrid({ block }: BlockProps<H & { showFromPrice?: boolean }, 
   return (
     <div className="container-x">
       <SectionHeading eyebrow={d.eyebrow} heading={d.heading} intro={d.intro} className="mb-14 md:mb-20" />
-      <div className="grid gap-x-10 gap-y-16 md:grid-cols-2">
-        {rooms.map((r, i) => (
-          <div key={r.id} className={cn(i % 2 === 1 && 'md:mt-28')}>
-            <RoomCard room={r} i={i} showPrice={d.showFromPrice !== false} />
-          </div>
-        ))}
-      </div>
+      {block.variant === 'grid' ? (
+        <div className="grid gap-x-10 gap-y-16 md:grid-cols-2">
+          {rooms.map((r, i) => (
+            <div key={r.id} className={cn(i % 2 === 1 && 'md:mt-28')}>
+              <RoomCard room={r} i={i} showPrice={d.showFromPrice !== false} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Slider label="Rooms" itemClassName="w-[82vw] sm:w-[46vw] lg:w-[36vw] xl:w-[32rem]">
+          {rooms.map((r, i) => (
+            <RoomCard key={r.id} room={r} i={i} showPrice={d.showFromPrice !== false} />
+          ))}
+        </Slider>
+      )}
     </div>
   );
 }
@@ -190,15 +199,14 @@ export function Facilities({ block }: BlockProps<H, { facilities: FacilityDTO[] 
   return (
     <div className="container-x">
       <SectionHeading eyebrow={block.data.eyebrow} heading={block.data.heading} intro={block.data.intro} className="mb-14" />
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((f, i) => {
+      {wrapFacilities(block.variant, items.map((f, i) => {
           const features = getFacilityFeatures(f);
           const isComingSoon = f.status === 'COMING_SOON';
           return (
             <Link
               key={f.id}
               href={`/facilities/${f.slug}`}
-              className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--r-xl)] border border-line bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:border-brand/40 hover:bg-surface-2 hover:shadow-[var(--shadow-lift)] focus-visible:outline-none cursor-pointer"
+              className="group relative flex h-full flex-col justify-between overflow-hidden rounded-[var(--r-xl)] border border-line bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:border-brand/40 hover:bg-surface-2 hover:shadow-[var(--shadow-lift)] focus-visible:outline-none cursor-pointer"
               data-reveal="fade"
               style={{ ['--i' as string]: i % 3 }}
             >
@@ -277,9 +285,18 @@ export function Facilities({ block }: BlockProps<H, { facilities: FacilityDTO[] 
               </div>
             </Link>
           );
-        })}
-      </div>
+        }))}
     </div>
+  );
+}
+
+/** Slider by default (swipe on phones, drag on computers); "grid" keeps the static layout. */
+function wrapFacilities(variant: string | undefined, cards: React.ReactNode[]) {
+  if (variant === 'grid') return <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{cards}</div>;
+  return (
+    <Slider label="Facilities" itemClassName="w-[84vw] sm:w-[46vw] lg:w-[31vw] xl:w-[27rem]" autoplayMs={7000}>
+      {cards}
+    </Slider>
   );
 }
 

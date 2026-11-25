@@ -74,8 +74,18 @@
 
 @layer components {
 .tone-warm { background: var(--bg-warm); }
-.tone-moss { background: #1A1E43; color: #F4F5F7; --bg: #1A1E43; --fg: #F4F5F7; --fg-muted: #C5C8DC; --fg-subtle: #9DA4CC; --line: rgb(244 245 247 / .14); --line-strong: rgb(244 245 247 / .26); --brand: #E88432; --surface: rgb(244 245 247 / .06); --surface-2: rgb(244 245 247 / .1); }
-.tone-dark { background: #0E1126; color: #F4F5F7; --bg: #0E1126; --fg: #F4F5F7; --fg-muted: #C5C8DC; --fg-subtle: #8E94B5; --line: rgb(244 245 247 / .12); --line-strong: rgb(244 245 247 / .24); --brand: #E88432; --surface: rgb(244 245 247 / .05); --surface-2: rgb(244 245 247 / .09); }
+/*
+ * Deep bands (footer, "dark"/"navy" section tones, the now-strip, plain CTA bands)
+ * follow the visitor's theme: soft brand-tinted light in light mode, deep navy in dark mode.
+ */
+.tone-moss { background: #E6E8F3; color: #1A1E43; --bg: #E6E8F3; --fg: #1A1E43; --fg-muted: #474D74; --fg-subtle: #6A7097; --line: rgb(26 30 67 / .12); --line-strong: rgb(26 30 67 / .22); --brand: #B4560F; --surface: rgb(255 255 255 / .6); --surface-2: rgb(26 30 67 / .06); }
+.tone-dark { background: #E9EAF1; color: #1A1E43; --bg: #E9EAF1; --fg: #1A1E43; --fg-muted: #474D74; --fg-subtle: #6A7097; --line: rgb(26 30 67 / .11); --line-strong: rgb(26 30 67 / .2); --brand: #B4560F; --surface: rgb(255 255 255 / .55); --surface-2: rgb(26 30 67 / .05); }
+:root[data-theme='dark'] .tone-moss { background: #1A1E43; color: #F4F5F7; --bg: #1A1E43; --fg: #F4F5F7; --fg-muted: #C5C8DC; --fg-subtle: #9DA4CC; --line: rgb(244 245 247 / .14); --line-strong: rgb(244 245 247 / .26); --brand: #E88432; --surface: rgb(244 245 247 / .06); --surface-2: rgb(244 245 247 / .1); }
+:root[data-theme='dark'] .tone-dark { background: #0E1126; color: #F4F5F7; --bg: #0E1126; --fg: #F4F5F7; --fg-muted: #C5C8DC; --fg-subtle: #8E94B5; --line: rgb(244 245 247 / .12); --line-strong: rgb(244 245 247 / .24); --brand: #E88432; --surface: rgb(244 245 247 / .05); --surface-2: rgb(244 245 247 / .09); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .tone-moss { background: #1A1E43; color: #F4F5F7; --bg: #1A1E43; --fg: #F4F5F7; --fg-muted: #C5C8DC; --fg-subtle: #9DA4CC; --line: rgb(244 245 247 / .14); --line-strong: rgb(244 245 247 / .26); --brand: #E88432; --surface: rgb(244 245 247 / .06); --surface-2: rgb(244 245 247 / .1); }
+  :root:not([data-theme='light']) .tone-dark { background: #0E1126; color: #F4F5F7; --bg: #0E1126; --fg: #F4F5F7; --fg-muted: #C5C8DC; --fg-subtle: #8E94B5; --line: rgb(244 245 247 / .12); --line-strong: rgb(244 245 247 / .24); --brand: #E88432; --surface: rgb(244 245 247 / .05); --surface-2: rgb(244 245 247 / .09); }
+}
 }
 
 /* ───────────── Buttons ───────────── */

@@ -62,7 +62,7 @@ export function CookieConsent() {
         <section
           role="region"
           aria-label="Cookie choices"
-          className="tone-moss fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] z-[70] rounded-[var(--r-lg)] p-5 shadow-[0_24px_60px_-20px_rgb(0_0_0/.55)] ring-1 ring-white/10 md:inset-x-auto md:bottom-6 md:left-6 md:max-w-[26rem] motion-safe:animate-[rb-rise_.5s_cubic-bezier(.2,.8,.2,1)]"
+          className="tone-moss fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] z-[70] rounded-[var(--r-lg)] p-5 shadow-[0_24px_60px_-20px_rgb(0_0_0/.55)] ring-1 ring-[var(--line)] md:inset-x-auto md:bottom-6 md:left-6 md:max-w-[26rem] motion-safe:animate-[rb-rise_.5s_cubic-bezier(.2,.8,.2,1)]"
         >
           <div className="flex items-start gap-3">
             <Cookie className="mt-0.5 size-5 shrink-0 text-[var(--brand)]" aria-hidden />
@@ -70,21 +70,21 @@ export function CookieConsent() {
               <p className="text-[15px] font-semibold">Your choice, your data</p>
               <p className="text-[13.5px] leading-relaxed text-[var(--fg-muted)]">
                 We use only what the site needs to work. With your yes, we also remember you in Sipi Concierge, count virtual-tour visits anonymously, and play videos from YouTube or Vimeo. No advertising, ever.{' '}
-                <Link href="/legal/cookies" className="underline underline-offset-2 hover:text-white">
+                <Link href="/legal/cookies" className="underline underline-offset-2 hover:text-[var(--fg)]">
                   Cookie policy
                 </Link>
               </p>
             </div>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => (save(NONE, 'reject_all'), setBanner(false))} className="rounded-full border border-white/35 px-4 py-2.5 text-[13.5px] font-semibold hover:bg-white/10">
+            <button type="button" onClick={() => (save(NONE, 'reject_all'), setBanner(false))} className="rounded-full border border-[var(--line-strong)] px-4 py-2.5 text-[13.5px] font-semibold hover:bg-[var(--surface-2)]">
               Reject all
             </button>
-            <button type="button" onClick={() => (save(ALL, 'accept_all'), setBanner(false))} className="rounded-full border border-white/35 px-4 py-2.5 text-[13.5px] font-semibold hover:bg-white/10">
+            <button type="button" onClick={() => (save(ALL, 'accept_all'), setBanner(false))} className="rounded-full border border-[var(--line-strong)] px-4 py-2.5 text-[13.5px] font-semibold hover:bg-[var(--surface-2)]">
               Accept all
             </button>
           </div>
-          <button type="button" onClick={() => setPanel(true)} className="mt-3 w-full text-center text-[13px] font-medium text-[var(--fg-muted)] underline underline-offset-4 hover:text-white">
+          <button type="button" onClick={() => setPanel(true)} className="mt-3 w-full text-center text-[13px] font-medium text-[var(--fg-muted)] underline underline-offset-4 hover:text-[var(--fg)]">
             Choose what to allow
           </button>
         </section>
