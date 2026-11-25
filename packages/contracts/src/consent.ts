@@ -49,6 +49,7 @@ export interface ConsentItem {
 export const CONSENT_REGISTRY: ConsentItem[] = [
   { name: 'rb_consent', category: 'necessary', kind: 'cookie', provider: 'Reberon Hotel', purpose: 'Remembers the choices you make in this panel.', duration: '6 months' },
   { name: 'rb-theme', category: 'necessary', kind: 'local storage', provider: 'Reberon Hotel', purpose: 'Remembers light or dark mode when you choose one.', duration: 'Until you clear it' },
+  { name: 'rb-a11y', category: 'necessary', kind: 'local storage', provider: 'Reberon Hotel', purpose: 'Remembers the accessibility options you choose (text size, contrast, reading aids).', duration: 'Until you clear it' },
   { name: 'rb-currency', category: 'necessary', kind: 'local storage', provider: 'Reberon Hotel', purpose: 'Remembers whether you see prices in UGX or USD.', duration: 'Until you clear it' },
   { name: 'reberon_concierge_sid', category: 'necessary', kind: 'session storage', provider: 'Reberon Hotel', purpose: 'Keeps your Sipi Concierge conversation going while this tab is open.', duration: 'Until you close the tab' },
   { name: 'rb-booking-…', category: 'necessary', kind: 'session storage', provider: 'Reberon Hotel', purpose: 'Holds your booking reference while you pay, so you can come back to it.', duration: 'Until you close the tab' },

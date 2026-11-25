@@ -2,6 +2,7 @@
 import { Children, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { motionOff } from '@/lib/a11y';
 
 /**
  * A calm, modern slider: native scroll-snap (smooth on phones, works without JS),
@@ -61,8 +62,9 @@ export function Slider({
 
   useEffect(() => {
     if (!autoplayMs || items.length < 2) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const t = setInterval(() => {
+      // "Stop animations" (accessibility panel) or the device's reduced-motion setting: stay put.
+      if (motionOff()) return;
       if (!paused.current && document.visibilityState === 'visible') go(1);
     }, autoplayMs);
     return () => clearInterval(t);

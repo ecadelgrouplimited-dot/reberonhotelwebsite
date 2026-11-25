@@ -367,3 +367,46 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
 
 /* Cookie banner entrance */
 @keyframes rb-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+/* ───────────── Accessibility choices (set by the accessibility panel on <html>) ───────────── */
+html[data-a11y-text='112'] { font-size: calc(112% * var(--text-scale, 1)); }
+html[data-a11y-text='125'] { font-size: calc(125% * var(--text-scale, 1)); }
+html[data-a11y-text='140'] { font-size: calc(140% * var(--text-scale, 1)); }
+html[data-a11y-text='160'] { font-size: calc(160% * var(--text-scale, 1)); }
+
+/* Readable spacing (WCAG 1.4.12 text-spacing values) */
+html[data-a11y-spacing] body :is(p, li, dd, dt, label, blockquote, figcaption, td, th, span, a) { line-height: 1.8 !important; letter-spacing: 0.04em !important; word-spacing: 0.12em !important; }
+html[data-a11y-spacing] body p { margin-bottom: 1.2em; }
+
+/* A plain, open font that is easier to read (also with dyslexia) */
+html[data-a11y-font] body, html[data-a11y-font] body *:not(svg):not(svg *) { font-family: Verdana, Tahoma, 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif !important; font-style: normal !important; }
+
+/* Stronger contrast: muted text becomes full strength, lines and edges darken */
+html[data-a11y-contrast], html[data-a11y-contrast] [class*='tone-'] { --fg-muted: var(--fg) !important; --fg-subtle: var(--fg) !important; --line: color-mix(in oklab, var(--fg) 45%, transparent) !important; --line-strong: var(--fg) !important; }
+html[data-a11y-contrast] body { text-shadow: none !important; }
+html[data-a11y-contrast] :is(.btn, button, input, select, textarea) { border-width: 2px !important; }
+
+/* Greyscale (on the page regions, not <body>, so fixed elements keep their place) */
+html[data-a11y-gray] :is(main, footer, .site-header, .rb-float) { filter: grayscale(1); }
+
+/* Highlight links and buttons */
+html[data-a11y-links] main a:not(.btn), html[data-a11y-links] footer a:not(.btn) { text-decoration: underline !important; text-decoration-thickness: 2px !important; text-underline-offset: 0.2em !important; background: rgb(255 214 0 / 0.22); border-radius: 2px; }
+html[data-a11y-links] :is(a, button, [role='button']) { outline: 2px dashed color-mix(in oklab, var(--accent) 70%, transparent); outline-offset: 2px; }
+
+/* Stop animations and moving things */
+html[data-a11y-motion] *, html[data-a11y-motion] *::before, html[data-a11y-motion] *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: 0.001ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+html[data-a11y-motion] [data-reveal] { opacity: 1 !important; transform: none !important; clip-path: none !important; }
+html[data-a11y-motion] .parallax-slow { transform: none !important; }
+
+/* A big cursor */
+html[data-a11y-cursor], html[data-a11y-cursor] * { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cpath d='M4 3 L4 33 L12 25 L18 38 L24 35 L18 22 L30 22 Z' fill='%23000' stroke='%23fff' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E") 4 3, auto !important; }
+html[data-a11y-cursor] :is(a, button, [role='button'], label, summary) { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='14' fill='%23D76E1B' fill-opacity='.85' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E") 20 20, pointer !important; }
+
+/* Strong keyboard focus */
+html[data-a11y-focus] :focus-visible { outline: 3px solid #D76E1B !important; outline-offset: 3px !important; box-shadow: 0 0 0 7px rgb(255 255 255 / 0.9) !important; border-radius: 4px; }
+
+/* Hide images (less distraction; text and alternative text stay) */
+html[data-a11y-noimg] main :is(img, picture, video, iframe), html[data-a11y-noimg] footer img { visibility: hidden !important; }
+
+/* Read-aloud: the paragraph being read */
+.rb-reading { background: rgb(255 214 0 / 0.35) !important; outline: 3px solid rgb(255 214 0 / 0.6); border-radius: 4px; }
